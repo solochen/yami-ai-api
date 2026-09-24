@@ -588,11 +588,11 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                     : "border-transparent bg-gradient-to-br from-amber-50 to-cyan-50 hover:border-primary/30 dark:from-amber-500/10 dark:to-cyan-500/10"
                 )}
               >
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                 <div className="tech-icon flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-200 bg-gray-950 text-lg text-amber-300 shadow-sm dark:border-amber-400/20"><AgentIcon value={creativeAgent.icon} fallback="✦" alt={td(`agent.${creativeAgent.code}.name`, creativeAgent.name)} /></div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="tech-title truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{td(`agent.${creativeAgent.code}.name`, creativeAgent.name)}</span>
+                    <div className="flex items-start justify-between gap-1">
+                      <span className="tech-title min-w-0 flex-1 line-clamp-2 text-xs font-semibold leading-4 text-gray-900 dark:text-gray-100" title={td(`agent.${creativeAgent.code}.name`, creativeAgent.name)}>{td(`agent.${creativeAgent.code}.name`, creativeAgent.name)}</span>
                       <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">Agent</span>
                     </div>
                     <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-gray-400">{td(`agent.${creativeAgent.code}.description`, creativeAgent.description || "")}</p>
@@ -628,7 +628,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                       : "bg-gray-50/80 border-2 border-transparent hover:bg-white hover:border-gray-100 dark:bg-white/5 dark:border-white/10 dark:hover:bg-white/10 dark:hover:border-white/20"
                   )}
                 >
-                  <div className="flex gap-3">
+                  <div className="flex gap-2">
                     <div className="tech-icon w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-lg shrink-0 shadow-sm overflow-hidden dark:bg-white/10 dark:border-white/10">
                       {model.icon_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -638,8 +638,8 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="tech-title font-semibold text-sm text-gray-900 truncate dark:text-gray-100">{modelName}</span>
+                      <div className="flex items-start justify-between gap-1">
+                        <span className="tech-title min-w-0 flex-1 line-clamp-2 text-xs font-semibold leading-4 text-gray-900 dark:text-gray-100" title={modelName}>{modelName}</span>
                         <span className={clsx("text-[10px] px-1.5 py-0.5 rounded-full shrink-0", tag.className)}>
                           {tagLabel}
                         </span>
@@ -751,13 +751,13 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                       : "bg-gray-50/80 border-2 border-transparent hover:bg-white hover:border-gray-100 dark:bg-white/5 dark:border-white/10 dark:hover:bg-white/10 dark:hover:border-white/20"
                   )}
                 >
-                  <div className="flex gap-3">
+                  <div className="flex gap-2">
                     <div className="tech-icon w-10 h-10 rounded-xl bg-gray-900 text-white flex items-center justify-center text-lg shrink-0 overflow-hidden">
                       <AgentIcon value={a.icon} alt={agentName} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="tech-title font-semibold text-sm text-gray-900 truncate dark:text-gray-100">{agentName}</span>
+                      <div className="flex items-start justify-between gap-1">
+                        <span className="tech-title min-w-0 flex-1 line-clamp-2 text-xs font-semibold leading-4 text-gray-900 dark:text-gray-100" title={agentName}>{agentName}</span>
                         {(() => {
                           const tag = AGENT_CATEGORY_TAG[displayCategory];
                           return tag ? (
@@ -1037,7 +1037,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
       <aside
         className={clsx(
           "hidden lg:flex bg-white border-r border-gray-100 flex-col shrink-0 transition-all duration-300 shadow-[2px_0_12px_rgba(0,0,0,0.04)] dark:bg-gray-900 dark:border-white/10 dark:shadow-none",
-          collapsed ? "w-[64px]" : "w-[248px]"
+          collapsed ? "w-[64px]" : "w-[300px]"
         )}
       >
         <div className="px-3.5 py-4 flex items-center justify-between border-b border-gray-50 dark:border-white/10">
