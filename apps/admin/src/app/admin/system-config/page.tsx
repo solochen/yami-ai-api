@@ -327,6 +327,11 @@ export default function SystemConfigPage() {
         sync_timeout_sec: 1800,
         workbench_default_theme: "dark",
         web_search_enabled: false,
+        chat_compression_enabled: true,
+        chat_compression_model_code: "",
+        chat_compression_min_chars: 6000,
+        chat_compression_min_messages: 8,
+        chat_compression_keep_messages: 6,
         web_search_provider: "tavily",
         web_search_api_key: "",
         web_search_exa_api_key: "",
@@ -1387,6 +1392,21 @@ export default function SystemConfigPage() {
           </p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {visiblePaymentItems.map((item) => renderItem(item))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm shadow-gray-950/5">
+          <div className="mb-1 text-sm font-semibold text-gray-900">对话上下文压缩</div>
+          <p className="mb-5 text-xs leading-relaxed text-gray-400">普通聊天历史变长后，用这里指定的低价对话模型把较早内容收成摘要，再送给当前模型。摘要单独按压缩模型计费。未选择模型时不压缩。</p>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {renderItem({ key: "chat_compression_enabled", label: "启用上下文压缩", type: "checkbox", hint: "关闭后，即使用户选择了压缩模型也不会压缩。" })}
+            {renderItem({ key: "chat_compression_model_code", label: "默认压缩模型", type: "select", options: [
+              { value: "", label: "不压缩" },
+              ...searchRouterModels,
+            ], hint: "「跟随系统」使用这个模型。请选择价格较低的对话模型。" })}
+            {renderItem({ key: "chat_compression_min_chars", label: "触发字数", type: "number", min: 500, hint: "去掉系统提示后，历史超过这个字数才会压缩。默认 6000。" })}
+            {renderItem({ key: "chat_compression_min_messages", label: "触发消息条数", type: "number", min: 2, hint: "历史消息超过这个条数也会压缩。默认 8。" })}
+            {renderItem({ key: "chat_compression_keep_messages", label: "保留最近消息条数", type: "number", min: 2, hint: "最近这些消息保持原文，更早的内容才进入摘要。默认 6。" })}
           </div>
         </section>
 

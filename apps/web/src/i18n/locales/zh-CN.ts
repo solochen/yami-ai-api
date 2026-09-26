@@ -560,6 +560,7 @@ const dictionary: Record<string, string> = {
     "nav.models": "大模型",
     "nav.workspace": "工作台",
     "nav.agents": "智能体",
+    "nav.toolbox": "工具箱",
     "nav.gallery": "灵感广场",
     "nav.works": "我的作品",
     "nav.wallet": "钱包",

@@ -560,6 +560,7 @@ const dictionary: Record<string, string> = {
     "nav.models": "Models",
     "nav.workspace": "Workspace",
     "nav.agents": "Agents",
+    "nav.toolbox": "Toolbox",
     "nav.gallery": "Inspiration Gallery",
     "nav.works": "My Works",
     "nav.wallet": "Wallet",

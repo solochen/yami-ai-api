@@ -688,7 +688,12 @@ func (s *ChatService) FinalizeStream(ctx context.Context, userID int64, requestI
 	if input.Ephemeral {
 		return input.ConversationID, nil
 	}
+	return s.SaveCompletedChat(ctx, userID, input, fullContent, reasoningContent)
+}
 
+// SaveCompletedChat stores one user turn and the stitched assistant reply.
+// Continuation rounds are billed separately and must not be saved as user messages.
+func (s *ChatService) SaveCompletedChat(ctx context.Context, userID int64, input CompletionInput, fullContent, reasoningContent string) (string, error) {
 	convID := input.ConversationID
 	if convID == "" && len(input.Messages) > 0 {
 		conv, _ := s.CreateConversation(ctx, userID, input.ModelCode, truncate(input.Messages[len(input.Messages)-1].Content, 30))

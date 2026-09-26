@@ -54,9 +54,45 @@ import { ALL_RATIOS, ImageGenerationToolbar, buildImageGenerationParams, normali
 import { GenerationLanguageMenu, buildLanguageParams, useGenerationLanguages } from "./GenerationLanguageMenu";
 
 interface Message {
+  id: string;
   role: "user" | "assistant";
   content: string;
   reasoning_content?: string;
+  createdAt: string;
+}
+
+const MAX_CHAT_INPUT_CHARS = 12000;
+const INDEX_DOT_COLORS = ["bg-sky-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500"];
+
+function textLength(value: string) {
+  return Array.from(value).length;
+}
+
+function clipText(value: string, max: number) {
+  const chars = Array.from(value);
+  return chars.length <= max ? value : chars.slice(0, max).join("");
+}
+
+function newMessage(role: Message["role"], content: string, extra?: Partial<Message>): Message {
+  return {
+    id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+    role,
+    content,
+    createdAt: new Date().toISOString(),
+    ...extra,
+  };
+}
+
+function formatIndexTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function indexPreview(content: string) {
+  const line = content.replace(/\s+/g, " ").trim();
+  const chars = Array.from(line);
+  return chars.length <= 18 ? line : `${chars.slice(0, 18).join("")}…`;
 }
 
 type MultiModelResult = {
@@ -782,11 +818,14 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [chatError, setChatError] = useState("");
+  const [continuing, setContinuing] = useState(false);
   const [mmMode, setMmMode] = useState(false);
   const [mmActiveTab, setMmActiveTab] = useState<"answer" | "summary">("answer");
   const [mmResults, setMmResults] = useState<MultiModelResult[]>([]);
   const [mmSummary, setMmSummary] = useState<string>("");
   const [copiedOutputKey, setCopiedOutputKey] = useState<string | null>(null);
+  const [indexOpen, setIndexOpen] = useState(true);
+  const [activeTurnId, setActiveTurnId] = useState("");
   const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
   const [estimateError, setEstimateError] = useState("");
   const [taskStatus, setTaskStatus] = useState("");
@@ -814,6 +853,21 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
     files: [],
   });
   const [deepThink, setDeepThink] = useState(false);
+  const [autoContinue, setAutoContinue] = useState(true);
+  const [multiTurn, setMultiTurn] = useState(true);
+  const [compressionModel, setCompressionModel] = useState("system");
+  const [compressing, setCompressing] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("starai_chat_auto_continue");
+      if (stored === "0") setAutoContinue(false);
+      if (window.localStorage.getItem("starai_chat_multi_turn") === "0") setMultiTurn(false);
+      const compression = window.localStorage.getItem("starai_chat_compression_model");
+      if (compression) setCompressionModel(compression);
+    } catch {
+      /* ignore */
+    }
+  }, []);
   const [menuWallet, setMenuWallet] = useState<{ compute_balance?: number } | null>(null);
   const [conversationId, setConversationId] = useState<string>("");
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1307,7 +1361,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
     try {
       const conv = await api<{
         public_id: string;
-        messages: { role: string; content: string; reasoning_content?: string }[];
+        messages: { role: string; content: string; reasoning_content?: string; created_at?: string }[];
       }>(`/api/chat/conversations/${publicId}`);
       const raw = conv.messages || [];
       const displayMessages: Message[] = [];
@@ -1316,7 +1370,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
 
       for (const m of raw) {
         if (m.role === "user") {
-          displayMessages.push({ role: "user", content: m.content });
+          displayMessages.push(newMessage("user", m.content, { createdAt: m.created_at || new Date().toISOString() }));
           continue;
         }
         if (m.role !== "assistant") continue;
@@ -1331,7 +1385,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
           }
           continue;
         }
-        displayMessages.push({ role: "assistant", content: m.content, reasoning_content: m.reasoning_content });
+        displayMessages.push(newMessage("assistant", m.content, { reasoning_content: m.reasoning_content, createdAt: m.created_at || new Date().toISOString() }));
       }
 
       setMessages(displayMessages);
@@ -1415,16 +1469,19 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
   };
 
   const handleChat = async () => {
-    if (!prompt.trim() || streaming) return;
-    const userMsg: Message = { role: "user", content: prompt };
+    if (!prompt.trim() || streaming || textLength(prompt) > MAX_CHAT_INPUT_CHARS) return;
+    const userMsg = newMessage("user", prompt);
+    const newMessages = [...messages, userMsg];
     setMessages((prev) => [...prev, userMsg]);
     setChatError("");
     setPrompt("");
     setStreaming(true);
+    setContinuing(false);
+    const dialogueChars = newMessages.reduce((sum, item) => sum + Array.from(item.content || "").length, 0);
+    setCompressing(isChatSingle && multiTurn && (newMessages.length > 8 || dialogueChars > 6000));
     setMmMode(false);
     setMmResults([]);
     setMmSummary("");
-    const newMessages = [...messages, userMsg];
     let assistantContent = "";
     let assistantReasoning = "";
     let receivedReply = false;
@@ -1482,6 +1539,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
             ...(isChatSingle && capDeepThink && typeof reasoningConfig.default_budget === "number"
               ? { reasoning_budget: reasoningConfig.default_budget }
               : {}),
+            ...(isChatSingle ? { auto_continue: autoContinue, compression_model: multiTurn ? compressionModel : "off" } : {}),
             asset_ids: bottom.asset_ids,
             file_asset_ids: bottom.files.map((f) => f.public_id),
           },
@@ -1500,15 +1558,18 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
       }
 
       const body = res.body;
-      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+      const assistantMsg = newMessage("assistant", "");
+      setMessages((prev) => [...prev, assistantMsg]);
 
       const applyDelta = (content: string, reasoning = "") => {
         receivedReply = true;
+        setCompressing(false);
         assistantContent += content;
         assistantReasoning += reasoning;
         setMessages((prev) => {
           const updated = [...prev];
-          updated[updated.length - 1] = { role: "assistant", content: assistantContent, reasoning_content: assistantReasoning };
+          const last = updated[updated.length - 1];
+          updated[updated.length - 1] = { ...(last || assistantMsg), role: "assistant", content: assistantContent, reasoning_content: assistantReasoning };
           return updated;
         });
       };
@@ -1544,6 +1605,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
           continue;
         }
         if (typeof data.conversation_id === "string" && data.conversation_id) setConversationId(data.conversation_id);
+        if (data.auto_continue === true) setContinuing(true);
         const streamError = data.error;
         if (streamError && typeof streamError === "object") {
           const error = streamError as { message?: unknown };
@@ -1620,6 +1682,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
         } else if (eventType === "delta" && typeof data.content === "string") {
           applyDelta(data.content);
         } else if (eventType === "done") {
+          setContinuing(false);
           if (typeof data.conversation_id === "string" && data.conversation_id) {
             setConversationId(data.conversation_id);
           }
@@ -1646,14 +1709,16 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
         const updated = [...prev];
         const last = updated[updated.length - 1];
         if (last?.role === "assistant" && !last.content) {
-          updated[updated.length - 1] = { role: "assistant", content: `[${msg}]` };
+          updated[updated.length - 1] = { ...last, content: `[${msg}]` };
         } else if (last?.role === "user") {
-          updated.push({ role: "assistant", content: `[${msg}]` });
+          updated.push(newMessage("assistant", `[${msg}]`));
         }
         return updated;
       });
     } finally {
       setStreaming(false);
+      setContinuing(false);
+      setCompressing(false);
     }
   };
 
@@ -1829,6 +1894,12 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
   const submit = () => (isChat ? handleChat() : handleMediaTask());
 
   const hasConversation = messages.length > 0 || !!taskOutput || taskImages.length > 0 || taskVideos.length > 0 || !!taskStatus;
+  const conversationTurns = messages.filter((msg) => msg.role === "user");
+  const promptChars = textLength(prompt);
+  const jumpToTurn = (id: string) => {
+    setActiveTurnId(id);
+    document.getElementById(`chat-turn-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
   const badgeFromCode = (code: string): ModelBadge => ({
     code,
     icon: modelMap[code]?.icon_url,
@@ -2111,7 +2182,8 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
             </div>
           </div>
         ) : isChat ? (
-          <div className="max-w-[980px] mx-auto space-y-4 py-4">
+          <div className="mx-auto flex w-full max-w-[1240px] items-start gap-3 py-4">
+            <div className="min-w-0 flex-1 space-y-4">
             {mmMode ? (
               <div className="soft-card p-4">
                 {messages
@@ -2217,8 +2289,8 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
               </div>
             ) : (
               <>
-                {messages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                {messages.map((msg, index) => (
+                  <div id={msg.role === "user" ? `chat-turn-${msg.id}` : undefined} key={msg.id} className={`flex scroll-mt-4 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                         msg.role === "user" ? "bg-primary text-dark whitespace-pre-wrap" : "soft-card text-gray-800"
@@ -2230,25 +2302,25 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                           <div className="mt-2 flex items-center justify-end">
                             <CopyOutputButton
                               text={msg.content}
-                              copied={copiedOutputKey === `msg-${i}`}
-                              onCopy={() => handleCopyOutput(`msg-${i}`, msg.content)}
+                              copied={copiedOutputKey === `msg-${msg.id}`}
+                              onCopy={() => handleCopyOutput(`msg-${msg.id}`, msg.content)}
                             />
                           </div>
                         </>
                       ) : (
                         <>
                           {msg.reasoning_content && (
-                            <details open={streaming && i === messages.length - 1} className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900">
-                              <summary className="cursor-pointer font-semibold">{streaming && i === messages.length - 1 ? t("workspace.reasoningThinking") : t("workspace.reasoningComplete")}</summary>
+                            <details open={streaming && index === messages.length - 1} className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900">
+                              <summary className="cursor-pointer font-semibold">{streaming && index === messages.length - 1 ? t("workspace.reasoningThinking") : t("workspace.reasoningComplete")}</summary>
                               <div className="mt-2 whitespace-pre-wrap leading-relaxed">{msg.reasoning_content}</div>
                             </details>
                           )}
-                          <RichMarkdown content={msg.content} emptyText={streaming && i === messages.length - 1 ? ts(UI_TEXT.thinking) : ""} />
+                          <RichMarkdown content={msg.content} emptyText={streaming && index === messages.length - 1 ? ts(UI_TEXT.thinking) : ""} />
                           <div className="mt-2 flex items-center justify-end">
                             <CopyOutputButton
                               text={msg.content}
-                              copied={copiedOutputKey === `msg-${i}`}
-                              onCopy={() => handleCopyOutput(`msg-${i}`, msg.content)}
+                              copied={copiedOutputKey === `msg-${msg.id}`}
+                              onCopy={() => handleCopyOutput(`msg-${msg.id}`, msg.content)}
                             />
                           </div>
                         </>
@@ -2264,6 +2336,47 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
               </>
             )}
             <div ref={bottomRef} />
+            </div>
+            {conversationTurns.length > 0 && (
+              <aside className={`sticky top-3 hidden shrink-0 self-start md:block ${indexOpen ? "w-[248px]" : "w-11"}`}>
+                {indexOpen ? (
+                  <div className="soft-card max-h-[min(420px,calc(100vh-220px))] overflow-hidden">
+                    <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2.5 dark:border-white/10">
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-100">{ts("对话索引")}</span>
+                      <span className="shrink-0 text-[11px] text-gray-400">{conversationTurns.length}{ts("条")}</span>
+                      <button type="button" onClick={() => setIndexOpen(false)} className="flex h-6 w-6 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/10" aria-label={ts("收起对话索引")}>
+                        <ChevronDown size={14} className="-rotate-90" />
+                      </button>
+                    </div>
+                    <div className="max-h-[360px] overflow-y-auto p-1.5">
+                      {conversationTurns.map((turn, index) => {
+                        const selected = (activeTurnId || conversationTurns[conversationTurns.length - 1]?.id) === turn.id;
+                        return (
+                          <button
+                            key={turn.id}
+                            type="button"
+                            onClick={() => jumpToTurn(turn.id)}
+                            className={`flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left transition hover:bg-gray-50 dark:hover:bg-white/5 ${selected ? "bg-primary/10" : ""}`}
+                          >
+                            <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${INDEX_DOT_COLORS[index % INDEX_DOT_COLORS.length]}`} />
+                            <span className="w-5 shrink-0 pt-0.5 text-[11px] tabular-nums text-gray-400">{String(index + 1).padStart(2, "0")}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs text-gray-700 dark:text-gray-200">{indexPreview(turn.content) || ts("空消息")}</span>
+                              <span className="mt-0.5 block text-[10px] text-gray-400">{formatIndexTime(turn.createdAt)}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setIndexOpen(true)} className="soft-card flex h-28 w-11 flex-col items-center justify-center gap-2 text-[11px] text-gray-500" aria-label={ts("展开对话索引")}>
+                    <ChevronDown size={14} className="rotate-90" />
+                    <span className="[writing-mode:vertical-rl]">{ts("对话索引")}</span>
+                  </button>
+                )}
+              </aside>
+            )}
           </div>
         ) : (
           <div className="max-w-[980px] mx-auto py-4">
@@ -2687,9 +2800,10 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
             ) : (
               <textarea
                 value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
+                onChange={(e) => setPrompt(isChat ? clipText(e.target.value, MAX_CHAT_INPUT_CHARS) : e.target.value)}
                 placeholder={promptPlaceholder}
                 rows={isVideo || isAudio ? 4 : 3}
+                maxLength={isChat ? MAX_CHAT_INPUT_CHARS : undefined}
                 className="w-full px-4 py-3 text-sm resize-none focus:outline-none bg-transparent placeholder:text-gray-400"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
@@ -2716,6 +2830,62 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                 {isMultiCollab && <BottomBar value={bottom} onChange={setBottom} showWebSearch={false} showTimeout={false} />}
                 {isChatSingle && (
                   <>
+                    <button
+                      type="button"
+                      onClick={() => setAutoContinue((enabled) => {
+                        const next = !enabled;
+                        try { window.localStorage.setItem("starai_chat_auto_continue", next ? "1" : "0"); } catch { /* ignore */ }
+                        return next;
+                      })}
+                      aria-pressed={autoContinue}
+                      title={ts("写到长度上限时自动接着写，续写单独计费，最多再续 2 轮")}
+                      className={`h-9 rounded-xl border px-3 text-sm ${
+                        autoContinue
+                          ? "border-primary/30 bg-primary/10 text-primary"
+                          : "border-gray-200 bg-gray-50 text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300"
+                      }`}
+                    >
+                      {continuing ? ts("正在续写") : ts("截断自动续写")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMultiTurn((enabled) => {
+                        const next = !enabled;
+                        try { window.localStorage.setItem("starai_chat_multi_turn", next ? "1" : "0"); } catch { /* ignore */ }
+                        return next;
+                      })}
+                      aria-pressed={multiTurn}
+                      title={ts("记住上文，超长自动压缩（额外扣费）")}
+                      className={`flex h-9 items-center gap-1.5 rounded-xl border px-3 text-left ${
+                        multiTurn
+                          ? "border-primary/30 bg-primary/10 text-primary"
+                          : "border-gray-200 bg-gray-50 text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300"
+                      }`}
+                    >
+                      <span className="text-sm leading-none">{compressing ? ts("正在压缩上下文") : ts("多轮对话")}</span>
+                      <span className={`text-[10px] leading-none ${multiTurn ? "text-primary/70" : "text-gray-400"}`}>{ts("记住上文，超长自动压缩（额外扣费）")}</span>
+                    </button>
+                    {multiTurn && (
+                    <label className="flex h-9 items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 px-2 text-sm text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
+                      <span className="shrink-0 text-xs">{ts("压缩模型")}</span>
+                      <select
+                        value={chatModels.some((item) => item.code === compressionModel) || compressionModel === "system" ? compressionModel : "system"}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          setCompressionModel(next);
+                          try { window.localStorage.setItem("starai_chat_compression_model", next); } catch { /* ignore */ }
+                        }}
+                        aria-label={ts("压缩模型")}
+                        title={ts("越强越贵。跟随系统使用后台配置的低价模型。历史较短时不会压缩。")}
+                        className="max-w-[140px] bg-transparent text-xs outline-none"
+                      >
+                        <option value="system">{ts("跟随系统")}</option>
+                        {chatModels.map((item) => (
+                          <option key={item.code} value={item.code}>{item.display_name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    )}
                     {capDeepThink && (
                       <button
                         type="button"
@@ -2806,27 +2976,26 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                     />
                   </>
                 )}
-                {estimatedCost !== null && !isVideo && !isImage && !isAudio && !isMultiCollab && (
-                  <span className="text-xs text-primary ml-1">
-                    Est. {estimatedCost.toFixed(4)}
-                  </span>
-                )}
               </div>
-              <div className={isMultiCollab ? "flex items-center justify-between gap-2 w-full sm:w-auto shrink-0" : "shrink-0"}>
-                {estimatedCost !== null && isMultiCollab && (
-                  <span className="text-xs text-primary whitespace-nowrap">
-                    Est. {estimatedCost.toFixed(4)}
-                  </span>
-                )}
+              <div className={isMultiCollab ? "flex items-center justify-between gap-2 w-full sm:w-auto shrink-0" : "flex items-center gap-2 shrink-0"}>
                 {estimatedCost === null && estimateError && isMultiCollab && (
                   <span className="text-xs text-amber-500 whitespace-nowrap">
                     {t("workspace.modelPriceMissing")}
+                  </span>
+                )}
+                {isChat && (
+                  <span
+                    className={`text-xs tabular-nums whitespace-nowrap ${promptChars >= MAX_CHAT_INPUT_CHARS ? "text-red-500" : "text-gray-400"}`}
+                    title={ts("最大输入字数")}
+                  >
+                    {promptChars}/{MAX_CHAT_INPUT_CHARS}
                   </span>
                 )}
               <button
                 onClick={submit}
                 disabled={
                   streaming ||
+                  (isChat && promptChars > MAX_CHAT_INPUT_CHARS) ||
                   (isVideo
                     ? videoConfig.prompt_required !== false && !prompt.trim()
                     : isAudio

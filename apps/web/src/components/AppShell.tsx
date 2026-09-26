@@ -4,7 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bot, ChevronLeft, Compass, FileText, Home, LayoutGrid, Menu, Search, Settings, WalletCards, X } from "lucide-react";
+import { Bot, ChevronLeft, Compass, FileText, Home, LayoutGrid, Menu, Search, Settings, WalletCards, Wrench, X } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { RechargeModal } from "./RechargeModal";
 import { api, apiCached, apiForLocaleCached } from "@/lib/api";
@@ -16,6 +16,7 @@ import { ReferralShareButton } from "./ReferralShareButton";
 import { useI18n } from "@/i18n/I18nProvider";
 import { WorkbenchTopActions } from "./WorkbenchTopActions";
 import { AgentIcon } from "./workbench/AgentIcon";
+import { ToolboxFilters, ToolboxPanel, type ToolboxAgent, type ToolboxCategory } from "./workbench/ToolboxPanel";
 import { galleryLanguageLabel, referenceTaxonomyLabel, type GalleryLanguage } from "./workbench/galleryReference";
 
 function WorkspaceLoading() {
@@ -37,6 +38,7 @@ const CreativeAgentWorkspace = dynamic(() => loadCreativeAgentWorkspace().then(m
 const PRIMARY_NAV = [
   { id: "models", label: "大模型", icon: LayoutGrid },
   { id: "agents", label: "智能体", icon: Bot },
+  { id: "toolbox", label: "工具箱", icon: Wrench },
   { id: "gallery", label: "灵感广场", icon: Compass },
 ] as const;
 
@@ -50,7 +52,7 @@ const SUBPAGE_LINKS = [
   { href: "/app/api-docs", label: "API 文档", shortLabel: "API", icon: FileText },
 ] as const;
 
-type Section = "models" | "agents" | "gallery";
+type Section = "models" | "agents" | "toolbox" | "gallery";
 const INFINITE_CANVAS_CODE = "infinite_canvas";
 const VIRAL_REMAKE_CODE = "viral_remake";
 const ONE_CLICK_VIRAL_REMAKE_CODE = "one_click_viral_remake";
@@ -68,6 +70,23 @@ const CANVAS_WORKFLOW_CODES = new Set([
   VIDEO_CREATION_CODE,
   VIDEO_CREATION_V2_CODE,
 ]);
+
+const MODEL_VENDORS: { id: string; label: string; pattern: RegExp }[] = [
+  { id: "openai", label: "OpenAI", pattern: /openai|\bgpt-|sora/i },
+  { id: "anthropic", label: "Anthropic", pattern: /anthropic|claude/i },
+  { id: "google", label: "Google", pattern: /google|gemini|\bveo\b/i },
+  { id: "qwen", label: "Qwen", pattern: /\bqwen\b/i },
+  { id: "zai", label: "Z.ai", pattern: /z-ai|\bglm\b/i },
+  { id: "deepseek", label: "DeepSeek", pattern: /deepseek/i },
+  { id: "minimax", label: "MiniMax", pattern: /minimax|hailuo|海螺/i },
+  { id: "doubao", label: "豆包", pattern: /豆包|doubao/i },
+  { id: "suno", label: "Suno", pattern: /suno/i },
+];
+
+function modelVendorId(model: { code: string; display_name: string; tags?: string[] }) {
+  const text = `${model.code} ${model.display_name} ${(model.tags || []).join(" ")}`;
+  return MODEL_VENDORS.find((vendor) => vendor.pattern.test(text))?.id || "other";
+}
 
 const MOBILE_SUBPAGE_LINKS = [
   { href: "/app", label: "工作台", icon: Home },
@@ -149,7 +168,7 @@ function useIsMobile() {
 export function AppShell({ children, selectedModelCode, selectedAgentCode, initialUser, initialWallet }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { t, td, locale } = useI18n();
+  const { t, td, ts, locale } = useI18n();
   const { site_name, site_description, api_docs_enabled, api_docs_operations } = useSiteBranding();
   const storedUser = useAuthStore((state) => state.user);
   const [bootstrapUser, setBootstrapUser] = useState<User | null>(initialUser || null);
@@ -160,9 +179,10 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isMobile = useIsMobile();
 
-  const [section, setSection] = useState<Section>(selectedAgentCode ? "agents" : "models");
+  const [section, setSection] = useState<Section>(selectedAgentCode ? "agents" : pathname === "/app/toolbox" ? "toolbox" : "models");
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
+  const [modelVendor, setModelVendor] = useState("all");
   const [models, setModels] = useState<Model[]>([]);
   const [creativeAgent, setCreativeAgent] = useState<AgentItem | null>(null);
   const [creativeAgentLoaded, setCreativeAgentLoaded] = useState(false);
@@ -176,6 +196,9 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
   const [agentsLoaded, setAgentsLoaded] = useState(false);
   const [agentSearch, setAgentSearch] = useState("");
   const [agentCategory, setAgentCategory] = useState("all");
+  const [toolboxAgents, setToolboxAgents] = useState<ToolboxAgent[]>([]);
+  const [toolboxCategory, setToolboxCategory] = useState<ToolboxCategory>("all");
+  const [toolboxQuery, setToolboxQuery] = useState("");
   const [activeAgentCode, setActiveAgentCode] = useState<string | undefined>(selectedAgentCode);
 
   const [galleryTags, setGalleryTags] = useState<GalleryTag[]>([]);
@@ -189,7 +212,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
   const [activeReferenceScene, setActiveReferenceScene] = useState("all");
   const [activeReferenceLanguage, setActiveReferenceLanguage] = useState<GalleryLanguage | "all">("all");
 
-  const isWorkbench = pathname === "/app" || pathname.startsWith("/app/models/") || pathname.startsWith("/app/agents/");
+  const isWorkbench = pathname === "/app" || pathname === "/app/toolbox" || pathname.startsWith("/app/models/") || pathname.startsWith("/app/agents/");
   const apiDocsVisible = api_docs_enabled !== false && (!api_docs_operations || Object.keys(api_docs_operations).length === 0 || Object.values(api_docs_operations).some((value) => value !== false));
 
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
@@ -212,7 +235,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
 
   const primaryNavLabel = useCallback(
     (id: string) =>
-      id === "models" ? t("nav.models") : id === "agents" ? t("nav.agents") : id === "gallery" ? t("nav.gallery") : id,
+      id === "models" ? t("nav.models") : id === "agents" ? t("nav.agents") : id === "toolbox" ? t("nav.toolbox") : id === "gallery" ? t("nav.gallery") : id,
     [t]
   );
 
@@ -392,20 +415,40 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
   }, [isWorkbench, section, isMobile, locale]);
 
   useEffect(() => {
+    if (pathname === "/app/toolbox") setSection("toolbox");
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!isWorkbench || section !== "toolbox") return;
+    let active = true;
+    apiForLocaleCached<{ items: ToolboxAgent[] }>("/api/agents", locale)
+      .then((result) => { if (active) setToolboxAgents(Array.isArray(result?.items) ? result.items : []); })
+      .catch(() => { if (active) setToolboxAgents([]); });
+    return () => { active = false; };
+  }, [isWorkbench, locale, section]);
+
+  useEffect(() => {
     if (!isWorkbench || section !== "gallery" || galleryMode !== "community") return;
     apiCached<{ items: GalleryTag[] }>("/api/gallery/tags", 30_000).then((r) => setGalleryTags(Array.isArray(r?.items) ? r.items : []));
   }, [galleryMode, isWorkbench, section]);
 
+  const modelVendorOptions = useMemo(() => {
+    const present = new Set(models.map((model) => modelVendorId(model)));
+    return MODEL_VENDORS.filter((vendor) => present.has(vendor.id));
+  }, [models]);
+
   const filteredModels = useMemo(() => {
-    if (!search.trim()) return models;
-    const q = search.toLowerCase();
-    return models.filter(
-      (m) =>
-        m.display_name.toLowerCase().includes(q) ||
-        m.description?.toLowerCase().includes(q) ||
-        m.tags?.some((t) => t.toLowerCase().includes(q))
-    );
-  }, [models, search]);
+    const q = search.trim().toLowerCase();
+    return models.filter((model) => {
+      if (modelVendor !== "all" && modelVendorId(model) !== modelVendor) return false;
+      if (!q) return true;
+      return (
+        model.display_name.toLowerCase().includes(q) ||
+        model.description?.toLowerCase().includes(q) ||
+        model.tags?.some((tag) => tag.toLowerCase().includes(q))
+      );
+    });
+  }, [models, search, modelVendor]);
 
   const filteredAgents = useMemo(() => {
     const q = agentSearch.trim().toLowerCase();
@@ -427,10 +470,11 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
   }, [agents, agentsLoaded, agentSearch, agentCategory, t]);
 
   const showCreativeAgentModel = useMemo(() => {
+    if (modelVendor !== "all") return false;
     if (!creativeAgent || (category !== "all" && category !== "chat")) return false;
     const q = search.trim().toLowerCase();
     return !q || `${creativeAgent.name} ${creativeAgent.description || ""} agent 通用智能体`.toLowerCase().includes(q);
-  }, [category, creativeAgent, search]);
+  }, [category, creativeAgent, modelVendor, search]);
 
   const showApiDocEntry = useMemo(() => {
     if (!apiDocsVisible) return false;
@@ -470,6 +514,8 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
             const agent = agents.find((a) => a.code === activeAgentCode);
             return agent ? td(`agent.${agent.code}.name`, agent.name) : t("nav.agents");
           })()
+        : section === "toolbox"
+          ? t("nav.toolbox")
         : t("nav.gallery");
 
   const renderSidebarBody = (opts?: { compact?: boolean; showFooter?: boolean }) => {
@@ -477,7 +523,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
     const compact = opts?.compact;
     return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="px-2.5 py-3.5 grid grid-cols-3 gap-1 shrink-0">
+      <div className="px-2.5 py-3.5 grid grid-cols-4 gap-1 shrink-0">
         {PRIMARY_NAV.map((item) => {
           const Icon = item.icon;
           const active = item.id === section;
@@ -508,6 +554,12 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                   setActiveAgentCode(code);
                   preloadAgentWorkspace(code || INFINITE_CANVAS_CODE);
                   router.push(`/app/agents/${encodeURIComponent(code || INFINITE_CANVAS_CODE)}`);
+                }
+                if (item.id === "toolbox") {
+                  setSection("toolbox");
+                  router.push("/app/toolbox");
+                  closeDrawer();
+                  return;
                 }
                 if (item.id === "gallery") {
                   router.push("/app");
@@ -559,14 +611,27 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
             </div>
           </div>
           <div className="px-2.5 py-3">
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 border border-gray-100">
-              <Search size={14} className="text-gray-400 shrink-0" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t("common.searchModels")}
-                className="flex-1 bg-transparent text-xs focus:outline-none placeholder:text-gray-400"
-              />
+            <div className="flex items-center gap-1.5">
+              <select
+                value={modelVendorOptions.some((vendor) => vendor.id === modelVendor) ? modelVendor : "all"}
+                onChange={(event) => setModelVendor(event.target.value)}
+                aria-label={ts("模型公司")}
+                className="h-9 max-w-[88px] shrink-0 rounded-xl border border-gray-100 bg-gray-50 px-2 text-xs text-gray-700 outline-none dark:border-white/10 dark:bg-white/5 dark:text-gray-200"
+              >
+                <option value="all">{ts("全部公司")}</option>
+                {modelVendorOptions.map((vendor) => (
+                  <option key={vendor.id} value={vendor.id}>{vendor.label}</option>
+                ))}
+              </select>
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                <Search size={14} className="shrink-0 text-gray-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t("common.searchModels")}
+                  className="min-w-0 flex-1 bg-transparent text-xs focus:outline-none placeholder:text-gray-400"
+                />
+              </div>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-2.5 space-y-2 min-h-0">
@@ -778,6 +843,16 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
             )}
           </div>
         </>
+      )}
+
+      {section === "toolbox" && (
+        <ToolboxFilters
+          agents={toolboxAgents}
+          category={toolboxCategory}
+          query={toolboxQuery}
+          onCategory={setToolboxCategory}
+          onQuery={setToolboxQuery}
+        />
       )}
 
       {section === "gallery" && (
@@ -1154,6 +1229,10 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                   {renderSidebarBody({ showFooter: false })}
                 </div>
               ))}
+
+            {section === "toolbox" && (
+              <ToolboxPanel agents={toolboxAgents} category={toolboxCategory} query={toolboxQuery} />
+            )}
 
             {section === "gallery" && (
               <GalleryPanel

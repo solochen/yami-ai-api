@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Globe, Upload, ChevronDown, BookOpen, UserRound, Shield, X, Film, FileText, Image as ImageIcon, Lock, Zap, Trash2 } from "lucide-react";
 import { api, createRole, deleteAsset, listAssets, listChannelPresets, listRoleTemplates, listRoles, uploadAsset, uploadFile } from "@/lib/api";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -67,6 +68,78 @@ function inferAssetKind(file: File): AssetKind {
   if (/\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(name)) return "image";
   if (/\.(mp4|mov|webm|mkv|avi)$/i.test(name)) return "video";
   return "doc";
+}
+
+const IMAGE_EXT = /^(png|jpe?g|webp|gif|bmp|svg|avif|ico)$/i;
+
+function fileExtension(name: string) {
+  const clean = name.split(/[\\/]/).pop()?.split(/[?#]/)[0] || "";
+  const ext = clean.includes(".") ? clean.split(".").pop() || "" : "";
+  const label = ext.replace(/[^a-z0-9]/gi, "").slice(0, 5).toUpperCase();
+  return label || "FILE";
+}
+
+function isImageAttachment(file: { name: string; url: string }) {
+  return IMAGE_EXT.test(fileExtension(file.name)) || /\.(png|jpe?g|webp|gif|bmp|svg|avif)(\?|$)/i.test(file.url);
+}
+
+function ChatAttachmentChip({ file, onRemove }: { file: BottomBarState["files"][number]; onRemove: () => void }) {
+  const chipRef = useRef<HTMLDivElement>(null);
+  const [preview, setPreview] = useState<{ left: number; top: number } | null>(null);
+  const image = isImageAttachment(file) && !!file.url;
+  const extension = fileExtension(file.name);
+
+  const showPreview = () => {
+    const rect = chipRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPreview({ left: rect.left + rect.width / 2, top: rect.top });
+  };
+
+  return (
+    <div ref={chipRef} className="relative shrink-0" onMouseEnter={showPreview} onMouseLeave={() => setPreview(null)}>
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={file.url} alt={file.name} className="h-11 w-11 rounded-lg border border-white/70 bg-white object-cover shadow-sm" />
+      ) : (
+        <div className="flex h-11 min-w-11 items-center justify-center rounded-lg bg-emerald-500 px-1.5 text-[10px] font-semibold leading-none tracking-wide text-white shadow-sm">
+          {extension}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white shadow"
+        aria-label={`移除 ${file.name}`}
+      >
+        <X size={10} />
+      </button>
+      {preview && typeof document !== "undefined" && createPortal(
+        <div className="pointer-events-none fixed z-[80] -translate-x-1/2 -translate-y-full pb-2" style={{ left: preview.left, top: preview.top }}>
+          {image ? (
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={file.url} alt="" className="h-40 w-40 object-contain" />
+              <div className="max-w-40 truncate border-t border-gray-100 px-2 py-1 text-[11px] text-gray-600">{file.name}</div>
+            </div>
+          ) : (
+            <div className="max-w-[280px] break-all rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs leading-5 text-white shadow-xl">{file.name}</div>
+          )}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+export function ChatAttachmentChips({ files, onRemove }: { files: BottomBarState["files"]; onRemove: (id: string) => void }) {
+  if (files.length === 0) return null;
+  return (
+    <div className="flex w-full min-w-0 basis-full items-center gap-2 overflow-x-auto py-1">
+      {files.map((file) => (
+        <ChatAttachmentChip key={file.public_id} file={file} onRemove={() => onRemove(file.public_id)} />
+      ))}
+    </div>
+  );
 }
 
 function clsx(...xs: Array<string | false | null | undefined>) {
@@ -833,23 +906,7 @@ export function ChatTopTools({
           />
         </>
       )}
-      {showUpload && value.files.length > 0 && (
-        <div className="scroll-x-only flex flex-nowrap items-center gap-1.5 max-w-full sm:max-w-[420px] shrink-0">
-          {value.files.slice(0, 5).map((f) => (
-            <div key={f.public_id} className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-600 dark:bg-white/5 dark:border-white/10 dark:text-gray-300">
-              <span className="truncate max-w-[120px]">{f.name}</span>
-              <button
-                type="button"
-                className="w-4 h-4 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 dark:bg-white/10 dark:border-white/10 dark:text-gray-300"
-                onClick={() => removeFile(f.public_id)}
-              >
-                <X size={10} />
-              </button>
-            </div>
-          ))}
-          {value.files.length > 5 && <span className="text-xs text-gray-400">+{value.files.length - 5}</span>}
-        </div>
-      )}
+      {showUpload && <ChatAttachmentChips files={value.files} onRemove={removeFile} />}
 
       {/* Asset library */}
       <button

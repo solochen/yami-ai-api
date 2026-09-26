@@ -1235,6 +1235,7 @@ func (h *Handler) ChatCompletion(c *gin.Context) {
 	if !h.enforceContentSafety(c, userID, "chat", input) {
 		return
 	}
+	input = h.chat.MaybeCompressContext(c.Request.Context(), userID, input)
 	if _, err := h.chat.ResolveInputModel(c.Request.Context(), &input); err != nil {
 		openAPIError(c, http.StatusBadRequest, "model_not_found", "模型不存在或未启用，请检查 model 是否为后台模型编码或接入模型名")
 		return
@@ -1858,10 +1859,25 @@ func (h *Handler) chatStream(c *gin.Context, userID int64, input service.Complet
 		h.chatMultiStream(c, userID, input, channelKey)
 		return
 	}
+	input = h.chat.MaybeCompressContext(c.Request.Context(), userID, input)
 	h.chatStreamSingle(c, userID, input, model)
 }
 
+const chatAutoContinueLimit = 2
+const chatAutoContinuePrompt = "从刚才中断的位置继续写完。不要重复已写内容，不要另起说明。"
+
+func chatAutoContinueEnabled(params map[string]interface{}) bool {
+	value, ok := params["auto_continue"].(bool)
+	return ok && value
+}
+
+func chatOutputLimited(err error) bool {
+	var pe *runtime.PlatformError
+	return errors.As(err, &pe) && pe.Code == "MODEL_OUTPUT_LIMIT"
+}
+
 func (h *Handler) chatStreamSingle(c *gin.Context, userID int64, input service.CompletionInput, model *service.ModelFull) {
+	autoContinue := chatAutoContinueEnabled(input.Params)
 	requestID, ch, estimated, err := h.chat.CompletionStream(c.Request.Context(), userID, input)
 	if err != nil {
 		if failChatBalanceOpenAPI(c, err) {
@@ -1882,55 +1898,115 @@ func (h *Handler) chatStreamSingle(c *gin.Context, userID int64, input service.C
 	c.Writer.Header().Set("Connection", "keep-alive")
 	c.Writer.WriteHeader(http.StatusOK)
 	flusher, _ := c.Writer.(http.Flusher)
-
-	var fullContent, fullReasoningContent string
-	var usage *runtime.ChatUsage
 	writeOpenAIStreamChunk(c, requestID, input.ModelCode, map[string]interface{}{"role": "assistant"}, "", nil)
 	flusher.Flush()
 
-	for chunk := range ch {
-		if chunk.Error != nil {
-			message := "模型服务异常"
-			if unfreezeErr := h.chat.UnfreezeStream(context.Background(), userID, requestID, estimated); unfreezeErr != nil {
-				message = "模型服务异常，且冻结额度释放失败，请联系客服核对账单"
+	var fullContent, fullReasoningContent string
+	continues := 0
+	roundInput := input
+	for {
+		var usage *runtime.ChatUsage
+		var roundContent, roundReasoning string
+		truncated := false
+		var streamErr error
+		for chunk := range ch {
+			if chunk.Error != nil {
+				if autoContinue && chatOutputLimited(chunk.Error) && strings.TrimSpace(fullContent+roundContent) != "" && continues < chatAutoContinueLimit {
+					truncated = true
+					break
+				}
+				streamErr = chunk.Error
+				break
 			}
-			openAIStreamError(c, message)
+			if chunk.Content != "" {
+				roundContent += chunk.Content
+				writeOpenAIStreamChunk(c, requestID, input.ModelCode, map[string]interface{}{"content": chunk.Content}, "", nil)
+				flusher.Flush()
+			}
+			if chunk.ReasoningContent != "" {
+				roundReasoning += chunk.ReasoningContent
+				writeOpenAIStreamChunk(c, requestID, input.ModelCode, map[string]interface{}{"reasoning_content": chunk.ReasoningContent}, "", nil)
+				flusher.Flush()
+			}
+			if len(chunk.ToolCalls) > 0 {
+				writeOpenAIStreamChunk(c, requestID, input.ModelCode, map[string]interface{}{"tool_calls": chunk.ToolCalls}, "", nil)
+				flusher.Flush()
+			}
+			if chunk.Usage != nil {
+				usage = chunk.Usage
+			}
+			if chunk.Done || truncated || streamErr != nil {
+				break
+			}
+		}
+		if truncated {
+			go func(left <-chan runtime.StreamChunk) {
+				for range left {
+				}
+			}(ch)
+		}
+		fullContent += roundContent
+		fullReasoningContent += roundReasoning
+		if streamErr != nil {
+			if unfreezeErr := h.chat.UnfreezeStream(context.Background(), userID, requestID, estimated); unfreezeErr != nil {
+				openAIStreamError(c, "模型服务异常，且冻结额度释放失败，请联系客服核对账单")
+			} else if strings.TrimSpace(fullContent) != "" {
+				conversationID, _ := h.chat.SaveCompletedChat(context.Background(), userID, input, fullContent, fullReasoningContent)
+				h.finishOpenAIStream(c, requestID, input.ModelCode, conversationID, usage)
+			} else {
+				openAIStreamError(c, "模型服务异常")
+			}
 			flusher.Flush()
 			return
 		}
-		if chunk.Content != "" {
-			fullContent += chunk.Content
-			writeOpenAIStreamChunk(c, requestID, input.ModelCode, map[string]interface{}{"content": chunk.Content}, "", nil)
+		if truncated {
+			billed := roundInput
+			billed.Ephemeral = true
+			if _, finalizeErr := h.chat.FinalizeStream(context.Background(), userID, requestID, billed, roundContent, roundReasoning, usage, estimated); finalizeErr != nil {
+				openAIStreamError(c, "费用结算失败，请联系客服核对账单")
+				flusher.Flush()
+				return
+			}
+			continues++
+			writeOpenAIStreamChunk(c, requestID, input.ModelCode, map[string]interface{}{}, "", nil)
+			notice := buildOpenAIStreamPayload(requestID, input.ModelCode, map[string]interface{}{}, "", nil)
+			notice["auto_continue"] = true
+			noticeData, _ := json.Marshal(notice)
+			c.Writer.Write([]byte("data: " + string(noticeData) + "\n\n"))
 			flusher.Flush()
+			roundInput = input
+			roundInput.Messages = append(append([]runtime.ChatMessage{}, input.Messages...),
+				runtime.ChatMessage{Role: "assistant", Content: fullContent},
+				runtime.ChatMessage{Role: "user", Content: chatAutoContinuePrompt},
+			)
+			roundInput.Ephemeral = true
+			requestID, ch, estimated, err = h.chat.CompletionStream(c.Request.Context(), userID, roundInput)
+			if err != nil {
+				conversationID, _ := h.chat.SaveCompletedChat(context.Background(), userID, input, fullContent, fullReasoningContent)
+				h.finishOpenAIStream(c, requestID, input.ModelCode, conversationID, nil)
+				flusher.Flush()
+				return
+			}
+			continue
 		}
-		if chunk.ReasoningContent != "" {
-			fullReasoningContent += chunk.ReasoningContent
-			writeOpenAIStreamChunk(c, requestID, input.ModelCode, map[string]interface{}{"reasoning_content": chunk.ReasoningContent}, "", nil)
+		conversationID, finalizeErr := h.chat.FinalizeStream(context.Background(), userID, requestID, input, fullContent, fullReasoningContent, usage, estimated)
+		if finalizeErr != nil {
+			openAIStreamError(c, "费用结算失败，请联系客服核对账单")
 			flusher.Flush()
+			return
 		}
-		if len(chunk.ToolCalls) > 0 {
-			writeOpenAIStreamChunk(c, requestID, input.ModelCode, map[string]interface{}{"tool_calls": chunk.ToolCalls}, "", nil)
-			flusher.Flush()
-		}
-		if chunk.Usage != nil {
-			usage = chunk.Usage
-		}
-		if chunk.Done {
-			break
-		}
-	}
-	conversationID, finalizeErr := h.chat.FinalizeStream(context.Background(), userID, requestID, input, fullContent, fullReasoningContent, usage, estimated)
-	if finalizeErr != nil {
-		openAIStreamError(c, "费用结算失败，请联系客服核对账单")
+		h.finishOpenAIStream(c, requestID, input.ModelCode, conversationID, usage)
 		flusher.Flush()
 		return
 	}
-	final := buildOpenAIStreamPayload(requestID, input.ModelCode, map[string]interface{}{}, "stop", usage)
+}
+
+func (h *Handler) finishOpenAIStream(c *gin.Context, requestID, model, conversationID string, usage *runtime.ChatUsage) {
+	final := buildOpenAIStreamPayload(requestID, model, map[string]interface{}{}, "stop", usage)
 	final["conversation_id"] = conversationID
 	data, _ := json.Marshal(final)
 	c.Writer.Write([]byte("data: " + string(data) + "\n\n"))
 	c.Writer.Write([]byte("data: [DONE]\n\n"))
-	flusher.Flush()
 }
 
 func writeOpenAIStreamChunk(c *gin.Context, requestID, model string, delta map[string]interface{}, finishReason string, usage *runtime.ChatUsage) {
@@ -6560,6 +6636,13 @@ func (h *Handler) AdminUpdateConfig(c *gin.Context) {
 		model, err := h.models.GetFullByCode(c.Request.Context(), strings.TrimSpace(code))
 		if err != nil || model == nil || !model.IsEnabled || model.Category != "chat" || (model.RequestMode != "chat_completions" && model.RequestMode != "responses") {
 			util.BadRequest(c, "联网搜索路由模型必须是已启用的对话模型")
+			return
+		}
+	}
+	if code, ok := req["chat_compression_model_code"].(string); ok && strings.TrimSpace(code) != "" {
+		model, err := h.models.GetFullByCode(c.Request.Context(), strings.TrimSpace(code))
+		if err != nil || model == nil || !model.IsEnabled || model.Category != "chat" || model.Code == "multi_collab_chat" {
+			util.BadRequest(c, "压缩模型必须是已启用的对话模型")
 			return
 		}
 	}

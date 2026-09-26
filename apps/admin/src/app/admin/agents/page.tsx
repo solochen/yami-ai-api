@@ -105,6 +105,12 @@ type FormState = {
   icon: string;
   sort_order: number;
   is_enabled: boolean;
+  toolbox_enabled: boolean;
+  toolbox_category: string;
+  toolbox_subtitle: string;
+  toolbox_tags: string;
+  toolbox_badges: string[];
+  toolbox_billing: string;
   generation_type: GenerationType;
   quality_model_code: string;
   image_concurrency: number;
@@ -849,6 +855,12 @@ function makeEmptyForm(): FormState {
     icon: preset.icon,
     sort_order: 0,
     is_enabled: true,
+    toolbox_enabled: false,
+    toolbox_category: "content",
+    toolbox_subtitle: "",
+    toolbox_tags: "",
+    toolbox_badges: ["available"],
+    toolbox_billing: "",
     generation_type: "image",
     quality_model_code: "",
     image_concurrency: 3,
@@ -1053,6 +1065,12 @@ export default function AgentsAdminPage() {
       icon: w.icon || preset.icon,
       sort_order: Number(w.sort_order || 0),
       is_enabled: w.is_enabled,
+      toolbox_enabled: display.toolbox?.enabled === true,
+      toolbox_category: display.toolbox?.category || "content",
+      toolbox_subtitle: display.toolbox?.subtitle || "",
+      toolbox_tags: Array.isArray(display.toolbox?.tags) ? display.toolbox.tags.join(", ") : "",
+      toolbox_badges: Array.isArray(display.toolbox?.badges) && display.toolbox.badges.length ? display.toolbox.badges : ["available"],
+      toolbox_billing: display.toolbox?.billing || "",
       generation_type: type,
       quality_model_code: runtime.quality_model_code || "",
       image_concurrency: Number(runtime.image_concurrency || 3),
@@ -1286,7 +1304,17 @@ export default function AgentsAdminPage() {
       price_rule: form.generation_type === "creative_agent" || form.generation_type === "novel_workshop" || form.generation_type === "photo_studio" || form.generation_type === "virtual_try_on"
         ? { billing_type: "model_actual", unit_price: form.generation_type === "creative_agent" ? 0 : Number(form.unit_price) || 0 }
         : bundle.price_rule,
-      display_config: bundle.display_config,
+      display_config: {
+        ...bundle.display_config,
+        toolbox: {
+          enabled: form.toolbox_enabled,
+          category: form.toolbox_category,
+          subtitle: form.toolbox_subtitle.trim(),
+          tags: form.toolbox_tags.split(/[,，]/).map((item) => item.trim()).filter(Boolean),
+          badges: form.toolbox_badges,
+          billing: form.toolbox_billing.trim(),
+        },
+      },
       runtime_config: form.system_workspace
         ? {
           ...bundle.runtime_config,
@@ -1430,6 +1458,47 @@ export default function AgentsAdminPage() {
                 <Field label="状态"><label className="flex h-10 items-center gap-2 rounded-xl border border-gray-100 px-3 text-sm"><input type="checkbox" checked={form.is_enabled} onChange={(e) => setForm({ ...form, is_enabled: e.target.checked })} />启用{form.system_workspace ? "工作流" : "智能体"}</label></Field>
                 <Field label="描述" wide><input className="admin-input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
                 <Field label="排序"><input type="number" className="admin-input" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) || 0 })} /></Field>
+              </section>
+
+              <section className="grid gap-4 rounded-2xl border border-gray-100 p-4 md:grid-cols-2">
+                <div className="md:col-span-2 text-sm font-semibold text-gray-900">工具箱目录</div>
+                <Field label="上架到工具箱"><label className="flex h-10 items-center gap-2 rounded-xl border border-gray-100 px-3 text-sm"><input type="checkbox" checked={form.toolbox_enabled} onChange={(e) => setForm({ ...form, toolbox_enabled: e.target.checked })} />在工具箱中展示</label></Field>
+                <Field label="工具分类">
+                  <select className="admin-input" value={form.toolbox_category} onChange={(e) => setForm({ ...form, toolbox_category: e.target.value })}>
+                    <option value="video">视频处理</option>
+                    <option value="content">内容创作</option>
+                    <option value="ai_create">AI 创作</option>
+                    <option value="assistant">AI 助手</option>
+                    <option value="document">文档处理</option>
+                    <option value="image">图片处理</option>
+                    <option value="text">文字处理</option>
+                  </select>
+                </Field>
+                <Field label="一句话说明" wide><input className="admin-input" value={form.toolbox_subtitle} onChange={(e) => setForm({ ...form, toolbox_subtitle: e.target.value })} placeholder="卡片上的短说明" /></Field>
+                <Field label="标签" wide><input className="admin-input" value={form.toolbox_tags} onChange={(e) => setForm({ ...form, toolbox_tags: e.target.value })} placeholder="用逗号分隔，例如：超分, 降噪" /></Field>
+                <Field label="计费文案"><input className="admin-input" value={form.toolbox_billing} onChange={(e) => setForm({ ...form, toolbox_billing: e.target.value })} placeholder="例如：按模型实际消耗" /></Field>
+                <Field label="角标">
+                  <div className="flex h-10 flex-wrap items-center gap-3 rounded-xl border border-gray-100 px-3 text-sm">
+                    {[
+                      ["available", "可用"],
+                      ["recommended", "推荐"],
+                      ["before_create", "创作前"],
+                      ["migrating", "迁移中"],
+                    ].map(([code, label]) => (
+                      <label key={code} className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={form.toolbox_badges.includes(code)}
+                          onChange={(e) => setForm({
+                            ...form,
+                            toolbox_badges: e.target.checked ? [...form.toolbox_badges, code] : form.toolbox_badges.filter((item) => item !== code),
+                          })}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </Field>
               </section>
 
               {(form.system_workspace || form.generation_type === "comic_drama") && <section className="grid gap-3 rounded-2xl border border-cyan-100 p-4 md:grid-cols-3">

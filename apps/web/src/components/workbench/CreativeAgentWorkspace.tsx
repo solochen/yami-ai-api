@@ -16,7 +16,7 @@ import { AgentLanding } from "./AgentLanding";
 import { AgentIcon } from "./AgentIcon";
 import { AgentRichText } from "./AgentRichText";
 import { downloadAgentDocument, requestsAgentDocument } from "./agentDocumentExport";
-import { ChatTopTools, type BottomBarState } from "./BottomBar";
+import { ChatAttachmentChips, ChatTopTools, type BottomBarState } from "./BottomBar";
 import { AGENT_THEMES } from "./categoryMeta";
 import { finalWorkflowMedia, workflowMaterials, workflowOutputIssue, workflowSuccessMessage, updateWorkflowMessages, type TaskState, type WorkflowMessage } from "./creativeAgentWorkflow";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -1560,13 +1560,8 @@ export function CreativeAgentWorkspace({
               <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void sendMessage(); } }} placeholder={t("描述想法，或上传参考素材直接创作。")} rows={3} aria-label={t("创作需求")} className="min-h-[48px] min-w-0 flex-1 resize-none bg-transparent px-1 py-1.5 text-sm leading-relaxed text-gray-700 outline-none placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-gray-500 sm:min-h-[88px] sm:py-2" />
             </div>
             {bottom.files.length > 0 && (
-              <div className="scroll-x-only flex flex-nowrap items-center gap-1.5 px-3 pb-3 sm:px-4">
-                {bottom.files.map((file) => (
-                  <div key={file.public_id} className="flex max-w-[180px] shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
-                    <span className="truncate">{file.name}</span>
-                    <button type="button" onClick={() => setBottom((current) => ({ ...current, files: current.files.filter((item) => item.public_id !== file.public_id) }))} className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 dark:border-white/10 dark:bg-white/10 dark:text-gray-300" aria-label={`移除 ${file.name}`}><X size={10} /></button>
-                  </div>
-                ))}
+              <div className="px-3 pb-3 sm:px-4">
+                <ChatAttachmentChips files={bottom.files} onRemove={(id) => setBottom((current) => ({ ...current, files: current.files.filter((item) => item.public_id !== id) }))} />
               </div>
             )}
             <div className="flex items-center gap-2 border-t border-gray-50 px-2 py-2 dark:border-white/10 sm:px-4 sm:py-3">
