@@ -54,7 +54,8 @@ function normalizeLanguage(item: UILanguage): UILanguage | null {
 }
 
 export function normalizeUILanguages(items?: UILanguage[]) {
-  const source = items?.length ? items : DEFAULT_UI_LANGUAGES;
+  const allowed = new Set(DEFAULT_UI_LANGUAGES.map((item) => item.code));
+  const source = (items?.length ? items : DEFAULT_UI_LANGUAGES).filter((item) => allowed.has(item.code));
   const unique = new Map<string, UILanguage>();
   source.forEach((item) => {
     const cleaned = normalizeLanguage(item);

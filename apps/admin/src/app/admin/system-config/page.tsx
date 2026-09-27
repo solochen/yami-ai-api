@@ -332,6 +332,12 @@ export default function SystemConfigPage() {
         chat_compression_min_chars: 6000,
         chat_compression_min_messages: 8,
         chat_compression_keep_messages: 6,
+        vidu_api_key: "",
+        vidu_api_host: "api.vidu.cn",
+        vidu_public_base_url: "",
+        vidu_voice_price_per_minute: 100,
+        vidu_video_price_per_minute: 3500,
+        vidu_text_credit_rate: 1,
         web_search_provider: "tavily",
         web_search_api_key: "",
         web_search_exa_api_key: "",
@@ -1407,6 +1413,19 @@ export default function SystemConfigPage() {
             {renderItem({ key: "chat_compression_min_chars", label: "触发字数", type: "number", min: 500, hint: "去掉系统提示后，历史超过这个字数才会压缩。默认 6000。" })}
             {renderItem({ key: "chat_compression_min_messages", label: "触发消息条数", type: "number", min: 2, hint: "历史消息超过这个条数也会压缩。默认 8。" })}
             {renderItem({ key: "chat_compression_keep_messages", label: "保留最近消息条数", type: "number", min: 2, hint: "最近这些消息保持原文，更早的内容才进入摘要。默认 6。" })}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm shadow-gray-950/5">
+          <div className="mb-1 text-sm font-semibold text-gray-900">实时数字人</div>
+          <p className="mb-5 text-xs leading-relaxed text-gray-400">密钥只保存在服务端。公网地址必须能被 Vidu 访问，角色知识库才会在通话中被引用。语音和视频按 Vidu 实际计费秒数折算成每分钟价格扣费。</p>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {renderItem({ key: "vidu_api_key", label: "Vidu API Key", type: "password", hint: "格式 Token 后面的密钥。保存后只显示脱敏值。" })}
+            {renderItem({ key: "vidu_api_host", label: "Vidu 接口域名", hint: "国内站 api.vidu.cn。密钥需来自 platform.vidu.cn，不要带 https://。" })}
+            {renderItem({ key: "vidu_public_base_url", label: "本站公网地址", hint: "例如 https://api.example.com。Vidu 用它回调知识库检索。" })}
+            {renderItem({ key: "vidu_voice_price_per_minute", label: "语音通话价格（算力/分钟）", type: "number", min: 0 })}
+            {renderItem({ key: "vidu_video_price_per_minute", label: "视频通话价格（算力/分钟）", type: "number", min: 0 })}
+            {renderItem({ key: "vidu_text_credit_rate", label: "文字会话换算", type: "number", min: 0, hint: "Vidu 返回的 credits_cost 乘以这个倍数，记成算力。" })}
           </div>
         </section>
 

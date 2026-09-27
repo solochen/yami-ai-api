@@ -381,8 +381,8 @@ func walletTransactionDisplayName(item TransactionItem, modelName, taskType, wor
 }
 
 func walletConsumptionType(mediaType, transactionType, remark string) string {
-	if strings.TrimSpace(remark) == "上下文压缩" {
-		return "上下文压缩"
+	if strings.TrimSpace(remark) == "上下文压缩" || strings.TrimSpace(remark) == "数字人语音" || strings.TrimSpace(remark) == "数字人视频" || strings.TrimSpace(remark) == "数字人视频退回" || strings.TrimSpace(remark) == "数字人文字" {
+		return strings.TrimSpace(remark)
 	}
 	switch strings.ToLower(strings.TrimSpace(mediaType)) {
 	case "chat", "text":

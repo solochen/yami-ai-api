@@ -34,6 +34,7 @@ const AgentWorkspace = dynamic(() => loadAgentWorkspace().then(module => module.
 const GalleryPanel = dynamic(() => import("./workbench/GalleryPanel").then(module => module.GalleryPanel), { loading: WorkspaceLoading });
 const InfiniteCanvasWorkspace = dynamic(() => loadInfiniteCanvasWorkspace().then(module => module.InfiniteCanvasWorkspace), { loading: WorkspaceLoading });
 const CreativeAgentWorkspace = dynamic(() => loadCreativeAgentWorkspace().then(module => module.CreativeAgentWorkspace), { loading: WorkspaceLoading });
+const DigitalHumanWorkspace = dynamic(() => import("./workbench/DigitalHumanWorkspace").then(module => module.DigitalHumanWorkspace), { loading: WorkspaceLoading });
 
 const PRIMARY_NAV = [
   { id: "models", label: "大模型", icon: LayoutGrid },
@@ -61,6 +62,7 @@ const CONTENT_IMAGE_POST_CODE = "content_image_post";
 const VIDEO_CREATION_CODE = "video_creation";
 const VIDEO_CREATION_V2_CODE = "video_creation_v2";
 const GENERAL_CREATIVE_AGENT_CODE = "general_creative_agent";
+const REALTIME_AVATAR_CODE = "realtime_avatar";
 const CANVAS_WORKFLOW_CODES = new Set([
   INFINITE_CANVAS_CODE,
   VIRAL_REMAKE_CODE,
@@ -620,7 +622,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
               >
                 <option value="all">{ts("全部公司")}</option>
                 {modelVendorOptions.map((vendor) => (
-                  <option key={vendor.id} value={vendor.id}>{vendor.label}</option>
+                  <option key={vendor.id} value={vendor.id}>{ts(vendor.label)}</option>
                 ))}
               </select>
               <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
@@ -1221,6 +1223,8 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                   />
                 ) : activeAgentCode === GENERAL_CREATIVE_AGENT_CODE ? (
                   <CreativeAgentWorkspace key={activeAgentCode} />
+                ) : activeAgentCode === REALTIME_AVATAR_CODE ? (
+                  <DigitalHumanWorkspace key={activeAgentCode} />
                 ) : (
                   <AgentWorkspace key={activeAgentCode} code={activeAgentCode} />
                 )
