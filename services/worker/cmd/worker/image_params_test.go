@@ -216,6 +216,100 @@ func TestAgentPromptDoesNotAddReferenceLockWithoutReference(t *testing.T) {
 	}
 }
 
+func TestBuildOpenRouterImagePayload(t *testing.T) {
+	rule := map[string]interface{}{
+		"upstream": map[string]interface{}{"adapter": "openrouter_image"},
+		"image":    map[string]interface{}{"supported_size_tiers": []interface{}{"1K", "2K"}, "count_max": float64(1)},
+	}
+	if !isOpenRouterImageAdapter(rule) {
+		t.Fatal("adapter not recognized")
+	}
+	if got := clampOpenRouterImageCount(rule, 4); got != 1 {
+		t.Fatalf("count = %d, want 1", got)
+	}
+	payload := buildOpenRouterImagePayload(context.Background(), "bytedance-seed/seedream-5-0-pro", "seedream-5-0-pro", "一只猫", 1, rule, map[string]interface{}{
+		"aspect_ratio":     "16:9",
+		"image_size":       "2K",
+		"size":             "2560x1440",
+		"reference_images": []string{"https://example.com/a.png"},
+	})
+	if payload["resolution"] != "2K" || payload["aspect_ratio"] != "16:9" {
+		t.Fatalf("payload = %#v", payload)
+	}
+	if _, ok := payload["size"]; ok {
+		t.Fatal("pixel size must not be sent to OpenRouter")
+	}
+	refs, _ := payload["input_references"].([]map[string]interface{})
+	if len(refs) != 1 || refs[0]["type"] != "image_url" {
+		t.Fatalf("references = %#v", payload["input_references"])
+	}
+	noTier := map[string]interface{}{"upstream": map[string]interface{}{"adapter": "openrouter_image"}, "image": map[string]interface{}{}}
+	plain := buildOpenRouterImagePayload(context.Background(), "openai/gpt-image-2", "gpt-image-2", "一只猫", 1, noTier, map[string]interface{}{"image_size": "1K", "quality": "high"})
+	if _, ok := plain["resolution"]; ok {
+		t.Fatal("resolution sent to a model that does not accept it")
+	}
+	if plain["quality"] != "high" {
+		t.Fatalf("quality = %v", plain["quality"])
+	}
+}
+
+func TestBuildOpenRouterVideoPayloadUsesOpeningFrame(t *testing.T) {
+	rule := map[string]interface{}{
+		"upstream": map[string]interface{}{"adapter": "openrouter_video"},
+		"video":    map[string]interface{}{"supported_frame_images": []interface{}{"first_frame", "last_frame"}},
+	}
+	payload := buildOpenRouterVideoPayload(context.Background(), "google/veo-3.1", "veo-3-1", "雨夜", rule, map[string]interface{}{
+		"duration":         float64(8),
+		"resolution":       "720p",
+		"aspect_ratio":     "16:9",
+		"reference_images": []string{"https://example.com/start.png"},
+	})
+	if payload["duration"] != 8 || payload["resolution"] != "720p" || payload["aspect_ratio"] != "16:9" {
+		t.Fatalf("payload = %#v", payload)
+	}
+	frames, _ := payload["frame_images"].([]map[string]interface{})
+	if len(frames) != 1 || frames[0]["frame_type"] != "first_frame" {
+		t.Fatalf("frames = %#v", payload["frame_images"])
+	}
+}
+
+func TestBuildOpenRouterVideoPayloadReferenceMix(t *testing.T) {
+	rule := map[string]interface{}{
+		"upstream": map[string]interface{}{"adapter": "openrouter_video"},
+		"video":    map[string]interface{}{"supported_frame_images": []interface{}{"first_frame", "last_frame"}},
+	}
+	payload := buildOpenRouterVideoPayload(context.Background(), "minimax/hailuo-3", "hailuo-3", "走路", rule, map[string]interface{}{
+		"generation_mode":  "reference",
+		"reference_images": []string{"https://example.com/a.png", "https://example.com/b.png"},
+		"reference_videos": []string{"https://example.com/move.mp4"},
+		"reference_audios": []string{"https://example.com/voice.mp3"},
+		"generate_audio":   true,
+	})
+	if _, ok := payload["frame_images"]; ok {
+		t.Fatal("reference mode must not send frame images")
+	}
+	refs, _ := payload["input_references"].([]map[string]interface{})
+	if len(refs) != 4 || refs[2]["type"] != "video_url" || refs[3]["type"] != "audio_url" {
+		t.Fatalf("references = %#v", payload["input_references"])
+	}
+	if payload["generate_audio"] != true {
+		t.Fatalf("audio flag = %#v", payload["generate_audio"])
+	}
+}
+
+func TestFirstUnsignedVideoURL(t *testing.T) {
+	raw := map[string]interface{}{"unsigned_urls": []interface{}{"https://openrouter.ai/api/v1/videos/abc/content?index=0"}}
+	if got := firstUnsignedVideoURL(raw); !strings.Contains(got, "/videos/abc/content") {
+		t.Fatalf("url = %q", got)
+	}
+}
+
+func TestUpstreamUSDCost(t *testing.T) {
+	if got := upstreamUSDCost([]byte(`{"data":[{"b64_json":"abc"}],"usage":{"cost":0.045}}`)); got != 0.045 {
+		t.Fatalf("cost = %v", got)
+	}
+}
+
 func TestAgentPromptDoesNotTreatComicStyleCoverAsSubjectReference(t *testing.T) {
 	prompt := agentPromptWithScene("create a premium product shot", map[string]interface{}{
 		"comic_style": map[string]interface{}{"cover_url": "https://cdn.example/style-cover.png"},

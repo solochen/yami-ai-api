@@ -16,10 +16,17 @@ type PaymentConfig = {
   payment_enabled: boolean;
   card_recharge_enabled: boolean;
   payment_provider?: string;
+  payment_channels?: string[];
   payment_currency?: string;
   payment_mock_mode?: boolean;
   payment_packages?: PaymentPackage[];
 };
+
+function moneyLabel(amount: number, currency?: string) {
+  const value = amount.toFixed(2).replace(/\.00$/, "");
+  if ((currency || "").toUpperCase() === "CNY") return `¥${value}`;
+  return `${value} ${currency || ""}`.trim();
+}
 
 export function RechargeModal({ open, onClose, onSuccess }: Props) {
   const { t } = useI18n();
@@ -30,22 +37,60 @@ export function RechargeModal({ open, onClose, onSuccess }: Props) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [config, setConfig] = useState<PaymentConfig | null>(null);
+  const [channel, setChannel] = useState("");
+  const [wechatQR, setWechatQR] = useState("");
+  const [wechatOrderNo, setWechatOrderNo] = useState("");
   const packages = config?.payment_packages || [];
+  const channels = config?.payment_mock_mode ? [] : (config?.payment_channels || []);
   const selectedPackage = packages.find((item) => item.public_id === packageId) || packages[0];
   const amount = selectedPackage?.amount || 0;
+  const payChannel = channel || channels[0] || config?.payment_provider || "mock";
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setWechatQR("");
+      setWechatOrderNo("");
+      return;
+    }
     setMessage("");
     setError("");
     api<PaymentConfig>("/api/payment/config")
       .then((c) => {
         setConfig(c);
         setTab(c.payment_enabled ? "online" : "card");
+        setChannel((current) => c.payment_channels?.includes(current) ? current : c.payment_channels?.[0] || "");
         setPackageId((current) => c.payment_packages?.some((item) => item.public_id === current) ? current : c.payment_packages?.[0]?.public_id || "");
       })
       .catch(() => setConfig(null));
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !wechatOrderNo) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const order = await api<{ status: string; compute_credited: number }>(`/api/payment/orders/${wechatOrderNo}`);
+        if (cancelled) return;
+        if (order.status === "paid") {
+          setWechatOrderNo("");
+          setWechatQR("");
+          setMessage(t("recharge.paymentSuccess", { amount: order.compute_credited }));
+          onSuccess?.();
+        } else if (order.status === "failed" || order.status === "expired") {
+          setWechatOrderNo("");
+          setWechatQR("");
+          setError(t("recharge.paymentFailed"));
+        }
+      } catch {
+        // A single poll failure should not cancel the payment; the next tick retries.
+      }
+    };
+    const timer = window.setInterval(poll, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [open, wechatOrderNo, onSuccess, t]);
 
   const handleRedeem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,10 +117,16 @@ export function RechargeModal({ open, onClose, onSuccess }: Props) {
     setError("");
     setMessage("");
     try {
-      const res = await api<{ compute_credited: number; status: string; checkout_url?: string }>("/api/payment/orders", {
+      const res = await api<{ compute_credited: number; status: string; checkout_url?: string; code_url?: string; qr_image?: string; order_no?: string }>("/api/payment/orders", {
         method: "POST",
-        body: JSON.stringify({ package_id: selectedPackage?.public_id, channel: config?.payment_provider || "mock" }),
+        body: JSON.stringify({ package_id: selectedPackage?.public_id, channel: payChannel }),
       });
+      if (res.status === "pending" && res.code_url) {
+        setWechatQR(res.qr_image || "");
+        setWechatOrderNo(res.order_no || "");
+        setMessage(t("recharge.waitingPayment"));
+        return;
+      }
       if (res.status === "pending" && res.checkout_url) {
         window.location.assign(res.checkout_url);
         return;
@@ -138,22 +189,54 @@ export function RechargeModal({ open, onClose, onSuccess }: Props) {
                       }`}
                     >
                       {item.badge ? <span className="absolute -right-1.5 -top-2 max-w-[90%] truncate rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-medium text-white">{item.badge}</span> : null}
-                      <span className="block">{item.amount.toFixed(2).replace(/\.00$/, "")} {config?.payment_currency || ""}</span>
+                      <span className="block">{moneyLabel(item.amount, config?.payment_currency)}</span>
                       <span className="mt-1 block text-[10px] font-medium text-emerald-600 dark:text-emerald-300">{t("recharge.creditsReceived", { amount: item.effective_compute_credits.toFixed(2).replace(/\.00$/, "") })}</span>
                       {item.name && item.name !== `${item.amount} ${config?.payment_currency || ""}` ? <span className="mt-1 block truncate text-[10px] font-normal opacity-65">{item.name}</span> : null}
                     </button>
                   ))}
                 </div> : <div className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-400 dark:border-white/10">{t("recharge.noPackages")}</div>}
 
+                {channels.length > 1 && (
+                  <div>
+                    <div className="mb-2 text-xs text-gray-400">{t("recharge.chooseChannel")}</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {channels.map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => setChannel(item)}
+                          className={`rounded-xl border px-3 py-2 text-sm font-medium ${
+                            payChannel === item
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-gray-200 text-gray-600 dark:border-white/10 dark:text-gray-300"
+                          }`}
+                        >
+                          {t(`recharge.channel.${item}`)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {wechatOrderNo && (
+                  <div className="rounded-xl border border-gray-200 px-4 py-4 text-center dark:border-white/10">
+                    <div className="text-sm font-medium text-gray-800 dark:text-gray-100">{t("recharge.wechatScan")}</div>
+                    {wechatQR ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={wechatQR} alt={t("recharge.wechatScan")} className="mx-auto mt-3 h-52 w-52 rounded-lg bg-white p-2" />
+                    ) : null}
+                  </div>
+                )}
+
                 {error && <p className="text-sm text-danger">{error}</p>}
                 {message && <p className="text-sm text-primary">{message}</p>}
 
                 <button
                   onClick={handleOnline}
-                  disabled={loading || !selectedPackage}
+                  disabled={loading || !selectedPackage || !!wechatOrderNo}
                   className="w-full rounded-xl bg-primary py-3 font-semibold text-dark disabled:opacity-50"
                 >
-                  {loading ? t("recharge.paying") : t("recharge.payAmount", { amount: `${amount} ${config?.payment_currency || ""}`.trim() })}
+                  {loading ? t("recharge.paying") : t("recharge.payAmount", { amount: moneyLabel(amount, config?.payment_currency) })}
                 </button>
 
                 <p className="text-center text-[11px] text-gray-400 dark:text-gray-500">

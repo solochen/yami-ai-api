@@ -341,7 +341,7 @@ func (s *ModelService) EstimateCost(model *ModelFull, params map[string]interfac
 	case "per_request":
 		return floatValue(model.PriceRule["unit_price"])
 	case "per_second":
-		unitPrice := floatValue(model.PriceRule["unit_price"])
+		unitPrice := perSecondUnitPrice(model.PriceRule, params)
 		duration := parseDurationSeconds(params)
 		if actual := floatValue(params["_actual_output_seconds"]); actual > 0 {
 			duration = actual
@@ -487,7 +487,48 @@ func estimateDynamicCost(rule map[string]interface{}, params map[string]interfac
 
 // imageTierPrice keeps per-image billing backward compatible while allowing a
 // logical image model to charge a different price for each output tier.
+func perSecondUnitPrice(rule, params map[string]interface{}) float64 {
+	resolution := strings.ToLower(strings.TrimSpace(stringValue(params["resolution"])))
+	if prices, ok := rule["unit_price_by_resolution"].(map[string]interface{}); ok && resolution != "" && resolution != "<nil>" {
+		for key, value := range prices {
+			if strings.EqualFold(strings.TrimSpace(key), resolution) && floatValue(value) > 0 {
+				return floatValue(value)
+			}
+		}
+	}
+	return floatValue(rule["unit_price"])
+}
+
+func imageVariantPrice(rule, params map[string]interface{}, tierMapKey string) (float64, bool) {
+	variantKey := "unit_price_by_variant"
+	if strings.Contains(tierMapKey, "cost") {
+		variantKey = "unit_cost_by_variant"
+	}
+	variants, _ := rule[variantKey].(map[string]interface{})
+	if len(variants) == 0 {
+		return 0, false
+	}
+	quality := strings.ToLower(strings.TrimSpace(stringValue(params["quality"])))
+	if quality == "" || quality == "<nil>" {
+		return 0, false
+	}
+	tier := strings.ToLower(strings.TrimSpace(stringValue(params["image_size"])))
+	if tier == "" || tier == "<nil>" {
+		tier = "1k"
+	}
+	want := quality + "_" + tier
+	for name, value := range variants {
+		if strings.EqualFold(strings.TrimSpace(name), want) {
+			return floatValue(value), true
+		}
+	}
+	return 0, false
+}
+
 func imageTierPrice(rule, params map[string]interface{}, tierMapKey, fallbackKey string) float64 {
+	if price, ok := imageVariantPrice(rule, params, tierMapKey); ok {
+		return price
+	}
 	tier := strings.ToUpper(strings.TrimSpace(stringValue(params["image_size"])))
 	if tier == "" {
 		tier = strings.ToUpper(strings.TrimSpace(stringValue(params["quality"])))

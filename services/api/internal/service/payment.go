@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -23,21 +25,32 @@ import (
 )
 
 type PaymentService struct {
-	db            *pgxpool.Pool
-	billing       *billing.Service
-	httpClient    *http.Client
-	stripeAPIBase string
-	paypalLiveAPI string
-	paypalTestAPI string
+	db                   *pgxpool.Pool
+	billing              *billing.Service
+	httpClient           *http.Client
+	stripeAPIBase        string
+	paypalLiveAPI        string
+	paypalTestAPI        string
+	alipayGateway        string
+	alipaySandboxGateway string
+	wechatAPIBase        string
+	wechatCerts          map[string]*rsa.PublicKey
+	wechatNonces         map[string]time.Time
+	wechatMu             sync.Mutex
 }
 
 func NewPaymentService(db *pgxpool.Pool, billing *billing.Service) *PaymentService {
 	return &PaymentService{
 		db: db, billing: billing,
-		httpClient:    &http.Client{Timeout: 20 * time.Second},
-		stripeAPIBase: "https://api.stripe.com",
-		paypalLiveAPI: "https://api-m.paypal.com",
-		paypalTestAPI: "https://api-m.sandbox.paypal.com",
+		httpClient:           &http.Client{Timeout: 20 * time.Second},
+		stripeAPIBase:        "https://api.stripe.com",
+		paypalLiveAPI:        "https://api-m.paypal.com",
+		paypalTestAPI:        "https://api-m.sandbox.paypal.com",
+		alipayGateway:        "https://openapi.alipay.com/gateway.do",
+		alipaySandboxGateway: "https://openapi-sandbox.dl.alipaydev.com/gateway.do",
+		wechatAPIBase:        "https://api.mch.weixin.qq.com",
+		wechatCerts:          map[string]*rsa.PublicKey{},
+		wechatNonces:         map[string]time.Time{},
 	}
 }
 
@@ -49,6 +62,8 @@ type OrderDTO struct {
 	ComputeCredited float64 `json:"compute_credited"`
 	Status          string  `json:"status"`
 	CheckoutURL     string  `json:"checkout_url,omitempty"`
+	CodeURL         string  `json:"code_url,omitempty"`
+	QRImage         string  `json:"qr_image,omitempty"`
 	ExpiresAt       *string `json:"expires_at,omitempty"`
 	PaidAt          *string `json:"paid_at,omitempty"`
 	CreatedAt       string  `json:"created_at"`
@@ -70,6 +85,18 @@ type PaymentProviderConfig struct {
 	PayPalClientSecret  string
 	PayPalWebhookID     string
 	PayPalBrandName     string
+	AlipayEnabled       bool
+	AlipayAppID         string
+	AlipayPrivateKey    string
+	AlipayPublicKey     string
+	AlipaySandbox       bool
+	WechatEnabled       bool
+	WechatAppID         string
+	WechatMchID         string
+	WechatAPIv3Key      string
+	WechatCertSerial    string
+	WechatPrivateKey    string
+	NotifyBaseURL       string
 	ExpireMinutes       int
 	MinAmount           float64
 	MaxAmount           float64
@@ -311,7 +338,7 @@ func (s *PaymentService) createMockOrder(ctx context.Context, userID int64, amou
 func (s *PaymentService) ProviderConfig(ctx context.Context) (PaymentProviderConfig, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT key, value FROM system_configs
-		WHERE key LIKE 'payment_%' OR key LIKE 'stripe_%' OR key LIKE 'paypal_%'`)
+		WHERE key LIKE 'payment_%' OR key LIKE 'stripe_%' OR key LIKE 'paypal_%' OR key LIKE 'alipay_%' OR key LIKE 'wechat_%'`)
 	if err != nil {
 		return PaymentProviderConfig{}, err
 	}
@@ -344,6 +371,18 @@ func (s *PaymentService) ProviderConfig(ctx context.Context) (PaymentProviderCon
 		PayPalClientSecret:  strings.TrimSpace(configString(values["paypal_client_secret"])),
 		PayPalWebhookID:     strings.TrimSpace(configString(values["paypal_webhook_id"])),
 		PayPalBrandName:     strings.TrimSpace(configString(values["paypal_brand_name"])),
+		AlipayEnabled:       configBool(values["payment_alipay_enabled"], false),
+		AlipayAppID:         strings.TrimSpace(configString(values["alipay_app_id"])),
+		AlipayPrivateKey:    strings.TrimSpace(configString(values["alipay_private_key"])),
+		AlipayPublicKey:     strings.TrimSpace(configString(values["alipay_public_key"])),
+		AlipaySandbox:       configBool(values["alipay_sandbox"], false),
+		WechatEnabled:       configBool(values["payment_wechat_enabled"], false),
+		WechatAppID:         strings.TrimSpace(configString(values["wechat_app_id"])),
+		WechatMchID:         strings.TrimSpace(configString(values["wechat_mch_id"])),
+		WechatAPIv3Key:      strings.TrimSpace(configString(values["wechat_api_v3_secret"])),
+		WechatCertSerial:    strings.TrimSpace(configString(values["wechat_cert_serial"])),
+		WechatPrivateKey:    strings.TrimSpace(configString(values["wechat_private_key"])),
+		NotifyBaseURL:       strings.TrimRight(strings.TrimSpace(configString(values["payment_notify_base_url"])), "/"),
 		ExpireMinutes:       configInt(values["payment_order_expire_minutes"], 30),
 		MinAmount:           configFloat(values["payment_min_amount"], 1),
 		MaxAmount:           configFloat(values["payment_max_amount"], 50000),
@@ -398,24 +437,113 @@ func (c PaymentProviderConfig) PayPalWebhookReady() bool {
 		c.PayPalClientSecret != "" && c.PayPalWebhookID != ""
 }
 
+func (c PaymentProviderConfig) RealPaymentRequested() bool {
+	if !c.Enabled {
+		return false
+	}
+	if c.AlipayEnabled || c.WechatEnabled {
+		return true
+	}
+	switch c.Provider {
+	case "generic", "stripe", "paypal":
+		return true
+	default:
+		return false
+	}
+}
+
+func (c PaymentProviderConfig) ReadyChannels() []string {
+	if !c.Enabled {
+		return nil
+	}
+	channels := []string{}
+	switch c.Provider {
+	case "generic", "stripe", "paypal":
+		if c.Ready() {
+			channels = append(channels, c.Provider)
+		}
+	}
+	if c.AlipayReady() {
+		channels = append(channels, "alipay")
+	}
+	if c.WechatReady() {
+		channels = append(channels, "wechat")
+	}
+	return channels
+}
+
+func (c PaymentProviderConfig) UnavailableReason() string {
+	if !c.Enabled {
+		return "在线支付未开启"
+	}
+	if c.Currency != "CNY" && (c.AlipayEnabled || c.WechatEnabled) {
+		return "支付宝和微信支付需要把收款币种设为 CNY"
+	}
+	if c.AlipayEnabled || c.WechatEnabled {
+		return "支付宝或微信支付尚未完整配置"
+	}
+	return "在线支付渠道尚未完整配置"
+}
+
+func (c PaymentProviderConfig) ChannelReady(channel string) bool {
+	for _, item := range c.ReadyChannels() {
+		if item == channel {
+			return true
+		}
+	}
+	return false
+}
+
+func (c PaymentProviderConfig) AlipayReady() bool {
+	if !c.Enabled || !c.AlipayEnabled || c.Currency != "CNY" || c.AlipayAppID == "" {
+		return false
+	}
+	if !validHTTPURL(c.NotifyBaseURL) || !validHTTPURL(c.SuccessURL) {
+		return false
+	}
+	if _, err := parseRSAPrivateKey(c.AlipayPrivateKey); err != nil {
+		return false
+	}
+	_, err := parseRSAPublicKey(c.AlipayPublicKey)
+	return err == nil
+}
+
+func (c PaymentProviderConfig) WechatReady() bool {
+	if !c.Enabled || !c.WechatEnabled || c.Currency != "CNY" {
+		return false
+	}
+	if c.WechatAppID == "" || c.WechatMchID == "" || c.WechatCertSerial == "" || len(c.WechatAPIv3Key) != 32 {
+		return false
+	}
+	if !validHTTPURL(c.NotifyBaseURL) {
+		return false
+	}
+	_, err := parseRSAPrivateKey(c.WechatPrivateKey)
+	return err == nil
+}
+
 // CreatePendingOrder creates an unpaid order for a configured external
 // checkout. Money is never credited on this path; only a signed webhook can do
 // that.
 func (s *PaymentService) CreatePendingOrder(ctx context.Context, userID int64, amount float64, packageID ...int64) (*OrderDTO, error) {
-	return s.createPendingOrder(ctx, userID, amount, optionalPackageID(packageID), nil)
+	return s.createPendingOrder(ctx, userID, amount, optionalPackageID(packageID), nil, "")
 }
 
-func (s *PaymentService) CreatePendingPackageOrder(ctx context.Context, userID int64, pkg RechargePackageDTO) (*OrderDTO, error) {
+func (s *PaymentService) CreatePendingPackageOrder(ctx context.Context, userID int64, pkg RechargePackageDTO, channel string) (*OrderDTO, error) {
 	credits := pkg.EffectiveComputeCredits
-	return s.createPendingOrder(ctx, userID, pkg.Amount, pkg.ID, &credits)
+	return s.createPendingOrder(ctx, userID, pkg.Amount, pkg.ID, &credits, channel)
 }
 
-func (s *PaymentService) createPendingOrder(ctx context.Context, userID int64, amount float64, packageID interface{}, creditsOverride *float64) (*OrderDTO, error) {
+func (s *PaymentService) createPendingOrder(ctx context.Context, userID int64, amount float64, packageID interface{}, creditsOverride *float64, channel string) (*OrderDTO, error) {
 	cfg, err := s.ProviderConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if !cfg.Ready() {
+	channel = strings.ToLower(strings.TrimSpace(channel))
+	if channel == "" {
+		channel = cfg.Provider
+	}
+	if !cfg.ChannelReady(channel) {
 		return nil, errors.New("在线支付渠道尚未完整配置")
 	}
 	if amount < cfg.MinAmount || amount > cfg.MaxAmount {
@@ -428,21 +556,21 @@ func (s *PaymentService) createPendingOrder(ctx context.Context, userID int64, a
 	}
 	orderNo := fmt.Sprintf("ord_%d_%s", time.Now().UnixMilli(), util.NewPublicID("")[1:7])
 	expireMinutes := cfg.ExpireMinutes
-	if cfg.Provider == "stripe" && expireMinutes < 30 {
+	if channel == "stripe" && expireMinutes < 30 {
 		expireMinutes = 30
 	}
-	if cfg.Provider == "paypal" && expireMinutes < 360 {
+	if channel == "paypal" && expireMinutes < 360 {
 		expireMinutes = 360
 	}
 	expiresAt := time.Now().Add(time.Duration(expireMinutes) * time.Minute)
 	_, err = s.db.Exec(ctx, `
 		INSERT INTO orders (order_no, user_id, channel, amount, currency, compute_credited, status, expires_at, payment_package_id)
-		VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8)`, orderNo, userID, cfg.Provider, amount, cfg.Currency, credited, expiresAt, packageID)
+		VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8)`, orderNo, userID, channel, amount, cfg.Currency, credited, expiresAt, packageID)
 	if err != nil {
 		return nil, err
 	}
-	var checkoutURL, providerOrderID string
-	switch cfg.Provider {
+	var checkoutURL, providerOrderID, codeURL string
+	switch channel {
 	case "generic":
 		checkoutURL = strings.ReplaceAll(cfg.CheckoutURL, "{order_no}", url.QueryEscape(orderNo))
 		checkoutURL = strings.ReplaceAll(checkoutURL, "{amount}", url.QueryEscape(strconv.FormatFloat(amount, 'f', 2, 64)))
@@ -450,12 +578,21 @@ func (s *PaymentService) createPendingOrder(ctx context.Context, userID int64, a
 		checkoutURL, providerOrderID, err = s.createStripeCheckout(ctx, cfg, orderNo, amount, expiresAt)
 	case "paypal":
 		checkoutURL, providerOrderID, err = s.createPayPalOrder(ctx, cfg, orderNo, amount)
+	case "alipay":
+		checkoutURL, err = s.createAlipayPagePay(cfg, orderNo, amount, expiresAt)
+	case "wechat":
+		codeURL, err = s.createWechatNativeOrder(ctx, cfg, orderNo, amount, expiresAt)
 	}
 	if err != nil {
 		_, _ = s.db.Exec(ctx, `UPDATE orders SET status='failed', remark=$1, updated_at=now() WHERE order_no=$2`, "provider_order_create_failed", orderNo)
 		return nil, err
 	}
-	if !validHTTPURL(checkoutURL) {
+	if channel == "wechat" {
+		if strings.TrimSpace(codeURL) == "" {
+			_, _ = s.db.Exec(ctx, `UPDATE orders SET status='failed', remark=$1, updated_at=now() WHERE order_no=$2`, "provider_code_url_missing", orderNo)
+			return nil, errors.New("微信支付未返回收款码")
+		}
+	} else if !validHTTPURL(checkoutURL) {
 		_, _ = s.db.Exec(ctx, `UPDATE orders SET status='failed', remark=$1, updated_at=now() WHERE order_no=$2`, "provider_checkout_url_invalid", orderNo)
 		return nil, errors.New("支付渠道未返回有效收银台地址")
 	}
@@ -466,8 +603,12 @@ func (s *PaymentService) createPendingOrder(ctx context.Context, userID int64, a
 	}
 	now := time.Now().Format(time.RFC3339)
 	expires := expiresAt.Format(time.RFC3339)
-	return &OrderDTO{OrderNo: orderNo, Channel: cfg.Provider, Amount: amount, Currency: cfg.Currency,
-		ComputeCredited: credited, Status: "pending", CheckoutURL: checkoutURL,
+	qrImage := ""
+	if codeURL != "" {
+		qrImage = paymentQRImage(codeURL)
+	}
+	return &OrderDTO{OrderNo: orderNo, Channel: channel, Amount: amount, Currency: cfg.Currency,
+		ComputeCredited: credited, Status: "pending", CheckoutURL: checkoutURL, CodeURL: codeURL, QRImage: qrImage,
 		ExpiresAt: &expires, CreatedAt: now}, nil
 }
 
@@ -587,6 +728,11 @@ func (s *PaymentService) completeOrder(ctx context.Context, orderNo, channel, pr
 		log.Printf("order %s credited; referral reward deferred: %v", orderNo, err)
 	}
 	return result, nil
+}
+
+func paymentCallbackDigest(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
 }
 
 func validHTTPURL(raw string) bool {

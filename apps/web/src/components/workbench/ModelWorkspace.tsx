@@ -50,6 +50,7 @@ import { AudioOptionToolbar, AudioTopControls } from "./audio/AudioOptionToolbar
 import { AudioUploadButton } from "./audio/AudioUploadButton";
 import { VideoUploadArea } from "./video/VideoUploadArea";
 import { VideoOptionToolbar, VideoTopControls } from "./video/VideoOptionToolbar";
+import { VideoPromptField } from "./video/VideoPromptField";
 import { ALL_RATIOS, ImageGenerationToolbar, buildImageGenerationParams, normalizeRatio, normalizeTier, type ImageAspectRatio, type ImageSizeTier } from "./ImageGenerationToolbar";
 import { GenerationLanguageMenu, buildLanguageParams, useGenerationLanguages } from "./GenerationLanguageMenu";
 
@@ -751,6 +752,18 @@ function RichMarkdown({ content, emptyText }: { content: string; emptyText?: str
   return <div className="rich-output min-w-0">{nodes}</div>;
 }
 
+function referenceImageSurchargeUsd(runtime: Record<string, unknown> | null | undefined) {
+  const video = runtime?.video;
+  const usd = Number(video && typeof video === "object" ? (video as { reference_image_surcharge_usd?: unknown }).reference_image_surcharge_usd : NaN);
+  return Number.isFinite(usd) && usd > 0 ? usd : 0;
+}
+
+function applyReferenceImageSurcharge(hint: string, usd: number, rate: number) {
+  if (!hint.includes("{{reference_image_surcharge}}") || usd <= 0 || !(rate > 0)) return hint;
+  const credits = Math.round(usd * rate * 10000) / 10000;
+  return hint.replaceAll("{{reference_image_surcharge}}", String(credits));
+}
+
 function CopyOutputButton({ text, copied, onCopy }: { text: string; copied: boolean; onCopy: () => void }) {
   const { ts } = useI18n();
   if (!text.trim()) return null;
@@ -945,7 +958,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
     const properties = { ...schemaProperties(source) };
     const adapter = String((model.runtime_rule as any)?.upstream?.adapter || "").toLowerCase();
     for (const key of ["count", "n", "aspect_ratio", "image_size", "size", "max_reference_images"]) delete properties[key];
-    if (adapter !== "openai_images") delete properties.quality;
+    if (adapter !== "openai_images" && adapter !== "openrouter_image") delete properties.quality;
     return { ...source, properties };
   }, [isImage, workbenchInputSchema, model.runtime_rule]);
   const hasSchemaFields = Object.keys(schemaProperties(workbenchInputSchema)).length > 0;
@@ -969,6 +982,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
   const imageAdapter = String((model.runtime_rule as any)?.upstream?.adapter || "").toLowerCase();
   const isAliyunQwenImage = isImage && imageAdapter === "aliyun_qwen_image_v3";
   const isOpenAIImages = isImage && imageAdapter === "openai_images";
+  const isOpenRouterImage = isImage && imageAdapter === "openrouter_image";
   const imageCountOptions = Array.isArray(imageRuntime.count_options)
     ? imageRuntime.count_options.map(Number).filter((value) => Number.isFinite(value) && value > 0)
     : undefined;
@@ -1038,10 +1052,25 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
     videoConfig.upload_profile === "frame_pair"
       ? videoConfig.reference_images?.max ?? 4
       : videoConfig.max_reference_images ?? 1;
+  const surchargeUsd = referenceImageSurchargeUsd(model.runtime_rule);
+  const [computeRate, setComputeRate] = useState(7.2);
+  useEffect(() => {
+    if (surchargeUsd <= 0) return;
+    let cancelled = false;
+    api<{ payment_compute_rate?: number }>("/api/system-configs/public", { cache: "no-store" })
+      .then((cfg) => {
+        const rate = Number(cfg?.payment_compute_rate);
+        if (!cancelled && Number.isFinite(rate) && rate > 0) setComputeRate(rate);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [surchargeUsd]);
   const promptPlaceholder = isChat
     ? t("workspace.placeholder.chat")
     : isVideo
-    ? (videoConfig.prompt_hint ? ts(videoConfig.prompt_hint) : t("workspace.placeholder.video"))
+    ? (videoConfig.prompt_hint ? applyReferenceImageSurcharge(ts(videoConfig.prompt_hint), surchargeUsd, computeRate) : t("workspace.placeholder.video"))
     : isAudio
     ? (audioConfig.prompt_hint ? ts(audioConfig.prompt_hint) : t("workspace.placeholder.audio"))
     : t("workspace.placeholder.image");
@@ -2622,7 +2651,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                               />
                             )}
                           </>
-                        ) : (
+                        ) : (isMiniMaxH3 || isSeedance2) ? null : (
                           <ChatTopTools
                             value={bottom}
                             onChange={setBottom}
@@ -2752,18 +2781,17 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                     onPortraitAssetTypeChange={(value) => setParams({ ...params, portrait_asset_type: value })}
                   />
                 </div>
-                <textarea
+                <VideoPromptField
+                  fill
                   value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
+                  onChange={setPrompt}
+                  onSubmit={submit}
                   placeholder={promptPlaceholder}
                   rows={5}
-                  className="min-h-28 min-w-0 flex-1 resize-none bg-transparent px-4 py-3 text-sm placeholder:text-gray-400 focus:outline-none"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-                      e.preventDefault();
-                      submit();
-                    }
-                  }}
+                  className="min-h-28 min-w-0 w-full flex-1 resize-none bg-transparent px-4 py-3 text-sm placeholder:text-gray-400 focus:outline-none"
+                  images={videoMedia.reference_images}
+                  videos={videoMedia.reference_videos}
+                  audios={videoMedia.reference_audios}
                 />
               </div>
             ) : isAudio && audioConfig.input_layout === "dual" ? (
@@ -2797,12 +2825,24 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                   }}
                 />
               </div>
+            ) : isVideo ? (
+              <VideoPromptField
+                value={prompt}
+                onChange={setPrompt}
+                onSubmit={submit}
+                placeholder={promptPlaceholder}
+                rows={4}
+                className="w-full px-4 py-3 text-sm resize-none focus:outline-none bg-transparent placeholder:text-gray-400"
+                images={videoMedia.reference_images}
+                videos={videoMedia.reference_videos}
+                audios={videoMedia.reference_audios}
+              />
             ) : (
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(isChat ? clipText(e.target.value, MAX_CHAT_INPUT_CHARS) : e.target.value)}
                 placeholder={promptPlaceholder}
-                rows={isVideo || isAudio ? 4 : 3}
+                rows={isAudio ? 4 : 3}
                 maxLength={isChat ? MAX_CHAT_INPUT_CHARS : undefined}
                 className="w-full px-4 py-3 text-sm resize-none focus:outline-none bg-transparent placeholder:text-gray-400"
                 onKeyDown={(e) => {
@@ -2931,7 +2971,8 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                       sizeTiers={imageSizeTiers}
                       ratios={isOpenAIImages ? (["1:1", "3:2", "2:3"] as ImageAspectRatio[]) : imageRatios}
                       allowAutoRatio={imageAllowsAutoRatio}
-                      showSizeTier={!isOpenAIImages}
+                      showCount={imageCountMax > 1}
+                      showSizeTier={isOpenRouterImage ? (imageSizeTiers?.length || 0) > 0 : !isOpenAIImages}
                     />
                     <VideoOptionToolbar schema={imageOptionSchema} values={params} onChange={setParams} />
                     <GenerationLanguageMenu languages={generationLanguages} value={languageCode} onChange={setLanguageCode} />

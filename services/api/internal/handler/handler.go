@@ -125,6 +125,8 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		api.POST("/payment/webhooks/generic", middleware.RateLimit(h.cache, "payment-webhook", 120, time.Minute, middleware.ClientIPIdentity), h.GenericPaymentWebhook)
 		api.POST("/payment/webhooks/stripe", middleware.RateLimit(h.cache, "stripe-webhook", 240, time.Minute, middleware.ClientIPIdentity), h.StripePaymentWebhook)
 		api.POST("/payment/webhooks/paypal", middleware.RateLimit(h.cache, "paypal-webhook", 240, time.Minute, middleware.ClientIPIdentity), h.PayPalPaymentWebhook)
+		api.POST("/payment/webhooks/alipay", middleware.RateLimit(h.cache, "alipay-webhook", 240, time.Minute, middleware.ClientIPIdentity), h.AlipayPaymentWebhook)
+		api.POST("/payment/webhooks/wechat", middleware.RateLimit(h.cache, "wechat-webhook", 240, time.Minute, middleware.ClientIPIdentity), h.WechatPaymentWebhook)
 		api.GET("/announcements", h.ListAnnouncements)
 		api.GET("/gallery/tags", h.ListGalleryTags)
 		api.GET("/gallery", h.ListGallery)
@@ -1033,20 +1035,31 @@ func (h *Handler) PaymentConfig(c *gin.Context) {
 		return
 	}
 	cfg["payment_packages"] = packages
+	channels := []string{}
+	if providerErr == nil {
+		channels = providerCfg.ReadyChannels()
+	}
 	allowMockPayment := mockPaymentAllowed(h.cfg.AppEnv)
-	if allowMockPayment && providerErr == nil && !providerCfg.Ready() {
+	if len(channels) > 0 {
+		cfg["payment_channels"] = channels
+		cfg["payment_provider"] = channels[0]
+		cfg["payment_currency"] = providerCfg.Currency
+		cfg["payment_mock_mode"] = false
+	} else if allowMockPayment && providerErr == nil && !providerCfg.RealPaymentRequested() {
+		cfg["payment_channels"] = []string{}
 		cfg["payment_provider"] = "mock"
 		cfg["payment_currency"] = providerCfg.Currency
 		cfg["payment_mock_mode"] = true
-	} else if providerErr == nil && providerCfg.Ready() {
-		cfg["payment_provider"] = providerCfg.Provider
-		cfg["payment_currency"] = providerCfg.Currency
-		cfg["payment_mock_mode"] = false
 	} else {
 		cfg["payment_enabled"] = false
+		cfg["payment_channels"] = []string{}
 		cfg["payment_provider"] = "disabled"
 		cfg["payment_mock_mode"] = false
-		cfg["payment_unavailable_reason"] = "在线支付渠道尚未完整配置"
+		reason := "在线支付渠道尚未完整配置"
+		if providerErr == nil {
+			reason = providerCfg.UnavailableReason()
+		}
+		cfg["payment_unavailable_reason"] = reason
 	}
 	util.OK(c, cfg)
 }
@@ -1073,19 +1086,28 @@ func (h *Handler) CreatePaymentOrder(c *gin.Context) {
 		return
 	}
 	allowMockPayment := mockPaymentAllowed(h.cfg.AppEnv)
+	providerCfg, providerErr := h.payment.ProviderConfig(c.Request.Context())
+	channels := []string{}
+	if providerErr == nil {
+		channels = providerCfg.ReadyChannels()
+	}
+	channel := strings.ToLower(strings.TrimSpace(req.Channel))
 	var order *service.OrderDTO
-	if allowMockPayment && (req.Channel == "" || req.Channel == "mock") {
+	if allowMockPayment && (channel == "" || channel == "mock") && len(channels) == 0 {
 		order, err = h.payment.CreateMockPackageOrder(c.Request.Context(), userID, *selectedPackage, "mock")
 	} else {
-		if req.Channel == "mock" {
+		if channel == "mock" {
 			util.Forbidden(c, "当前运行环境不支持模拟支付")
 			return
 		}
-		if req.Channel != "" && req.Channel != "generic" && req.Channel != "stripe" && req.Channel != "paypal" {
+		if channel == "" && len(channels) == 1 {
+			channel = channels[0]
+		}
+		if !paymentChannelAllowed(channels, channel) {
 			util.BadRequest(c, "不支持的支付渠道")
 			return
 		}
-		order, err = h.payment.CreatePendingPackageOrder(c.Request.Context(), userID, *selectedPackage)
+		order, err = h.payment.CreatePendingPackageOrder(c.Request.Context(), userID, *selectedPackage, channel)
 	}
 	if err != nil {
 		util.BadRequest(c, err.Error())
@@ -1096,6 +1118,15 @@ func (h *Handler) CreatePaymentOrder(c *gin.Context) {
 			fmt.Sprintf("在线充值到账 %.2f 算力", order.ComputeCredited), "wallet")
 	}
 	util.Created(c, order)
+}
+
+func paymentChannelAllowed(channels []string, channel string) bool {
+	for _, item := range channels {
+		if item == channel {
+			return true
+		}
+	}
+	return false
 }
 
 // mockPaymentAllowed is deliberately allow-list based. Unknown, staging and
@@ -1177,6 +1208,42 @@ func (h *Handler) PayPalPaymentWebhook(c *gin.Context) {
 	}
 	h.notifyPaymentCompletion(c, result)
 	util.OK(c, map[string]interface{}{"handled": handled, "result": result})
+}
+
+func (h *Handler) AlipayPaymentWebhook(c *gin.Context) {
+	raw, ok := readPaymentWebhookBody(c, 1<<20)
+	if !ok {
+		return
+	}
+	result, err := h.payment.CompleteAlipayWebhook(c.Request.Context(), raw)
+	if err != nil {
+		middleware.RecordPaymentWebhookRejected()
+		c.String(http.StatusBadRequest, "failure")
+		return
+	}
+	h.notifyPaymentCompletion(c, result)
+	c.String(http.StatusOK, "success")
+}
+
+func (h *Handler) WechatPaymentWebhook(c *gin.Context) {
+	raw, ok := readPaymentWebhookBody(c, 1<<20)
+	if !ok {
+		return
+	}
+	headers := map[string]string{
+		"Wechatpay-Timestamp": c.GetHeader("Wechatpay-Timestamp"),
+		"Wechatpay-Nonce":     c.GetHeader("Wechatpay-Nonce"),
+		"Wechatpay-Signature": c.GetHeader("Wechatpay-Signature"),
+		"Wechatpay-Serial":    c.GetHeader("Wechatpay-Serial"),
+	}
+	result, err := h.payment.CompleteWechatWebhook(c.Request.Context(), raw, headers)
+	if err != nil {
+		middleware.RecordPaymentWebhookRejected()
+		c.JSON(http.StatusBadRequest, gin.H{"code": "FAIL", "message": "支付回调校验失败"})
+		return
+	}
+	h.notifyPaymentCompletion(c, result)
+	c.JSON(http.StatusOK, gin.H{"code": "SUCCESS", "message": "成功"})
 }
 
 func readPaymentWebhookBody(c *gin.Context, maxBytes int64) ([]byte, bool) {
@@ -6840,6 +6907,7 @@ func (h *Handler) GetPublicSystemConfigs(c *gin.Context) {
 		"terms_title":                     cfg["terms_title"],
 		"terms_content":                   cfg["terms_content"],
 		"web_search_unit_price":           webSearchConfig.UnitPrice,
+		"payment_compute_rate":            cfg["payment_compute_rate"],
 		"privacy_title":                   cfg["privacy_title"],
 		"privacy_content":                 cfg["privacy_content"],
 		"image_captcha_enabled":           cfg["image_captcha_enabled"],

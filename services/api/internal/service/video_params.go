@@ -485,6 +485,12 @@ func validateVideoUpload(cfg videoRuntimeConfig, params map[string]interface{}) 
 			if refCount+videoCount+audioCount == 0 {
 				return errors.New("MiniMax-H3 多模态参考模式至少需要 1 个参考素材")
 			}
+			if audioCount > 0 && refCount+videoCount == 0 {
+				return errors.New("参考音频必须和参考图或参考视频一起使用")
+			}
+			if refCount+videoCount+audioCount > 12 {
+				return errors.New("参考素材合计不能超过 12 个")
+			}
 			if firstCount+lastCount > 0 {
 				return errors.New("MiniMax-H3 多模态参考素材不能与首尾帧混用")
 			}

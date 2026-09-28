@@ -166,3 +166,17 @@ func TestAgentConfirmationConversation(t *testing.T) {
 		}
 	}
 }
+
+func TestImageTierPriceUsesQualityAndSizeVariant(t *testing.T) {
+	rule := map[string]interface{}{
+		"billing_type": "per_image",
+		"unit_price":   float64(0.288),
+		"unit_price_by_variant": map[string]interface{}{
+			"low_1k":    float64(0.288),
+			"medium_2k": float64(0.576),
+		},
+	}
+	if got := imageTierPrice(rule, map[string]interface{}{"quality": "medium", "image_size": "2K"}, "unit_price_by_size", "unit_price"); got != 0.576 {
+		t.Fatalf("variant price = %v", got)
+	}
+}

@@ -60,7 +60,22 @@ const BASE_ITEMS: ConfigItem[] = [
     { value: "paypal", label: "PayPal Checkout" },
     { value: "generic", label: "通用 HMAC 网关" },
   ], hint: "先保存并验证渠道参数，最后再开启在线支付。" },
-  { key: "payment_currency", label: "收款币种", type: "text", hint: "三位 ISO 币种代码，例如 USD、EUR、JPY。必须与支付商账户支持的币种一致。" },
+  { key: "payment_currency", label: "收款币种", type: "select", options: [
+    { value: "USD", label: "USD 美元" },
+    { value: "CNY", label: "CNY 人民币" },
+  ], hint: "支付宝和微信支付只能使用 CNY。套餐金额按这里的币种原样收款，不会把 10 自动换算成别的金额。" },
+  { key: "payment_alipay_enabled", label: "启用支付宝", type: "checkbox", hint: "电脑网站支付。可与微信支付同时启用，用户充值时选择。" },
+  { key: "payment_wechat_enabled", label: "启用微信支付", type: "checkbox", hint: "Native 扫码支付。可与支付宝同时启用。" },
+  { key: "payment_notify_base_url", label: "支付回调根地址", type: "text", hint: "API 的公网根地址，例如 https://api.example.com。支付宝回调会请求该地址下的 /api/payment/webhooks/alipay，微信回调请求 /api/payment/webhooks/wechat。" },
+  { key: "alipay_app_id", label: "支付宝 AppId", type: "text" },
+  { key: "alipay_private_key", label: "支付宝应用私钥", type: "textarea", hint: "开放平台应用私钥，支持 PEM 或一行 Base64。保存后只显示脱敏值。" },
+  { key: "alipay_public_key", label: "支付宝公钥", type: "textarea", hint: "开放平台提供的支付宝公钥，不是应用公钥。" },
+  { key: "alipay_sandbox", label: "支付宝沙箱", type: "checkbox", hint: "开启后使用支付宝沙箱网关。" },
+  { key: "wechat_app_id", label: "微信 AppId", type: "text" },
+  { key: "wechat_mch_id", label: "微信商户号", type: "text" },
+  { key: "wechat_cert_serial", label: "微信商户证书序列号", type: "text" },
+  { key: "wechat_api_v3_secret", label: "微信 APIv3 密钥", type: "password", hint: "32 位密钥。保存后只显示脱敏值。" },
+  { key: "wechat_private_key", label: "微信商户私钥", type: "textarea", hint: "apiclient_key.pem 的内容。保存后只显示脱敏值。" },
   { key: "payment_compute_rate", label: "默认算力兑换倍率", type: "number", hint: "未在套餐中指定到账算力时使用：支付金额 × 此倍率。1 算力≈1元人民币时，USD 可设置约 7.2；更换收款币种后请同步调整。" },
   { key: "payment_product_name", label: "支付商品名称", type: "text", hint: "显示在 Stripe / PayPal 收银台，例如 StarAI Credits。" },
   { key: "payment_success_url", label: "支付成功返回地址", type: "text", hint: "必须是完整 http(s) 地址，可使用 {order_no}，例如 https://example.com/app/wallet?payment=success&order={order_no}" },
@@ -678,6 +693,9 @@ export default function SystemConfigPage() {
     if (item.key.startsWith("stripe_")) return activePaymentProvider === "stripe";
     if (item.key.startsWith("paypal_")) return activePaymentProvider === "paypal";
     if (item.key === "payment_checkout_url_template" || item.key === "payment_webhook_secret") return activePaymentProvider === "generic";
+    if (item.key.startsWith("alipay_")) return !!configs.payment_alipay_enabled;
+    if (item.key.startsWith("wechat_")) return !!configs.payment_wechat_enabled;
+    if (item.key === "payment_notify_base_url") return !!configs.payment_alipay_enabled || !!configs.payment_wechat_enabled;
     return true;
   });
 
@@ -1394,7 +1412,7 @@ export default function SystemConfigPage() {
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm shadow-gray-950/5">
           <div className="mb-4 text-sm font-semibold text-gray-900">基础配置</div>
           <p className="mb-4 text-xs leading-relaxed text-gray-400">
-            真实支付默认关闭。Stripe 回调地址为 /api/payment/webhooks/stripe，PayPal 回调地址为 /api/payment/webhooks/paypal，通用网关回调地址为 /api/payment/webhooks/generic。
+            真实支付默认关闭。Stripe 回调为 /api/payment/webhooks/stripe，PayPal 为 /api/payment/webhooks/paypal，通用网关为 /api/payment/webhooks/generic。支付宝和微信使用上面的支付回调根地址。
           </p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {visiblePaymentItems.map((item) => renderItem(item))}

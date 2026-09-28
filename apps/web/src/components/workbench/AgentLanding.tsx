@@ -101,7 +101,7 @@ export function AgentLanding({
           })}
         </div>
 
-        <div className={`agent-feature-card agent-feature-card--landing group mx-auto flex w-full max-w-[640px] flex-col justify-center overflow-hidden rounded-3xl border border-cyan-300/70 bg-white/65 p-3 shadow-xl shadow-cyan-950/10 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-cyan-400 hover:bg-white/75 hover:shadow-2xl hover:shadow-cyan-950/15 dark:border-cyan-400/30 dark:bg-transparent dark:shadow-black/30 dark:hover:bg-cyan-400/[0.04] sm:min-h-[260px] sm:p-5 lg:min-h-[280px] lg:p-6 ${compactOnMobile ? "min-h-[155px] max-h-[190px]" : "min-h-[230px] max-h-[280px]"}`}>
+        <div className={`agent-feature-card agent-feature-card--landing group mx-auto flex w-full max-w-[640px] flex-col justify-start overflow-hidden rounded-3xl border border-cyan-300/70 bg-white/65 p-4 shadow-xl shadow-cyan-950/10 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-cyan-400 hover:bg-white/75 hover:shadow-2xl hover:shadow-cyan-950/15 dark:border-cyan-400/30 dark:bg-transparent dark:shadow-black/30 dark:hover:bg-cyan-400/[0.04] sm:p-5 ${compactOnMobile ? "min-h-[180px]" : "min-h-[230px]"}`}>
           <div className="mb-4 flex items-center justify-between gap-3 lg:mb-5">
             <span className="rounded-xl bg-cyan-500/10 px-3 py-2 text-sm font-black text-cyan-700 dark:text-cyan-200">{String(Math.min(activeIndex + 1, safeFeatures.length)).padStart(2, "0")}</span>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">

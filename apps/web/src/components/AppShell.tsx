@@ -82,6 +82,12 @@ const MODEL_VENDORS: { id: string; label: string; pattern: RegExp }[] = [
   { id: "deepseek", label: "DeepSeek", pattern: /deepseek/i },
   { id: "minimax", label: "MiniMax", pattern: /minimax|hailuo|海螺/i },
   { id: "doubao", label: "豆包", pattern: /豆包|doubao/i },
+  { id: "bytedance", label: "ByteDance", pattern: /bytedance|seedream|seedance|字节/i },
+  { id: "alibaba", label: "Alibaba", pattern: /alibaba|\bwan\b|happyhorse/i },
+  { id: "kling", label: "Kling", pattern: /kling|kwaivgi/i },
+  { id: "runway", label: "Runway", pattern: /runway|\baleph\b|gen-4/i },
+  { id: "bfl", label: "Black Forest Labs", pattern: /black-forest|flux/i },
+  { id: "xai", label: "xAI", pattern: /\bx-?ai\b|grok/i },
   { id: "suno", label: "Suno", pattern: /suno/i },
 ];
 

@@ -608,7 +608,7 @@ export function CreativeAgentWorkspace({
     if (messages.length > 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const timer = window.setInterval(() => {
       if (!document.hidden) setActiveFeature((current) => (current + 1) % CREATIVE_FEATURES.length);
-    }, 4500);
+    }, 9000);
     return () => window.clearInterval(timer);
   }, [messages.length]);
 

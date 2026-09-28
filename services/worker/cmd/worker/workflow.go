@@ -3170,7 +3170,7 @@ func estimatePriceRuleCostWorker(rule map[string]interface{}, params map[string]
 		if n <= 0 {
 			n = 1
 		}
-		return floatAny(rule["unit_price"]) * duration * n
+		return workerPerSecondUnitPrice(rule, params) * duration * n
 	case "per_request":
 		return floatAny(rule["unit_price"])
 	case "dynamic":
@@ -3244,7 +3244,48 @@ func estimateDynamicPriceRuleCostWorker(rule, params map[string]interface{}) flo
 	}
 }
 
+func workerPerSecondUnitPrice(rule, params map[string]interface{}) float64 {
+	resolution := strings.ToLower(strings.TrimSpace(stringAny(params["resolution"])))
+	if prices, ok := rule["unit_price_by_resolution"].(map[string]interface{}); ok && resolution != "" && resolution != "<nil>" {
+		for key, value := range prices {
+			if strings.EqualFold(strings.TrimSpace(key), resolution) && floatAny(value) > 0 {
+				return floatAny(value)
+			}
+		}
+	}
+	return floatAny(rule["unit_price"])
+}
+
+func workerImageVariantPrice(rule, params map[string]interface{}, tierMapKey string) (float64, bool) {
+	variantKey := "unit_price_by_variant"
+	if strings.Contains(tierMapKey, "cost") {
+		variantKey = "unit_cost_by_variant"
+	}
+	variants, _ := rule[variantKey].(map[string]interface{})
+	if len(variants) == 0 {
+		return 0, false
+	}
+	quality := strings.ToLower(strings.TrimSpace(stringAny(params["quality"])))
+	if quality == "" || quality == "<nil>" {
+		return 0, false
+	}
+	tier := strings.ToLower(strings.TrimSpace(stringAny(params["image_size"])))
+	if tier == "" || tier == "<nil>" {
+		tier = "1k"
+	}
+	want := quality + "_" + tier
+	for name, value := range variants {
+		if strings.EqualFold(strings.TrimSpace(name), want) {
+			return floatAny(value), true
+		}
+	}
+	return 0, false
+}
+
 func workerImageTierValue(rule, params map[string]interface{}, tierMapKey, fallbackKey string) float64 {
+	if price, ok := workerImageVariantPrice(rule, params, tierMapKey); ok {
+		return price
+	}
 	tier := strings.ToUpper(strings.TrimSpace(stringAny(params["image_size"])))
 	if tier == "" {
 		tier = strings.ToUpper(strings.TrimSpace(stringAny(params["quality"])))

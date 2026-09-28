@@ -395,7 +395,7 @@ routeLoop:
 				markWorkerRouteFailure(ctx, pool, selected.Route.ID, poolEnabled)
 				return failTask(ctx, pool, p, "MODEL_PROVIDER_ERROR", err.Error())
 			}
-			if pollUsage.hasAny() {
+			if pollUsage.hasAny() || pollUsage.CostUSD > 0 {
 				usage = pollUsage
 			}
 		}
@@ -424,6 +424,16 @@ routeLoop:
 		actualCost = estimateModelCostByIDWorker(ctx, pool, p.ModelID, billingInput, usage.PromptTokens, usage.OutputTokens, 0, 0)
 	}
 	providerCost := workerRouteProviderCost(selected.Route, billingInput, usage.PromptTokens, usage.OutputTokens, 0, 0)
+	usd := usage.CostUSD
+	if usd <= 0 {
+		usd = upstreamUSDCost(respBody)
+	}
+	if usd > 0 {
+		if rate := modelUSDToComputeRate(ctx, pool, p.ModelID); rate > 0 {
+			actualCost = math.Round(usd*rate*1e6) / 1e6
+		}
+		providerCost = usd
+	}
 	updateWorkerRouteAttemptProviderCost(ctx, pool, p.TaskNo, selected.Route.ID, providerCost)
 
 	var output, meta []byte
@@ -1069,7 +1079,11 @@ func executeWorkerGenerationAttempt(ctx context.Context, pool *pgxpool.Pool, p I
 		if endpoint == "" {
 			endpoint = "/v1/video/generations"
 		}
-		body, _ = json.Marshal(videoparams.BuildUpstreamVideoPayload(p.ModelCode, upstreamModel, route.RuntimeRule, extraParams, p.Input))
+		if isOpenRouterVideoAdapter(route.RuntimeRule) {
+			body, _ = json.Marshal(buildOpenRouterVideoPayload(ctx, upstreamModel, p.ModelCode, prompt, route.RuntimeRule, p.Input))
+		} else {
+			body, _ = json.Marshal(videoparams.BuildUpstreamVideoPayload(p.ModelCode, upstreamModel, route.RuntimeRule, extraParams, p.Input))
+		}
 	} else if isAudio {
 		if endpoint == "" {
 			endpoint = "/v1/audio/speech"
@@ -1115,6 +1129,9 @@ func executeWorkerGenerationAttempt(ctx context.Context, pool *pgxpool.Pool, p I
 			body, _ = json.Marshal(buildMappedImagePayload(ctx, p.ModelCode, upstreamModel, route.RuntimeRule, extraParams, p.Input))
 		} else if isOpenAIImagesAdapter(route.RuntimeRule) {
 			body, _ = json.Marshal(buildOpenAIImagesPayload(upstreamModel, p.ModelCode, prompt, result.GenerationCount, p.Input))
+		} else if isOpenRouterImageAdapter(route.RuntimeRule) {
+			result.GenerationCount = clampOpenRouterImageCount(route.RuntimeRule, result.GenerationCount)
+			body, _ = json.Marshal(buildOpenRouterImagePayload(ctx, upstreamModel, p.ModelCode, prompt, result.GenerationCount, route.RuntimeRule, p.Input))
 		} else {
 			size, _ := p.Input["size"].(string)
 			if size == "" {
@@ -1214,6 +1231,224 @@ func applyOpenAIImageOptions(out, input map[string]interface{}) {
 			out[key] = value
 		}
 	}
+}
+
+func isOpenRouterVideoAdapter(runtimeRule map[string]interface{}) bool {
+	upstream, _ := runtimeRule["upstream"].(map[string]interface{})
+	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(upstream["adapter"])), "openrouter_video")
+}
+
+func buildOpenRouterVideoPayload(ctx context.Context, upstreamModel, modelCode, prompt string, runtimeRule, input map[string]interface{}) map[string]interface{} {
+	model := strings.TrimSpace(upstreamModel)
+	if model == "" {
+		model = modelCode
+	}
+	payload := map[string]interface{}{"model": model, "prompt": prompt}
+	if duration := intAny(input["duration"]); duration > 0 {
+		payload["duration"] = duration
+	}
+	if resolution := strings.TrimSpace(fmt.Sprint(input["resolution"])); resolution != "" && resolution != "<nil>" {
+		payload["resolution"] = resolution
+	}
+	if ratio := strings.TrimSpace(fmt.Sprint(input["aspect_ratio"])); ratio != "" && ratio != "<nil>" {
+		payload["aspect_ratio"] = ratio
+	}
+	if _, exists := input["generate_audio"]; exists {
+		payload["generate_audio"] = boolInput(input, "generate_audio")
+	}
+	videoRule, _ := runtimeRule["video"].(map[string]interface{})
+	frameTypes := map[string]bool{}
+	for _, item := range stringSlice(videoRule["supported_frame_images"]) {
+		frameTypes[item] = true
+	}
+	mode := strings.ToLower(strings.TrimSpace(fmt.Sprint(input["generation_mode"])))
+	if mode == "<nil>" {
+		mode = ""
+	}
+	addFrame := func(raw interface{}, frameType string, frames *[]map[string]interface{}) {
+		if !frameTypes[frameType] {
+			return
+		}
+		url := normalizeReferenceImage(ctx, strings.TrimSpace(fmt.Sprint(raw)))
+		if url == "" || url == "<nil>" {
+			return
+		}
+		*frames = append(*frames, map[string]interface{}{
+			"type":       "image_url",
+			"image_url":  map[string]string{"url": url},
+			"frame_type": frameType,
+		})
+	}
+	referencePart := func(raw interface{}, kind string) map[string]interface{} {
+		url := normalizeReferenceImage(ctx, strings.TrimSpace(fmt.Sprint(raw)))
+		if url == "" || url == "<nil>" {
+			return nil
+		}
+		switch kind {
+		case "video":
+			return map[string]interface{}{"type": "video_url", "video_url": map[string]string{"url": url}}
+		case "audio":
+			return map[string]interface{}{"type": "audio_url", "audio_url": map[string]string{"url": url}}
+		default:
+			return map[string]interface{}{"type": "image_url", "image_url": map[string]string{"url": url}}
+		}
+	}
+	collectReferences := func() []map[string]interface{} {
+		var references []map[string]interface{}
+		for _, ref := range referenceImageSources(input["reference_images"]) {
+			if part := referencePart(ref, "image"); part != nil {
+				references = append(references, part)
+			}
+		}
+		for _, ref := range referenceImageSources(input["reference_videos"]) {
+			if part := referencePart(ref, "video"); part != nil {
+				references = append(references, part)
+			}
+		}
+		for _, ref := range referenceImageSources(input["reference_audios"]) {
+			if part := referencePart(ref, "audio"); part != nil {
+				references = append(references, part)
+			}
+		}
+		return references
+	}
+	switch mode {
+	case "text":
+		return payload
+	case "first_frame", "last_frame", "first_last":
+		var frames []map[string]interface{}
+		if mode != "last_frame" {
+			addFrame(input["first_frame"], "first_frame", &frames)
+		}
+		if mode != "first_frame" {
+			addFrame(input["last_frame"], "last_frame", &frames)
+		}
+		if len(frames) > 0 {
+			payload["frame_images"] = frames
+		}
+		return payload
+	case "reference", "image", "video", "image_audio", "image_video", "video_audio", "image_video_audio":
+		if references := collectReferences(); len(references) > 0 {
+			payload["input_references"] = references
+		}
+		return payload
+	}
+	var frames []map[string]interface{}
+	addFrame(input["first_frame"], "first_frame", &frames)
+	addFrame(input["last_frame"], "last_frame", &frames)
+	if len(frames) == 0 {
+		if references := collectReferences(); len(references) > 0 && frameTypes["first_frame"] && len(referenceImageSources(input["reference_videos"]))+len(referenceImageSources(input["reference_audios"])) == 0 && len(referenceImageSources(input["reference_images"])) == 1 {
+			addFrame(referenceImageSources(input["reference_images"])[0], "first_frame", &frames)
+		} else if len(references) > 0 {
+			payload["input_references"] = references
+		}
+	}
+	if len(frames) > 0 {
+		payload["frame_images"] = frames
+	}
+	return payload
+}
+
+func firstUnsignedVideoURL(raw map[string]interface{}) string {
+	urls, ok := raw["unsigned_urls"].([]interface{})
+	if !ok {
+		return ""
+	}
+	for _, item := range urls {
+		if address, ok := item.(string); ok && isHTTPURL(address) {
+			return address
+		}
+	}
+	return ""
+}
+
+func isOpenRouterImageAdapter(runtimeRule map[string]interface{}) bool {
+	upstream, _ := runtimeRule["upstream"].(map[string]interface{})
+	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(upstream["adapter"])), "openrouter_image")
+}
+
+func clampOpenRouterImageCount(runtimeRule map[string]interface{}, count int) int {
+	if count < 1 {
+		count = 1
+	}
+	imageRule, _ := runtimeRule["image"].(map[string]interface{})
+	maxCount := intAny(imageRule["count_max"])
+	if maxCount > 0 && count > maxCount {
+		return maxCount
+	}
+	return count
+}
+
+func buildOpenRouterImagePayload(ctx context.Context, upstreamModel, modelCode, prompt string, count int, runtimeRule, input map[string]interface{}) map[string]interface{} {
+	model := strings.TrimSpace(upstreamModel)
+	if model == "" {
+		model = modelCode
+	}
+	payload := map[string]interface{}{
+		"model":  model,
+		"prompt": prompt,
+		"n":      count,
+	}
+	if ratio := strings.TrimSpace(fmt.Sprint(input["aspect_ratio"])); ratio != "" && ratio != "<nil>" {
+		payload["aspect_ratio"] = ratio
+	}
+	if len(supportedImageSizeTiers(runtimeRule)) > 0 {
+		if tier := strings.TrimSpace(fmt.Sprint(input["image_size"])); tier != "" && tier != "<nil>" {
+			payload["resolution"] = strings.ToUpper(tier)
+		}
+	}
+	for _, key := range []string{"quality", "background", "output_format", "output_compression", "seed"} {
+		if value := strings.TrimSpace(fmt.Sprint(input[key])); value != "" && value != "<nil>" {
+			payload[key] = input[key]
+		}
+	}
+	var references []map[string]interface{}
+	for _, ref := range referenceImageSources(input["reference_images"]) {
+		url := normalizeReferenceImage(ctx, ref)
+		if url == "" {
+			continue
+		}
+		references = append(references, map[string]interface{}{
+			"type":      "image_url",
+			"image_url": map[string]string{"url": url},
+		})
+	}
+	if len(references) > 0 {
+		payload["input_references"] = references
+	}
+	return payload
+}
+
+func upstreamUSDCost(body []byte) float64 {
+	var raw map[string]interface{}
+	if json.Unmarshal(body, &raw) != nil {
+		return 0
+	}
+	usage, _ := raw["usage"].(map[string]interface{})
+	if usage == nil {
+		return 0
+	}
+	cost := floatAny(usage["cost"])
+	if cost < 0 {
+		return 0
+	}
+	return cost
+}
+
+func modelUSDToComputeRate(ctx context.Context, pool *pgxpool.Pool, modelID int64) float64 {
+	var raw []byte
+	if err := pool.QueryRow(ctx, `SELECT price_rule FROM models WHERE id=$1`, modelID).Scan(&raw); err != nil {
+		return 0
+	}
+	rule := map[string]interface{}{}
+	if json.Unmarshal(raw, &rule) != nil {
+		return 0
+	}
+	rate := floatAny(rule["usd_to_compute"])
+	if rate < 0 {
+		return 0
+	}
+	return rate
 }
 
 func isOpenAIImagesAdapter(runtimeRule map[string]interface{}) bool {
@@ -1943,6 +2178,8 @@ var standardImageSizes = map[string]map[string]string{
 	"1:2":  {"1K": "720x1440", "2K": "1440x2880", "4K": "1920x3840"},
 	"3:1":  {"1K": "1440x480", "2K": "2880x960", "4K": "3840x1280"},
 	"1:3":  {"1K": "480x1440", "2K": "960x2880", "4K": "1280x3840"},
+	"4:1":  {"1K": "2048x512", "2K": "4096x1024", "4K": "5760x1440"},
+	"1:4":  {"1K": "512x2048", "2K": "1024x4096", "4K": "1440x5760"},
 }
 
 func resolveImageGenerationInput(input map[string]interface{}, runtimeRule map[string]interface{}, endpoint, model string) {
@@ -2830,7 +3067,7 @@ func mediaItemFromMap(m map[string]interface{}) (mediaItem, bool) {
 		return mediaItem{URL: mediaURL, Thumbnail: thumb}, true
 	}
 	if b64 := firstString(m, encodedMediaKeys()...); b64 != "" && looksLikeEncodedMedia(b64) {
-		return mediaItem{B64JSON: b64, MimeType: firstString(m, "mime_type", "mime", "content_type", "format", "audio_format")}, true
+		return mediaItem{B64JSON: b64, MimeType: firstString(m, "media_type", "mime_type", "mime", "content_type", "format", "audio_format")}, true
 	}
 	for _, key := range []string{"data", "result", "output", "message", "content", "audio", "audio_result", "images", "videos", "audios", "results", "files", "choices"} {
 		if it, ok := mediaItemFromValue(m[key], m); ok {
@@ -3539,6 +3776,10 @@ func pollUpstreamTask(ctx context.Context, pool *pgxpool.Pool, conn connectionCo
 			if failMsg := upstreamContentFailure(raw); failMsg != "" {
 				return nil, upstreamUsageDetails{}, fmt.Errorf("%s", failMsg)
 			}
+			if mediaURL := firstUnsignedVideoURL(raw); mediaURL != "" {
+				log.Printf("Task %s poll #%d got unsigned video url", taskNo, attempt)
+				return []mediaItem{{URL: mediaURL}}, upstreamUsageFromBody(body), nil
+			}
 			if items := extractMediaItems(raw); len(items) > 0 {
 				log.Printf("Task %s poll #%d got %d media item(s)", taskNo, attempt, len(items))
 				return items, upstreamUsageFromBody(body), nil
@@ -3581,6 +3822,7 @@ type upstreamUsageDetails struct {
 	HasInputSeconds    bool
 	HasOutputSeconds   bool
 	HasInputImageCount bool
+	CostUSD            float64
 }
 
 func (u upstreamUsageDetails) hasAny() bool {
@@ -3644,6 +3886,9 @@ func upstreamUsageFromBody(body []byte) upstreamUsageDetails {
 			}
 			if value, exists := usage["input_image_count"]; exists {
 				details.InputImageCount, details.HasInputImageCount = intAny(value), true
+			}
+			if cost := floatAny(usage["cost"]); cost > 0 {
+				details.CostUSD = cost
 			}
 			if !details.HasOutputSeconds {
 				if value, exists := usage["total_seconds"]; exists {

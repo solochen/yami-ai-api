@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowRight, Film, Music2, Plus, UserRound, X } from "lucide-react";
 import type { VideoMediaItem, VideoMediaState, VideoRuntimeConfig } from "@starai/shared-types";
 import { uploadAsset } from "@/lib/api";
@@ -32,6 +33,7 @@ function EmptyUploadBox({
   tilt,
   compact,
   accept = IMAGE_ACCEPT,
+  multiple = false,
 }: {
   label: string;
   onUpload: (files: FileList | null) => void;
@@ -39,6 +41,7 @@ function EmptyUploadBox({
   tilt?: boolean;
   compact?: boolean;
   accept?: string;
+  multiple?: boolean;
 }) {
   return (
     <label
@@ -53,6 +56,7 @@ function EmptyUploadBox({
       <input
         type="file"
         accept={accept}
+        multiple={multiple}
         className="hidden"
         disabled={uploading}
         onChange={(e) => {
@@ -105,45 +109,99 @@ function FilledImageCard({
   compact?: boolean;
 }) {
   const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const title = badge || image.name || t("查看原图");
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
   return (
-    <div className={`group/img relative shrink-0 overflow-hidden border-2 border-white bg-gray-100 shadow-lg ${compact ? "h-14 w-14 rounded-xl" : "h-16 w-16 rounded-2xl"}`}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={image.url} alt={image.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
-      {badge ? (
-        <span className="pointer-events-none absolute left-1 top-1 px-1.5 py-0.5 rounded-md bg-black/55 text-white text-[10px]">
-          {badge}
-        </span>
-      ) : null}
-      {onRemove && (
-        <button
-          type="button"
-          onClick={onRemove}
-          className="absolute right-0.5 top-0.5 w-5 h-5 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition"
-          title={t("common.remove")}
-        >
-          <X size={12} />
-        </button>
-      )}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/70 px-1.5 py-1 text-[10px] text-white opacity-0 group-hover/img:opacity-100 transition whitespace-nowrap truncate">
-        {image.name}
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setOpen(true);
+          }
+        }}
+        title={t("查看原图")}
+        className={`group/img relative shrink-0 cursor-zoom-in overflow-hidden border-2 border-white bg-gray-100 shadow-lg ${compact ? "h-14 w-14 rounded-xl" : "h-16 w-16 rounded-2xl"}`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={image.url} alt={title} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+        {badge ? (
+          <span className="pointer-events-none absolute left-1 top-1 px-1.5 py-0.5 rounded-md bg-black/55 text-white text-[10px]">
+            {badge}
+          </span>
+        ) : null}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRemove();
+            }}
+            className="absolute right-0.5 top-0.5 w-5 h-5 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition"
+            title={t("common.remove")}
+          >
+            <X size={12} />
+          </button>
+        )}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/70 px-1.5 py-1 text-[10px] text-white opacity-0 group-hover/img:opacity-100 transition whitespace-nowrap truncate">
+          {image.name}
+        </div>
       </div>
-    </div>
+      {open && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setOpen(false)}
+        >
+          <div className="relative flex max-h-[92vh] max-w-[94vw] items-center justify-center" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-xl border border-white/20 bg-black/70 text-white"
+              aria-label={t("common.close")}
+            >
+              <X size={16} />
+            </button>
+            {badge ? <span className="absolute left-3 top-3 z-10 rounded-lg bg-black/70 px-2 py-1 text-xs text-white">{badge}</span> : null}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={image.url} alt={title} className="max-h-[92vh] max-w-[94vw] object-contain" />
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
 function FilledFileCard({
   item,
   kind,
+  badge,
   onRemove,
 }: {
   item: VideoMediaItem;
   kind: "video" | "audio";
+  badge?: string;
   onRemove: () => void;
 }) {
   const { t } = useI18n();
   const Icon = kind === "video" ? Film : Music2;
   return (
     <div className="group/file relative flex h-14 w-[4.5rem] shrink-0 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-xl border border-gray-200 bg-white px-1.5 shadow-sm dark:border-white/10 dark:bg-white/5">
+      {badge ? <span className="pointer-events-none absolute left-1 top-1 rounded-md bg-black/55 px-1 py-0.5 text-[10px] text-white">{badge}</span> : null}
       <Icon size={18} className="text-primary" />
       <span className="w-full truncate text-center text-[10px] text-gray-500 dark:text-gray-300">{item.name}</span>
       <button
@@ -179,14 +237,14 @@ function ReferenceImageStack({
   if (images.length === 0) {
     if (max <= 0) return null;
     return (
-      <EmptyUploadBox label={`${t("video.referenceImage")} 0/${max}`} uploading={uploading} tilt={!compact} compact={compact} onUpload={onUpload} />
+      <EmptyUploadBox label={`${t("video.referenceImage")} 0/${max}`} uploading={uploading} tilt={!compact} compact={compact} multiple={max > 1} onUpload={onUpload} />
     );
   }
 
   return (
     <div className={compact ? "flex min-h-14 max-w-full flex-wrap items-center gap-1.5" : "scroll-x-only flex h-16 w-full shrink-0 flex-nowrap items-center gap-2"}>
       {images.map((img, i) => (
-        <FilledImageCard key={img.url} image={img} compact={compact} onRemove={() => onRemove(i)} />
+        <FilledImageCard key={img.url} image={img} compact={compact} badge={`${t("canvas.kind.image")}${i + 1}`} onRemove={() => onRemove(i)} />
       ))}
       {canAdd && <AddMoreButton uploading={uploading} multiple onUpload={onUpload} />}
     </div>
@@ -393,6 +451,7 @@ export function VideoUploadArea({
               key={item.url}
               item={item}
               kind="video"
+              badge={`${t("canvas.kind.video")}${index + 1}`}
               onRemove={() => onChange({ ...media, reference_videos: media.reference_videos.filter((_, i) => i !== index) })}
             />
           ))}
@@ -400,6 +459,7 @@ export function VideoUploadArea({
             <EmptyUploadBox
               label={`${t("video.referenceVideo")} ${media.reference_videos.length}/${config.reference_videos?.max ?? 3}`}
               compact
+              multiple={(config.reference_videos?.max ?? 3) - media.reference_videos.length > 1}
               accept={VIDEO_ACCEPT}
               uploading={uploading}
               onUpload={(files) =>
@@ -417,6 +477,7 @@ export function VideoUploadArea({
               key={item.url}
               item={item}
               kind="audio"
+              badge={`${t("canvas.kind.audio")}${index + 1}`}
               onRemove={() => onChange({ ...media, reference_audios: media.reference_audios.filter((_, i) => i !== index) })}
             />
           ))}
@@ -424,6 +485,7 @@ export function VideoUploadArea({
             <EmptyUploadBox
               label={`${t("video.referenceAudio")} ${media.reference_audios.length}/${config.reference_audios?.max ?? 3}`}
               compact
+              multiple={(config.reference_audios?.max ?? 3) - media.reference_audios.length > 1}
               accept={AUDIO_ACCEPT}
               uploading={uploading}
               onUpload={(files) =>
@@ -536,6 +598,7 @@ export function VideoUploadArea({
                 key={item.url}
                 item={item}
                 kind="video"
+                badge={`${t("canvas.kind.video")}${index + 1}`}
                 onRemove={() => onChange({ ...media, reference_videos: media.reference_videos.filter((_, i) => i !== index) })}
               />
             ))}
@@ -543,6 +606,7 @@ export function VideoUploadArea({
               <EmptyUploadBox
                 label={`${t("video.referenceVideo")} ${media.reference_videos.length}/${config.reference_videos?.max ?? 3}`}
                 compact
+                multiple={(config.reference_videos?.max ?? 3) - media.reference_videos.length > 1}
                 accept={VIDEO_ACCEPT}
                 uploading={uploading}
                 onUpload={(files) =>
@@ -562,6 +626,7 @@ export function VideoUploadArea({
                 key={item.url}
                 item={item}
                 kind="audio"
+                badge={`${t("canvas.kind.audio")}${index + 1}`}
                 onRemove={() => onChange({ ...media, reference_audios: media.reference_audios.filter((_, i) => i !== index) })}
               />
             ))}
@@ -569,6 +634,7 @@ export function VideoUploadArea({
               <EmptyUploadBox
                 label={`${t("video.referenceAudio")} ${media.reference_audios.length}/${config.reference_audios?.max ?? 3}`}
                 compact
+                multiple={(config.reference_audios?.max ?? 3) - media.reference_audios.length > 1}
                 accept={AUDIO_ACCEPT}
                 uploading={uploading}
                 onUpload={(files) =>

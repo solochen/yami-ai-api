@@ -1654,12 +1654,12 @@ func (s *AdminService) LogOperation(ctx context.Context, adminID int64, action, 
 
 func isSensitiveConfigKey(key string) bool {
 	k := strings.ToLower(key)
-	return strings.Contains(k, "api_key") || strings.Contains(k, "token") || strings.Contains(k, "secret") || strings.Contains(k, "password")
+	return strings.Contains(k, "api_key") || strings.Contains(k, "token") || strings.Contains(k, "secret") || strings.Contains(k, "password") || strings.Contains(k, "private_key")
 }
 
 func isSensitiveDetailKey(key string) bool {
 	k := strings.ToLower(key)
-	return strings.Contains(k, "api_key") || strings.Contains(k, "token") || strings.Contains(k, "secret") || strings.Contains(k, "password") || strings.Contains(k, "authorization")
+	return strings.Contains(k, "api_key") || strings.Contains(k, "token") || strings.Contains(k, "secret") || strings.Contains(k, "password") || strings.Contains(k, "authorization") || strings.Contains(k, "private_key")
 }
 
 func redactSensitiveDetail(v interface{}) interface{} {
