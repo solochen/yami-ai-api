@@ -126,6 +126,9 @@ services:
       NEW_API_BASE_URL: http://mock-new-api:3002
       NEW_API_TOKEN: change-me-dev-model-gateway-token
       MODEL_ROUTE_CIPHER_KEY: dev-model-route-cipher-key
+      CHROME_PATH: /usr/bin/chromium-browser
+      DOUYIN_API_BASE: ${DOUYIN_API_BASE:-https://api.douyin.wtf}
+      DOUYIN_API_KEY: ${DOUYIN_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -135,6 +138,48 @@ services:
         condition: service_started
       mock-new-api:
         condition: service_started
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  admin:
+    build:
+      context: ../..
+      dockerfile: apps/admin/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+        ADMIN_ASSET_PREFIX: /admin-assets
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      ADMIN_ASSET_PREFIX: /admin-assets
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3001/admin/login"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
 volumes:
   postgres_data:

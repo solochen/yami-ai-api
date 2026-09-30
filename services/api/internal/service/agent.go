@@ -382,6 +382,16 @@ func (s *AgentService) CreateProject(ctx context.Context, userID int64, code str
 			return nil, err
 		}
 	}
+	if stringValue(def.RuntimeConfig["agent_mode"]) == "product_image_extract" {
+		if err := normalizeProductImageExtractInputs(inputs); err != nil {
+			return nil, err
+		}
+	}
+	if stringValue(def.RuntimeConfig["agent_mode"]) == "viral_video_breakdown" {
+		if err := normalizeViralVideoBreakdownInputs(inputs); err != nil {
+			return nil, err
+		}
+	}
 	productEstimate := 0.0
 	billingReservation := 0.0
 	if stringValue(def.RuntimeConfig["agent_mode"]) == "product_refine" {
@@ -454,6 +464,17 @@ func (s *AgentService) EstimateWorkflowCost(ctx context.Context, def *WorkflowDT
 	if stringValue(def.RuntimeConfig["agent_mode"]) == "product_refine" {
 		_, estimate, err := s.productPricing(ctx, def.RuntimeConfig, def.PriceRule, intFromAgentAny(inputs["count"]), stringValue(inputs["quality"]))
 		return estimate, err
+	}
+	if stringValue(def.RuntimeConfig["agent_mode"]) == "viral_video_breakdown" {
+		rate := floatValue(def.PriceRule["unit_price"])
+		if rate < 0 {
+			rate = 0
+		}
+		maxSec := intFromAgentAny(def.RuntimeConfig["max_duration_sec"])
+		if maxSec <= 0 {
+			maxSec = 180
+		}
+		return rate * float64(maxSec), nil
 	}
 	nodeEstimate := 0.0
 	for _, node := range def.Nodes {
@@ -2379,6 +2400,37 @@ func (s *AgentService) Upsert(ctx context.Context, in AgentUpsertInput) error {
 	if in.Code == "" || in.Name == "" {
 		return errors.New("编码和名称必填")
 	}
+	if in.Code == "extract_product_images" {
+		if in.RuntimeConfig == nil {
+			in.RuntimeConfig = map[string]interface{}{}
+		}
+		in.RuntimeConfig["agent_mode"] = "product_image_extract"
+		in.RuntimeConfig["preset_code"] = "product_image_extract"
+		in.Category = "tool"
+		if in.PriceRule == nil {
+			in.PriceRule = map[string]interface{}{}
+		}
+		in.PriceRule["billing_type"] = "per_request"
+	}
+	if in.Code == "viral_video_breakdown" {
+		if in.RuntimeConfig == nil {
+			in.RuntimeConfig = map[string]interface{}{}
+		}
+		in.RuntimeConfig["agent_mode"] = "viral_video_breakdown"
+		in.RuntimeConfig["preset_code"] = "viral_video_breakdown"
+		in.RuntimeConfig["generation_type"] = "tool"
+		if intFromAgentAny(in.RuntimeConfig["max_duration_sec"]) <= 0 {
+			in.RuntimeConfig["max_duration_sec"] = 180
+		}
+		in.Category = "tool"
+		if in.PriceRule == nil {
+			in.PriceRule = map[string]interface{}{}
+		}
+		in.PriceRule["billing_type"] = "duration_second"
+		if floatValue(in.PriceRule["unit_price"]) < 0 {
+			in.PriceRule["unit_price"] = 0
+		}
+	}
 	if in.Category == "" {
 		in.Category = "workflow"
 	}
@@ -2457,7 +2509,7 @@ func (s *AgentService) Upsert(ctx context.Context, in AgentUpsertInput) error {
 func validateWorkflowPriceRule(rule map[string]interface{}) error {
 	billingType := strings.ToLower(strings.TrimSpace(stringValue(rule["billing_type"])))
 	switch billingType {
-	case "per_request", "model_actual", "dynamic", "per_chapter":
+	case "per_request", "model_actual", "dynamic", "per_chapter", "duration_second":
 	default:
 		return fmt.Errorf("不支持的工作流计费类型：%s", billingType)
 	}

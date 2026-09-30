@@ -226,6 +226,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			auth.GET("/agent-projects/:id", h.GetAgentProject)
 			auth.POST("/agent-projects/:id/retry", h.RetryAgentProject)
 			auth.POST("/agent-projects/:id/cancel", h.CancelAgentProject)
+			auth.POST("/agent-projects/:id/breakdown-rewrite", h.RewriteViralBreakdown)
 			auth.POST("/agent-projects/:id/retry-node", h.RetryAgentProjectNode)
 			auth.PATCH("/agent-projects/:id/comic/keyframes/:index", h.ReplaceComicProjectKeyframe)
 			auth.PATCH("/agent-projects/:id/comic/segments/:index", h.ReplaceComicProjectSegment)

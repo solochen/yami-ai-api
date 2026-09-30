@@ -10,7 +10,7 @@ import { AgentPolicyEditor } from "./AgentPolicyEditor";
 type GenerationType = "image" | "video" | "video_upscale" | "video_redraw" | "subtitle_remove" | "comic_drama" | "novel_workshop" | "photo_studio" | "virtual_try_on" | "creative_agent";
 type WorkflowNode = { id: string; name: string; type: string; model_code: string; prompt_template?: string; cost: number };
 type RuntimeConfig = {
-  agent_mode?: "simple_pipeline" | "custom_nodes" | "comic_drama" | "novel_workshop" | "photo_studio" | "virtual_try_on" | "infinite_canvas" | "video_upscale" | "video_redraw" | "subtitle_remove" | "creative_chat" | "product_refine";
+  agent_mode?: "simple_pipeline" | "custom_nodes" | "comic_drama" | "novel_workshop" | "photo_studio" | "virtual_try_on" | "infinite_canvas" | "video_upscale" | "video_redraw" | "subtitle_remove" | "creative_chat" | "product_refine" | "product_image_extract" | "viral_video_breakdown";
   system_workspace?: boolean;
   quality_model_code?: string;
   image_concurrency?: number;
@@ -55,6 +55,7 @@ type RuntimeConfig = {
   preserve_audio?: boolean;
   default_enhancement_mode?: string;
   max_input_duration_sec?: number;
+  max_duration_sec?: number;
   max_input_size_mb?: number;
   upscale_operation?: string;
   upscale_prompt?: string;
@@ -1103,7 +1104,7 @@ export default function AgentsAdminPage() {
       default_target_resolution: runtime.default_target_resolution || "720P",
       preserve_audio: runtime.preserve_audio !== false,
       default_enhancement_mode: runtime.default_enhancement_mode || "balanced",
-      max_input_duration_sec: Number(runtime.max_input_duration_sec || 300),
+      max_input_duration_sec: w.code === "viral_video_breakdown" ? Number(runtime.max_duration_sec || 600) : Number(runtime.max_input_duration_sec || 300),
       max_input_size_mb: Number(runtime.max_input_size_mb || 500),
       upscale_operation: runtime.upscale_operation || "upscale",
       upscale_prompt: runtime.upscale_prompt || "Enhance the source video to the requested resolution. Preserve the original content, timing, composition, identity, motion and audio. Reduce compression artifacts and noise, recover natural detail, and avoid changing the scene.",
@@ -1236,7 +1237,11 @@ export default function AgentsAdminPage() {
       setErr("通用智能体需要选择主聊天、图片、视频、语音和音乐模型");
       return;
     }
-    if (!form.system_workspace && form.generation_type !== "creative_agent" && form.generation_type !== "comic_drama" && form.generation_type !== "virtual_try_on" && !isVideoUtilityType(form.generation_type) && (!form.analysis_model_code || !form.generation_model_code)) {
+    if (!form.system_workspace && form.code === "viral_video_breakdown" && !form.analysis_model_code) {
+      setErr("请选择分析模型，它需要能理解视频或图片");
+      return;
+    }
+    if (!form.system_workspace && form.code !== "viral_video_breakdown" && form.generation_type !== "creative_agent" && form.generation_type !== "comic_drama" && form.generation_type !== "virtual_try_on" && !isVideoUtilityType(form.generation_type) && (!form.analysis_model_code || !form.generation_model_code)) {
       setErr("请选择分析模型和生成模型");
       return;
     }
@@ -1357,6 +1362,27 @@ export default function AgentsAdminPage() {
       if (form.code === "product_refine") {
         payload.runtime_config = runtimeConfig(form);
         payload.price_rule = { billing_type: "model_actual", unit_price: Math.max(0, Number(form.unit_price) || 0) };
+      }
+      if (form.code === "extract_product_images") {
+        payload.agent_mode = "product_image_extract";
+        payload.price_rule = { billing_type: "per_request", unit_price: Math.max(0, Number(form.unit_price) || 0) };
+      }
+      if (form.code === "viral_video_breakdown") {
+        const saved = payload as Record<string, unknown>;
+        saved.agent_mode = "viral_video_breakdown";
+        saved.category = "tool";
+        saved.nodes = [];
+        saved.price_rule = { billing_type: "duration_second", unit_price: Math.max(0, Number(form.unit_price) || 0) };
+        saved.runtime_config = {
+          ...(payload.runtime_config || {}),
+          agent_mode: "viral_video_breakdown",
+          preset_code: "viral_video_breakdown",
+          generation_type: "tool",
+          analysis_model_code: form.analysis_model_code,
+          max_duration_sec: Math.max(1, Math.min(3600, Number(form.max_input_duration_sec) || 600)),
+          input_capabilities: { allow_text_only: true, support_reference_video: true },
+          flow_options: { enable_autopilot: true, enable_step_confirm: false, allow_prompt_edit: false },
+        };
       }
       await adminApi(form.isEdit ? `/agents/${form.code}` : "/agents", {
         method: form.isEdit ? "PUT" : "POST",
@@ -1595,7 +1621,7 @@ export default function AgentsAdminPage() {
                     <Field label="Agent 文本转语音模型"><select className="admin-input" value={form.speech_model_code} onChange={(e) => setForm({ ...form, speech_model_code: e.target.value })}><option value="">请选择语音模型</option>{audioModels.map((m) => <option key={m.code} value={m.code}>{m.display_name} / {m.code}</option>)}</select></Field>
                     <Field label="Agent 歌曲音乐模型"><select className="admin-input" value={form.music_model_code} onChange={(e) => setForm({ ...form, music_model_code: e.target.value })}><option value="">请选择音乐模型</option>{musicModels.map((m) => <option key={m.code} value={m.code}>{m.display_name} / {m.code}</option>)}</select></Field>
                   </>
-                ) : form.generation_type !== "comic_drama" && form.generation_type !== "novel_workshop" && (
+                ) : form.generation_type !== "comic_drama" && form.generation_type !== "novel_workshop" && form.code !== "viral_video_breakdown" && (
                   <Field label={form.code === "product_refine" ? "商品编辑模型" : form.generation_type === "video_upscale" ? "视频超分模型" : form.generation_type === "video_redraw" ? "视频转绘模型" : form.generation_type === "subtitle_remove" ? "硬字幕 AI 修复模型（可选）" : form.generation_type === "video" ? "视频生成模型" : "图片生成模型"}>
                     <select className="admin-input" value={form.generation_model_code} onChange={(e) => setForm({ ...form, generation_model_code: e.target.value })}>
                       <option value="">{form.generation_type === "subtitle_remove" ? "不配置（仅支持独立字幕轨）" : "请选择生成模型"}</option>{generationModels.map((m) => {
@@ -1665,7 +1691,9 @@ export default function AgentsAdminPage() {
                 )}
                 {form.generation_type !== "creative_agent" && !isVideoUtilityType(form.generation_type) && <Field label="默认生成数量"><input type="number" min={1} max={50} className="admin-input" value={form.default_count} onChange={(e) => setForm({ ...form, default_count: Math.max(1, Number(e.target.value) || 1) })} /></Field>}
                 {form.generation_type !== "creative_agent" && !isVideoUtilityType(form.generation_type) && <Field label="AI方案数量"><input type="number" min={1} max={5} className="admin-input" value={form.candidate_count} onChange={(e) => setForm({ ...form, candidate_count: Math.min(5, Math.max(1, Number(e.target.value) || 3)) })} /></Field>}
-                {form.generation_type !== "creative_agent" && <Field label="工作流收费"><input type="number" min={0} step="0.01" className="admin-input" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: Number(e.target.value) || 0 })} /></Field>}
+                {form.code === "viral_video_breakdown" && <Field label="最大视频时长（秒）"><input type="number" min={1} max={3600} className="admin-input" value={form.max_input_duration_sec} onChange={(e) => setForm({ ...form, max_input_duration_sec: Math.max(1, Math.min(3600, Number(e.target.value) || 600)) })} /><p className="mt-1 text-xs text-gray-500">超过此时长会拒绝分析。提交时按这个秒数冻结，完成后按实际秒数结算。</p></Field>}
+                {form.generation_type !== "creative_agent" && <Field label={form.code === "extract_product_images" ? "提取成功收费（算力）" : form.code === "viral_video_breakdown" ? "每秒算力" : "工作流收费"}><input type="number" min={0} step="0.01" className="admin-input" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: Number(e.target.value) || 0 })} />{form.code === "viral_video_breakdown" && <p className="mt-1 text-xs text-gray-500">分析模型同时负责整段理解、逐帧看图和剧本。填 0 表示不按秒扣费。</p>}</Field>}
+                {form.code === "extract_product_images" && <p className="self-end text-[11px] leading-5 text-gray-400">提取成功后按这个金额扣除算力。提取失败会退回冻结，不扣费。填 0 表示免费。</p>}
                 {form.code === "product_refine" && <p className="self-end text-[11px] leading-5 text-gray-400">预计费用 = 工作流收费 + 生成数量 × 所选图片模型的后台单价；自动修正不重复增加预计费用。</p>}
                 {form.generation_type === "creative_agent" && <p className="md:col-span-2 rounded-xl bg-gray-50 px-3 py-2 text-[11px] leading-5 text-gray-500">通用智能体不额外收取固定工作流费用，主聊天分析和最终图片或视频分别按所配置模型的实际计费规则结算。</p>}
                 {form.generation_type === "novel_workshop" && <p className="self-end text-[11px] leading-5 text-gray-400">总费用 = 工作流收费 + 大模型用量费；大模型用量费取「上游真实扣费」与「按模型设定的输入/输出/缓存单价计算的费用」中的较低者。创建时按目标篇幅预估冻结，完成/取消/失败按实际用量结算。</p>}

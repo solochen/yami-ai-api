@@ -1439,8 +1439,8 @@ export default function SystemConfigPage() {
           <p className="mb-5 text-xs leading-relaxed text-gray-400">密钥只保存在服务端。公网地址必须能被 Vidu 访问，角色知识库才会在通话中被引用。语音和视频按 Vidu 实际计费秒数折算成每分钟价格扣费。</p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {renderItem({ key: "vidu_api_key", label: "Vidu API Key", type: "password", hint: "格式 Token 后面的密钥。保存后只显示脱敏值。" })}
-            {renderItem({ key: "vidu_api_host", label: "Vidu 接口域名", hint: "国内站 api.vidu.cn。密钥需来自 platform.vidu.cn，不要带 https://。" })}
-            {renderItem({ key: "vidu_public_base_url", label: "本站公网地址", hint: "例如 https://api.example.com。Vidu 用它回调知识库检索。" })}
+            {renderItem({ key: "vidu_api_host", label: "Vidu 接口域名", type: "text", hint: "国内站 api.vidu.cn。密钥需来自 platform.vidu.cn，不要带 https://。" })}
+            {renderItem({ key: "vidu_public_base_url", label: "本站公网地址", type: "text", hint: "例如 https://api.example.com。Vidu 用它回调知识库检索。" })}
             {renderItem({ key: "vidu_voice_price_per_minute", label: "语音通话价格（算力/分钟）", type: "number", min: 0 })}
             {renderItem({ key: "vidu_video_price_per_minute", label: "视频通话价格（算力/分钟）", type: "number", min: 0 })}
             {renderItem({ key: "vidu_text_credit_rate", label: "文字会话换算", type: "number", min: 0, hint: "Vidu 返回的 credits_cost 乘以这个倍数，记成算力。" })}

@@ -35,6 +35,8 @@ const WorkspaceLoading = () => {
   return <div className="flex flex-1 items-center justify-center p-8 text-sm text-gray-400">{ts("正在打开工作区...")}</div>;
 };
 const VideoUpscaleWorkspace = dynamic(() => import("./VideoUpscaleWorkspace").then((module) => module.VideoUpscaleWorkspace), { loading: WorkspaceLoading });
+const ProductImageExtractWorkspace = dynamic(() => import("./ProductImageExtractWorkspace").then((module) => module.ProductImageExtractWorkspace), { loading: WorkspaceLoading });
+const ViralBreakdownWorkspace = dynamic(() => import("./ViralBreakdownWorkspace").then((module) => module.ViralBreakdownWorkspace), { loading: WorkspaceLoading });
 const NovelWorkshopLanding = dynamic(() => import("./NovelWorkshopLanding").then((module) => module.NovelWorkshopLanding), { loading: WorkspaceLoading });
 const ProductRefineWorkspace = dynamic(() => import("./ProductRefineWorkspace").then((module) => module.ProductRefineWorkspace), { loading: WorkspaceLoading });
 const PhotoStudioLanding = dynamic(() => import("./PhotoStudioLanding").then((module) => module.PhotoStudioLanding), { loading: WorkspaceLoading });
@@ -63,6 +65,7 @@ type Workflow = {
   nodes?: Array<{ id: string; name: string; type: string }>;
   input_schema?: Record<string, unknown>;
   display_config?: DisplayConfig;
+  price_rule?: { billing_type?: string; unit_price?: number };
   runtime_config?: {
     agent_mode?: string;
     generation_type?: string;
@@ -477,6 +480,8 @@ export function AgentWorkspace({ code }: { code: string }) {
   const isVirtualTryOn = workflow?.runtime_config?.agent_mode === "virtual_try_on" || workflow?.runtime_config?.preset_code === "virtual_try_on" || workflow?.code === "ai_virtual_tryon";
   const videoUtilityMode = workflow?.runtime_config?.agent_mode || workflow?.runtime_config?.preset_code;
   const isVideoUtility = ["video_upscale", "video_redraw", "subtitle_remove"].includes(videoUtilityMode || "");
+  const isProductImageExtract = workflow?.runtime_config?.agent_mode === "product_image_extract" || workflow?.code === "extract_product_images";
+  const isViralBreakdown = workflow?.runtime_config?.agent_mode === "viral_video_breakdown" || workflow?.code === "viral_video_breakdown";
   const workflowName = workflow ? td(`agent.${workflow.code}.name`, workflow.name) : "";
   const workflowDescription = workflow ? td(`agent.${workflow.code}.description`, workflow.description || "") : "";
   const inputCaps = workflow?.runtime_config?.input_capabilities || {};
@@ -1499,6 +1504,14 @@ export function AgentWorkspace({ code }: { code: string }) {
 
   if (isVideoUtility) {
     return <VideoUpscaleWorkspace workflow={workflow} />;
+  }
+
+  if (isProductImageExtract && workflow) {
+    return <ProductImageExtractWorkspace workflow={workflow} />;
+  }
+
+  if (isViralBreakdown && workflow) {
+    return <ViralBreakdownWorkspace workflow={workflow} />;
   }
 
   if (isComicDrama) {

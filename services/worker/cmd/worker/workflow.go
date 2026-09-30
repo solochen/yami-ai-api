@@ -103,6 +103,12 @@ func processWorkflowTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token
 	if stringAny(runtimeCfg["agent_mode"]) == "product_refine" {
 		return processProductWorkflow(ctx, pool, baseURL, token, p, publicID, estimated, inputs, runtimeCfg)
 	}
+	if stringAny(runtimeCfg["agent_mode"]) == "product_image_extract" {
+		return processProductImageExtractWorkflow(ctx, pool, p, publicID, estimated, inputs)
+	}
+	if stringAny(runtimeCfg["agent_mode"]) == "viral_video_breakdown" {
+		return processViralVideoBreakdownWorkflow(ctx, pool, baseURL, token, p, publicID, estimated, inputs, runtimeCfg)
+	}
 	if stringAny(runtimeCfg["agent_mode"]) == "comic_drama" {
 		return processComicDramaWorkflow(ctx, pool, baseURL, token, p, publicID, workflowID, category, estimated, inputs, runtimeCfg)
 	}
@@ -2361,10 +2367,7 @@ func executeWorkerLLMWithMedia(ctx context.Context, pool *pgxpool.Pool, baseURL,
 		if normalizeWorkerLLMProtocol(route.Protocol) == "claude" && !hasWorkerHeader(conn.Headers, "anthropic-version") {
 			conn.Headers["anthropic-version"] = "2023-06-01"
 		}
-		timeout := defaultTimeout
-		if route.TimeoutSeconds > 0 {
-			timeout = time.Duration(route.TimeoutSeconds) * time.Second
-		}
+		timeout := workerLLMRequestTimeout(ctx, defaultTimeout, route.TimeoutSeconds)
 		retries := route.MaxRetries
 		if retries < 0 {
 			retries = 0
@@ -2386,15 +2389,18 @@ func executeWorkerLLMWithMedia(ctx context.Context, pool *pgxpool.Pool, baseURL,
 				statusLabel = fmt.Sprintf("HTTP_%d", status)
 			}
 			logWorkerRouteAttempt(ctx, pool, requestID, model.ID, route.ID, attempt, statusLabel, status, latencyMS)
-			if workerStatusCanFailover(status) {
-				markWorkerRouteFailure(ctx, pool, route.ID, poolEnabled)
-			}
 			message := compactUpstreamError(responseBody)
 			if requestErr != nil {
 				message = requestErr.Error()
 			}
+			// 客户端超时/网络错误时响应不完整，即使带着 HTTP 200 也不可用：
+			// 必须允许换线路和同线路重试，否则一次慢请求就会被当成“上游拒绝”直接终止。
+			canFailover := workerStatusCanFailover(status) || requestErr != nil
+			if canFailover {
+				markWorkerRouteFailure(ctx, pool, route.ID, poolEnabled)
+			}
 			failures = append(failures, fmt.Sprintf("%s (HTTP %d): %s", firstNonEmpty(route.UpstreamModel, model.Code), status, message))
-			if !workerStatusCanFailover(status) {
+			if !canFailover {
 				return workerLLMResult{}, fmt.Errorf("上游拒绝请求：HTTP %d %s", status, message)
 			}
 			if retry < retries && workerShouldRetrySameRoute(requestErr, status, poolEnabled) && waitWorkerRouteRetry(ctx, retry) {
@@ -2407,6 +2413,19 @@ func executeWorkerLLMWithMedia(ctx context.Context, pool *pgxpool.Pool, baseURL,
 		return workerLLMResult{}, errors.New("没有可用线路，线路可能已禁用、正在冷却或被其他请求探测")
 	}
 	return workerLLMResult{}, errors.New(strings.Join(failures, "；"))
+}
+
+func workerLLMRequestTimeout(ctx context.Context, defaultTimeout time.Duration, routeTimeoutSeconds int) time.Duration {
+	timeout := defaultTimeout
+	if routeTimeoutSeconds > 0 {
+		timeout = time.Duration(routeTimeoutSeconds) * time.Second
+	}
+	// 普通聊天线路通常配置为 90 秒，但视频理解和长剧本整理需要更长时间。
+	// 爆款拆解调用方通过 context 声明本次请求的最低超时，线路配置只能放宽，不能压低。
+	if floor := breakdownTimeoutFloor(ctx); floor > timeout {
+		timeout = floor
+	}
+	return timeout
 }
 
 func buildWorkerLLMRequest(route workerModelRoute, requestMode, fallbackModel, system, user string, temperature float64) (map[string]interface{}, string) {

@@ -74,7 +74,6 @@ const recentWorkbench: Record<string, string> = {
   "开麦": "Unmute",
   "关闭摄像头": "Camera off",
   "打开摄像头": "Camera on",
-  "新建角色": "New character",
   "编辑当前角色": "Edit character",
   "名字": "Name",
   "关系": "Relation",
