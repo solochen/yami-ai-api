@@ -107,7 +107,7 @@ export function VideoPromptField({
               key={label}
               type="button"
               data-active={label === current}
-              className={`block w-full px-3 py-1.5 text-left text-xs ${label === current ? "bg-cyan-50 text-cyan-800 dark:bg-cyan-400/10 dark:text-cyan-100" : "text-gray-700 dark:text-gray-200"}`}
+              className={`block w-full px-3 py-1.5 text-left text-xs ${label === current ? "bg-primary/10 text-primary dark:bg-primary/10 dark:text-primary" : "text-gray-700 dark:text-gray-200"}`}
               onMouseDown={(event) => {
                 event.preventDefault();
                 insert(label);

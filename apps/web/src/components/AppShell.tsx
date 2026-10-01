@@ -122,7 +122,7 @@ interface GalleryTag {
 
 function GallerySidebarFilterGroup({ label, items, value, onChange }: { label: string; items: { value: string; label: string }[]; value: string; onChange: (value: string) => void }) {
   return (
-    <section className="border-b border-gray-100 pb-4 last:border-b-0 dark:border-white/10">
+    <section className="mcdl-sidebar-filter border-b border-gray-100 pb-4 last:border-b-0 dark:border-white/10">
       <div className="mb-2 flex items-center justify-between px-0.5">
         <h3 className="text-xs font-semibold text-gray-700 dark:text-gray-200">{label}</h3>
         <span className="text-[10px] tabular-nums text-gray-400">{Math.max(0, items.length - 1)}</span>
@@ -136,7 +136,7 @@ function GallerySidebarFilterGroup({ label, items, value, onChange }: { label: s
             className={clsx(
               "max-w-full rounded-lg border px-2.5 py-1.5 text-left text-[11px] leading-4 transition",
               value === item.value
-                ? "border-primary/50 bg-primary/10 font-medium text-emerald-800 dark:text-emerald-200"
+                ? "border-primary/50 bg-primary/10 font-medium text-primary"
                 : "border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10"
             )}
           >
@@ -530,8 +530,8 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
     const showFooter = opts?.showFooter !== false;
     const compact = opts?.compact;
     return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="px-2.5 py-3.5 grid grid-cols-4 gap-1 shrink-0">
+    <div className="mcdl-sidebar-body flex flex-col h-full min-h-0">
+      <div className="mcdl-sidebar-nav px-2.5 py-3.5 grid grid-cols-4 gap-1 shrink-0">
         {PRIMARY_NAV.map((item) => {
           const Icon = item.icon;
           const active = item.id === section;
@@ -875,7 +875,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                   className={clsx(
                     "rounded-lg px-2 py-2 text-xs font-semibold transition",
                     galleryMode === mode
-                      ? "bg-white text-gray-900 shadow-sm dark:bg-emerald-300 dark:text-gray-950"
+                      ? "bg-primary text-dark shadow-sm"
                       : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
                   )}
                 >
@@ -933,10 +933,10 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
       )}
 
       {showFooter ? (
-        <div className="px-2.5 py-3 border-t border-gray-50 mt-auto shrink-0">
+        <div className="mcdl-sidebar-footer px-2.5 py-3 border-t border-gray-50 mt-auto shrink-0">
           <div className="flex items-center gap-3">
             <Link href="/app/wallet" onClick={closeDrawer} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl transition hover:bg-gray-50 dark:hover:bg-white/5">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white text-sm font-bold shrink-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-dark shadow-sm">
                 {user?.nickname?.[0] || "U"}
               </div>
               <div className="flex-1 min-w-0">
@@ -961,7 +961,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
   };
 
   const renderMobileTopBar = (title: string) => (
-    <div className="relative z-40 lg:hidden shrink-0 flex items-center gap-2 px-3 py-2.5 bg-white border-b border-gray-100 dark:bg-gray-900 dark:border-white/10">
+    <div className="mcdl-app-mobile-topbar relative z-40 lg:hidden shrink-0 flex items-center gap-2 px-3 py-2.5 bg-white border-b border-gray-100 dark:bg-gray-900 dark:border-white/10">
       <button
         type="button"
         onClick={() => setDrawerOpen(true)}
@@ -1028,10 +1028,10 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
   );
   const Drawer = () =>
     drawerOpen ? (
-      <div className="lg:hidden fixed inset-0 z-50 flex">
+      <div className="mcdl-app-drawer lg:hidden fixed inset-0 z-50 flex">
         <button type="button" className="flex-1 bg-black/40" aria-label={t("common.closeMenu")} onClick={closeDrawer} />
-        <aside className="w-[min(320px,88vw)] bg-white flex flex-col shadow-xl h-full dark:bg-gray-900 dark:border-l dark:border-white/10">
-          <div className="px-3.5 py-4 flex items-center justify-between border-b border-gray-50 dark:border-white/10">
+        <aside className="mcdl-app-drawer-panel w-[min(320px,88vw)] bg-white flex flex-col shadow-xl h-full dark:bg-gray-900 dark:border-l dark:border-white/10">
+          <div className="mcdl-app-drawer-header px-3.5 py-4 flex items-center justify-between border-b border-gray-50 dark:border-white/10">
             <SiteBrand
               href="/app"
               subtitle={site_description || "AI 大模型聚合平台"}
@@ -1056,7 +1056,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
   if (!isWorkbench) {
     const hideSubpageRail = pathname === "/app/api-docs";
     return (
-      <div className="flex flex-col h-screen bg-[#EEF1F6] dark:bg-gray-950">
+      <div className="mcdl-product-shell mcdl-subpage-shell flex flex-col h-screen bg-[#EEF1F6] dark:bg-gray-950">
         {renderMobileTopBar(
             subpageLabel(SUBPAGE_LINKS.find((l) => pathname.startsWith(l.href) && l.href !== "/app")?.href || "/app") ||
             site_name ||
@@ -1064,7 +1064,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
         )}
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {!hideSubpageRail && (
-            <aside className="hidden lg:flex w-[92px] bg-white border-r border-gray-100 flex-col items-center py-4 px-2 shrink-0 dark:bg-gray-900 dark:border-white/10">
+            <aside className="mcdl-app-rail hidden lg:flex w-[92px] bg-white border-r border-gray-100 flex-col items-center py-4 px-2 shrink-0 dark:bg-gray-900 dark:border-white/10">
               <SiteBrand href="/app" showName={false} className="mb-4" badgeClassName="rounded-2xl shadow-sm" />
               <div className="flex w-full flex-col gap-2">
                 {SUBPAGE_LINKS.filter((l) => apiDocsVisible || l.href !== "/app/api-docs").map((l) => {
@@ -1090,7 +1090,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
               </div>
             </aside>
           )}
-          <main className={clsx("relative flex-1 min-w-0 dark:bg-gray-950", hideSubpageRail ? "overflow-hidden" : "overflow-auto")}>
+          <main className={clsx("mcdl-app-content relative flex-1 min-w-0 dark:bg-gray-950", hideSubpageRail ? "overflow-hidden" : "overflow-auto")}>
             {!hideSubpageRail && (
               <div className="pointer-events-none fixed right-5 top-4 z-40 hidden items-center gap-2 lg:flex">
                 <div className="pointer-events-auto">
@@ -1116,10 +1116,10 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
   const showDesktopHeader = section === "models" && !activeModelCode;
 
   return (
-    <div className="flex h-[100dvh] bg-[#EEF1F6] overflow-hidden dark:bg-gray-950">
+    <div className="mcdl-product-shell mcdl-workbench-shell flex h-[100dvh] bg-[#EEF1F6] overflow-hidden dark:bg-gray-950">
       <aside
         className={clsx(
-          "hidden lg:flex bg-white border-r border-gray-100 flex-col shrink-0 transition-all duration-300 shadow-[2px_0_12px_rgba(0,0,0,0.04)] dark:bg-gray-900 dark:border-white/10 dark:shadow-none",
+          "mcdl-app-sidebar hidden lg:flex bg-white border-r border-gray-100 flex-col shrink-0 transition-all duration-300 shadow-[2px_0_12px_rgba(0,0,0,0.04)] dark:bg-gray-900 dark:border-white/10 dark:shadow-none",
           collapsed ? "w-[64px]" : "w-[300px]"
         )}
       >
@@ -1144,10 +1144,10 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
 
       <Drawer />
 
-      <main className="workspace-surface relative flex-1 min-w-0 flex flex-col overflow-hidden">
+      <main className="mcdl-app-content workspace-surface relative flex-1 min-w-0 flex flex-col overflow-hidden">
         {!hideMobileTopBar && renderMobileTopBar(sectionTitle)}
         {showDesktopHeader && (
-          <div className="relative z-40 hidden lg:flex shrink-0 items-center justify-end gap-2 px-5 py-3 bg-white border-b border-gray-100 dark:bg-gray-900 dark:border-white/10">
+          <div className="mcdl-app-desktop-header relative z-40 hidden lg:flex shrink-0 items-center justify-end gap-2 px-5 py-3 bg-white border-b border-gray-100 dark:bg-gray-900 dark:border-white/10">
             <WorkbenchTopActions onRecharge={() => setShowRecharge(true)} />
           </div>
         )}

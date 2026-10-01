@@ -30,7 +30,7 @@ export default function AgentsPage() {
   }, []);
 
   return (
-    <div className="flex-1 overflow-y-auto p-8">
+    <div className="mcdl-page flex-1 overflow-y-auto p-8">
       <div className="max-w-5xl mx-auto">
         <h1 className="text-2xl font-bold mb-1">{t("agent.listTitle")}</h1>
         <p className="text-sm text-gray-500 mb-6">{t("agent.listDesc")}</p>

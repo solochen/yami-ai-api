@@ -605,7 +605,7 @@ export default function ApiDocsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden bg-[#F5F7FB] dark:bg-[#070B14]">
+    <div className="mcdl-api-docs flex h-full min-h-0 overflow-hidden bg-[#F5F7FB] dark:bg-[#070B14]">
       <aside className="hidden h-full w-[280px] shrink-0 flex-col border-r border-gray-200/80 bg-[#FAFBFD] dark:border-white/10 dark:bg-[#0D1422] lg:flex">
         <div className="border-b border-gray-200/80 px-4 pb-4 pt-5 dark:border-white/10">
           <SiteBrand href="/app" subtitle={docsSubtitle} nameClassName="font-bold text-gray-900 dark:text-gray-100" subtitleClassName="text-[11px] text-gray-500 dark:text-gray-400" />

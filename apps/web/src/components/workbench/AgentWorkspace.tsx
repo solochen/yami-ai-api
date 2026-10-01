@@ -1453,8 +1453,8 @@ export function AgentWorkspace({ code }: { code: string }) {
     const outputs = project.outputs || {};
     const chapters = Array.isArray(outputs.chapters) ? outputs.chapters as any[] : [];
     const novelShell = (content: ReactNode) => (
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#eaf7fb] text-gray-900 dark:bg-[#05080f] dark:text-white">
-        <div className="pointer-events-none absolute inset-0 opacity-80 [background-image:linear-gradient(rgba(15,23,42,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.08)_1px,transparent_1px)] [background-size:40px_40px] dark:opacity-60 dark:[background-image:linear-gradient(rgba(34,211,238,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.08)_1px,transparent_1px)]" />
+      <div className="mcdl-workspace relative flex min-h-0 flex-1 flex-col overflow-hidden text-gray-900 dark:text-white">
+        <div className="mcdl-workspace-atmosphere pointer-events-none absolute inset-0" />
         <div className="relative z-10 flex min-h-0 flex-1 flex-col">
           <div className="shrink-0 px-3 py-1.5 sm:px-5 sm:py-2 lg:px-8"><PhotoStudioTopBar workflowCode={workflow.code} historyFallbackTitle={ts("小说任务")} onNewTask={resetTask} onLoadHistory={loadHistory} /></div>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-3 sm:px-8 sm:pt-5">
@@ -1520,7 +1520,7 @@ export function AgentWorkspace({ code }: { code: string }) {
     const projectQuality = activeComicProject?.quality || projectDraft.quality;
     const projectOrientation = activeComicProject?.orientation || projectDraft.orientation;
     return (
-      <div className="flex min-h-0 flex-1 overflow-hidden bg-[#eaf7fb] text-gray-900 dark:bg-[#05080f] dark:text-white">
+      <div className="mcdl-workspace flex min-h-0 flex-1 overflow-hidden text-gray-900 dark:text-white">
         <aside
           className={
             "relative z-20 hidden shrink-0 flex-col border-r border-gray-200/80 bg-white/80 shadow-sm backdrop-blur-xl transition-all duration-300 dark:border-white/10 dark:bg-[#111116]/90 lg:flex " +
@@ -1543,7 +1543,7 @@ export function AgentWorkspace({ code }: { code: string }) {
                 <button type="button" onClick={() => setProjectModalOpen(true)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold text-gray-700 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10">
                   <Plus size={16} /> {t("comic.newProject")}
                 </button>
-						<button type="button" onClick={() => { const next = !showArchivedProjects; setShowArchivedProjects(next); void loadComicProjects(next); }} className="mt-2 w-full text-center text-xs text-gray-400 hover:text-cyan-600">{showArchivedProjects ? t("comic.hideArchived") : t("comic.showArchived")}</button>
+						<button type="button" onClick={() => { const next = !showArchivedProjects; setShowArchivedProjects(next); void loadComicProjects(next); }} className="mt-2 w-full text-center text-xs text-gray-400 hover:text-primary">{showArchivedProjects ? t("comic.hideArchived") : t("comic.showArchived")}</button>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
                 {comicProjects.length === 0 ? (
@@ -1562,7 +1562,7 @@ export function AgentWorkspace({ code }: { code: string }) {
 									tabIndex={0}
                           onClick={() => selectComicProject(item)}
 									onKeyDown={(event) => { if (event.key === "Enter") selectComicProject(item); }}
-                          className={"w-full rounded-2xl border p-3 text-left transition " + (active ? "border-cyan-300 bg-cyan-50 shadow-sm dark:border-cyan-400/40 dark:bg-cyan-400/10" : "border-gray-100 bg-white/70 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10")}
+                          className={"w-full rounded-2xl border p-3 text-left transition " + (active ? "border-primary/30 bg-primary/10 shadow-sm dark:border-primary/30 dark:bg-primary/10" : "border-gray-100 bg-white/70 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10")}
                         >
                           <div className="flex items-center gap-3">
                             <div className="h-12 w-16 shrink-0 overflow-hidden rounded-xl bg-gray-100 dark:bg-white/10">
@@ -1578,7 +1578,7 @@ export function AgentWorkspace({ code }: { code: string }) {
                             </div>
                           </div>
 									<div className="mt-2 flex justify-end gap-1 border-t border-gray-100 pt-2 dark:border-white/10">
-										<button type="button" title={t("comic.cloneProject")} onClick={(event) => { event.stopPropagation(); void cloneComicProject(item); }} className="rounded-lg p-1.5 text-gray-400 hover:bg-cyan-50 hover:text-cyan-600"><Copy size={13} /></button>
+										<button type="button" title={t("comic.cloneProject")} onClick={(event) => { event.stopPropagation(); void cloneComicProject(item); }} className="rounded-lg p-1.5 text-gray-400 hover:bg-primary/10 hover:text-primary"><Copy size={13} /></button>
 										<button type="button" title={item.archived ? t("comic.restoreProject") : t("comic.archiveProject")} onClick={(event) => { event.stopPropagation(); void archiveComicProject(item); }} className="rounded-lg p-1.5 text-gray-400 hover:bg-amber-50 hover:text-amber-600"><Archive size={13} /></button>
 										<button type="button" title={t("comic.deleteProject")} onClick={(event) => { event.stopPropagation(); void deleteComicProject(item); }} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={13} /></button>
 									</div>
@@ -1589,7 +1589,7 @@ export function AgentWorkspace({ code }: { code: string }) {
                 )}
               </div>
               <div className="border-t border-gray-100 p-4 dark:border-white/10">
-                <button type="button" onClick={() => setSettingsOpen(true)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 text-sm font-semibold text-cyan-700 dark:border-cyan-400/20 dark:bg-cyan-400/10 dark:text-cyan-200">
+                <button type="button" onClick={() => setSettingsOpen(true)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/10 text-sm font-semibold text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary">
                   <Settings2 size={16} /> {t("comic.smartEngine")}
                 </button>
               </div>
@@ -1598,16 +1598,15 @@ export function AgentWorkspace({ code }: { code: string }) {
         </aside>
 
         <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden" onMouseEnter={() => !projectDrawerCollapsed && setComicDrawerCollapsed(true)}>
-          <div className="pointer-events-none absolute inset-0 opacity-80 [background-image:linear-gradient(rgba(15,23,42,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.08)_1px,transparent_1px)] [background-size:40px_40px] dark:opacity-60 dark:[background-image:linear-gradient(rgba(34,211,238,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.08)_1px,transparent_1px)]" />
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_70%_10%,rgba(34,211,238,.24),transparent_28%),radial-gradient(circle_at_12%_84%,rgba(20,184,166,.18),transparent_22%)] dark:bg-[radial-gradient(circle_at_76%_10%,rgba(20,184,166,.22),transparent_28%),radial-gradient(circle_at_14%_82%,rgba(6,182,212,.14),transparent_22%)]" />
+          <div className="mcdl-workspace-atmosphere pointer-events-none absolute inset-0" />
           <div className="scrollbar-none relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-2 pb-3 sm:px-5 lg:px-8">
             {!project && <div className="comic-landing-stack flex min-h-0 flex-1 flex-col justify-start gap-2 py-2 sm:gap-3 sm:py-3 lg:gap-3 lg:py-2">
               <div className="shrink-0 text-center">
-              <div className="mb-1.5 inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-semibold text-cyan-700 dark:border-cyan-400/20 dark:bg-cyan-400/10 dark:text-cyan-200 sm:px-4 sm:text-xs">
-                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" /> {t("comic.superAgent")}
+              <div className="mb-1.5 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-semibold text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary sm:px-4 sm:text-xs">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" /> {t("comic.superAgent")}
               </div>
               <div className="flex items-center justify-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-cyan-500/10 text-xl sm:h-11 sm:w-11 sm:text-2xl">🎨</div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10 text-xl sm:h-11 sm:w-11 sm:text-2xl">🎨</div>
                 <h1 title={workflowName || t("comic.defaultName")} className="max-w-[min(78vw,960px)] truncate text-xl font-black tracking-normal text-gray-900 dark:text-white sm:text-3xl">{workflowName || t("comic.defaultName")}</h1>
               </div>
               {workflowDescription ? (
@@ -1640,13 +1639,13 @@ export function AgentWorkspace({ code }: { code: string }) {
             <div className="mx-auto w-full max-w-[1040px] shrink-0">
                 {error && <div className="mb-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">{error}</div>}
                 {project && (
-                  <div className="mb-2 rounded-2xl border border-cyan-100 bg-white/70 px-4 py-2 text-xs text-gray-500 shadow-sm backdrop-blur dark:border-cyan-400/15 dark:bg-white/5 dark:text-gray-300">
+                  <div className="mb-2 rounded-2xl border border-primary/30 bg-white/70 px-4 py-2 text-xs text-gray-500 shadow-sm backdrop-blur dark:border-primary/30 dark:bg-white/5 dark:text-gray-300">
                     <div className="flex items-center justify-between gap-3">
                     <span>{projectStage(project, allMediaTasks, generationType, true, ts)} · {totalProgress}%</span>
                     <div className="flex items-center gap-2">
-					  {finalVideoURL ? <a href={finalVideoURL} target="_blank" rel="noreferrer" className="font-semibold text-cyan-600 dark:text-cyan-200">{t("comic.viewFinal")}</a> : null}
+					  {finalVideoURL ? <a href={finalVideoURL} target="_blank" rel="noreferrer" className="font-semibold text-primary dark:text-primary">{t("comic.viewFinal")}</a> : null}
                       {(project.status === "pending" || project.status === "waiting_confirm") && <button type="button" onClick={() => void cancelProject()} className="font-semibold text-red-500 hover:text-red-600">{t("common.cancel")}</button>}
-                      {project.status === "failed" && <button type="button" onClick={() => void retry()} className="inline-flex items-center gap-1 font-semibold text-cyan-600 dark:text-cyan-200"><RefreshCw size={12} />{t("comic.retryWorkflow")}</button>}
+                      {project.status === "failed" && <button type="button" onClick={() => void retry()} className="inline-flex items-center gap-1 font-semibold text-primary dark:text-primary"><RefreshCw size={12} />{t("comic.retryWorkflow")}</button>}
                     </div>
                     </div>
                     {project.error_message ? <p className="mt-1 text-red-500">{project.error_message}</p> : null}
@@ -1657,7 +1656,7 @@ export function AgentWorkspace({ code }: { code: string }) {
                     <div className="mb-2 text-sm font-semibold text-amber-800 dark:text-amber-200">{project.outputs?.current_step === "keyframes_confirm" ? ts("请检查下方关键帧的人物与服装，确认后生成视频") : t("agent.confirmPlan")}</div>
                     <textarea hidden={isComicDrama && project?.outputs?.current_step === "keyframes_confirm"} value={confirmPrompt} readOnly={!allowPromptEdit} onChange={(event) => setConfirmPrompt(event.target.value)} className="h-24 w-full resize-none rounded-xl border border-amber-100 bg-white px-3 py-2 text-sm text-gray-700 outline-none dark:border-amber-400/20 dark:bg-gray-950 dark:text-gray-100" />
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <button type="button" onClick={() => void confirmStep()} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-cyan-500 px-4 text-sm font-semibold text-white"><Check size={15} />{t("agent.confirmGenerate")}</button>
+                      <button type="button" onClick={() => void confirmStep()} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary/100 px-4 text-sm font-semibold text-white"><Check size={15} />{t("agent.confirmGenerate")}</button>
                       {canUseAutopilot && <button type="button" onClick={() => void enableAutopilot()} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-gray-900 px-4 text-sm font-semibold text-white dark:bg-white dark:text-gray-900"><Wand2 size={15} />{t("agent.autopilot")}</button>}
                     </div>
                   </div>
@@ -1669,10 +1668,10 @@ export function AgentWorkspace({ code }: { code: string }) {
                     <div className="scroll-x-only grid grid-cols-[1fr_auto_1fr] items-center gap-2 overflow-x-auto">
                       <button type="button" onClick={() => void openComicImageLibrary("references")} className="flex h-9 shrink-0 items-center gap-2 justify-self-start rounded-xl border border-gray-100 bg-gray-50 px-3 text-xs font-medium text-gray-600 transition hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10">
                         <Folder size={15} />{t("asset.library")}
-                        {currentComicReferences().length > 0 ? <span className="rounded-full bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-600 dark:text-cyan-200">{currentComicReferences().length}</span> : null}
+                        {currentComicReferences().length > 0 ? <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary dark:text-primary">{currentComicReferences().length}</span> : null}
                       </button>
-                      <label title={ts("输入是已有剧本／原文：按原文定位分镜，保留来源供核对")} className={"flex h-9 shrink-0 cursor-pointer items-center gap-2 justify-self-center rounded-xl border px-3 text-xs font-medium transition " + (comicSourceMode ? "border-cyan-300 bg-cyan-50 text-cyan-700 dark:border-cyan-400/30 dark:bg-cyan-400/10 dark:text-cyan-200" : "border-gray-100 bg-gray-50 text-gray-600 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10")}>
-                        <input aria-label={ts("输入是已有剧本／原文：按原文定位分镜，保留来源供核对")} type="checkbox" checked={comicSourceMode} onChange={(e) => setComicSourceMode(e.target.checked)} className="h-3.5 w-3.5 accent-cyan-500" />
+                      <label title={ts("输入是已有剧本／原文：按原文定位分镜，保留来源供核对")} className={"flex h-9 shrink-0 cursor-pointer items-center gap-2 justify-self-center rounded-xl border px-3 text-xs font-medium transition " + (comicSourceMode ? "border-primary/30 bg-primary/10 text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary" : "border-gray-100 bg-gray-50 text-gray-600 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10")}>
+                        <input aria-label={ts("输入是已有剧本／原文：按原文定位分镜，保留来源供核对")} type="checkbox" checked={comicSourceMode} onChange={(e) => setComicSourceMode(e.target.checked)} className="h-3.5 w-3.5 accent-primary" />
                         <span className="whitespace-nowrap">{ts("输入是已有剧本／原文：按原文定位分镜，保留来源供核对")}</span>
                       </label>
                       <button type="button" onClick={() => setHelpOpen(true)} className="flex h-9 shrink-0 items-center gap-2 justify-self-end rounded-xl border border-gray-100 bg-gray-50 px-3 text-xs font-medium text-gray-600 transition hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10">
@@ -1682,19 +1681,19 @@ export function AgentWorkspace({ code }: { code: string }) {
                   </div>
                   <div className="flex min-h-[92px] gap-3 p-3 sm:min-h-[104px] sm:p-4">
 					<div className="flex shrink-0 gap-1.5">
-                      <label className="flex h-14 w-12 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-200 bg-gray-50 text-[10px] text-gray-400 hover:border-cyan-300 hover:bg-cyan-50 dark:border-white/10 dark:bg-white/5 dark:hover:bg-cyan-400/10 sm:h-20 sm:w-16">
+                      <label className="flex h-14 w-12 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-200 bg-gray-50 text-[10px] text-gray-400 hover:border-primary/30 hover:bg-primary/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-primary/10 sm:h-20 sm:w-16">
 					  {productImage ? <div className="relative h-full w-full"><Image src={productImage.url} alt="" width={128} height={128} sizes="64px" className="h-full w-full rounded-xl object-cover" /><span className="absolute bottom-1 right-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] text-white">{currentComicReferences().length}/8</span></div> : comicUploading || uploading ? <Loader2 size={18} className="animate-spin" /> : <><Plus size={18} /><span>{t("comic.referenceImage")}</span></>}
                         <input type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" disabled={uploading} onChange={(e) => { void handleComicUploads(e.target.files); e.currentTarget.value = ""; }} />
                       </label>
                     </div>
 					<textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={t("comic.videoPlaceholder")} className="min-h-[68px] flex-1 resize-none bg-transparent text-sm leading-6 text-gray-700 outline-none placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-gray-500 sm:min-h-[86px]" />
-                    <button onClick={run} disabled={submitting} className="mt-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-500 text-white shadow-lg shadow-cyan-500/25 transition hover:bg-cyan-400 disabled:opacity-40">
+                    <button onClick={run} disabled={submitting} className="mt-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/100 text-white shadow-lg shadow-primary/20 transition hover:bg-primary disabled:opacity-40">
                       {submitting ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={18} />}
                     </button>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 px-3 py-3 dark:border-white/10 sm:px-4">
                     <button type="button" onClick={() => setStyleModalOpen(true)} className="flex h-9 items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/5 dark:text-gray-200">
-					<Star size={14} className="text-cyan-500" /> {activeComicProject?.style?.name ? ts(activeComicProject.style.name) : activeStyle?.name ? ts(activeStyle.name) : t("comic.selectStyle")}
+					<Star size={14} className="text-primary" /> {activeComicProject?.style?.name ? ts(activeComicProject.style.name) : activeStyle?.name ? ts(activeStyle.name) : t("comic.selectStyle")}
                     </button>
                     <button type="button" onClick={() => setProjectModalOpen(true)} className="flex h-9 items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/5 dark:text-gray-200">
 					<Folder size={14} /> {activeComicProject?.name || t("comic.selectProject")}
@@ -1762,7 +1761,7 @@ export function AgentWorkspace({ code }: { code: string }) {
                       )}
                     </MediaOptionMenu>
                     <div className="mx-auto flex w-full max-w-[260px] items-center justify-center rounded-full bg-gray-100 p-1 dark:bg-white/10 sm:ml-auto sm:mr-0 sm:w-auto sm:max-w-none">
-					<button type="button" onClick={() => setMode("step")} className={"flex-1 rounded-full px-4 py-2 text-center text-xs font-semibold sm:flex-none " + (mode === "step" ? "bg-cyan-500 text-white shadow" : "text-gray-500 dark:text-gray-300")}>{t("agent.stepConfirm")}</button>
+					<button type="button" onClick={() => setMode("step")} className={"flex-1 rounded-full px-4 py-2 text-center text-xs font-semibold sm:flex-none " + (mode === "step" ? "bg-primary/100 text-white shadow" : "text-gray-500 dark:text-gray-300")}>{t("agent.stepConfirm")}</button>
 					<button type="button" onClick={() => setMode("auto")} className={"flex-1 rounded-full px-4 py-2 text-center text-xs font-semibold sm:flex-none " + (mode === "auto" ? "bg-gray-900 text-white shadow dark:bg-white dark:text-gray-900" : "text-gray-500 dark:text-gray-300")}>{t("agent.autopilot")}</button>
                     </div>
                   </div>
@@ -1849,7 +1848,7 @@ export function AgentWorkspace({ code }: { code: string }) {
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4" onClick={() => setHelpOpen(false)}>
             <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-gray-900" onClick={(event) => event.stopPropagation()}>
               <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 font-semibold text-gray-900 dark:text-white"><HelpCircle size={17} className="text-cyan-500" />{t("agent.help")}</div>
+                <div className="flex items-center gap-2 font-semibold text-gray-900 dark:text-white"><HelpCircle size={17} className="text-primary" />{t("agent.help")}</div>
                 <button type="button" onClick={() => setHelpOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-300"><X size={15} /></button>
               </div>
               <p className="whitespace-pre-wrap text-sm leading-7 text-gray-600 dark:text-gray-300">{display.help || t("agent.helpDefault")}</p>
@@ -1862,11 +1861,10 @@ export function AgentWorkspace({ code }: { code: string }) {
   }
 
   return (
-    <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden bg-[#eaf7fb] text-gray-900 dark:bg-[#05080f] dark:text-white">
+    <div className="mcdl-workspace relative flex-1 flex flex-col min-h-0 overflow-hidden text-gray-900 dark:text-white">
       {!project && (
         <>
-          <div className="pointer-events-none absolute inset-0 opacity-80 [background-image:linear-gradient(rgba(15,23,42,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.08)_1px,transparent_1px)] [background-size:40px_40px] dark:opacity-60 dark:[background-image:linear-gradient(rgba(34,211,238,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.08)_1px,transparent_1px)]" />
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_70%_10%,rgba(34,211,238,.22),transparent_28%),radial-gradient(circle_at_12%_84%,rgba(20,184,166,.16),transparent_22%)] dark:bg-[radial-gradient(circle_at_76%_10%,rgba(20,184,166,.2),transparent_28%),radial-gradient(circle_at_14%_82%,rgba(6,182,212,.12),transparent_22%)]" />
+          <div className="mcdl-workspace-atmosphere pointer-events-none absolute inset-0" />
         </>
       )}
       <div className="relative z-20 shrink-0 px-4 sm:px-6 py-3 flex items-center justify-between">
@@ -2255,7 +2253,7 @@ function LegacyAgentLanding({
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pb-2">
       <div className="shrink-0 pt-1 text-center sm:pt-3 lg:pt-4">
         <div className={"mb-1.5 inline-flex items-center gap-2 rounded-full border border-white/60 px-3 py-1 text-[11px] font-semibold backdrop-blur dark:border-white/10 sm:px-4 sm:text-xs " + theme.pill}>
-          <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
           {generationType === "video" ? ts("视频智能体") : ts("图片智能体")}
         </div>
         <div className="flex items-center justify-center gap-3">
@@ -2282,8 +2280,8 @@ function LegacyAgentLanding({
                 type="button"
                 onClick={() => onSelect(idx)}
                 className={
-                  "group w-full min-w-0 max-w-full overflow-hidden box-border rounded-2xl border p-4 text-left backdrop-blur transition duration-300 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-xl hover:shadow-cyan-950/10 active:scale-[0.99] dark:hover:shadow-black/30 " +
-                  (selected ? "border-cyan-300 bg-white/75 shadow-lg shadow-cyan-950/5 dark:border-cyan-400/40 dark:bg-white/10" : "border-gray-200 bg-white/55 hover:border-cyan-200 hover:bg-white/70 dark:border-white/10 dark:bg-transparent dark:hover:border-cyan-400/25 dark:hover:bg-cyan-400/5")
+                  "group w-full min-w-0 max-w-full overflow-hidden box-border rounded-2xl border p-4 text-left backdrop-blur transition duration-300 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-xl hover:shadow-primary/20 active:scale-[0.99] dark:hover:shadow-black/30 " +
+                  (selected ? "border-primary/30 bg-white/75 shadow-lg shadow-primary/20 dark:border-primary/30 dark:bg-white/10" : "border-gray-200 bg-white/55 hover:border-primary/30 hover:bg-white/70 dark:border-white/10 dark:bg-transparent dark:hover:border-primary/30 dark:hover:bg-primary/5")
                 }
               >
                 <div className="flex items-center gap-3">
@@ -2294,22 +2292,22 @@ function LegacyAgentLanding({
                     <div title={item.title} className="truncate text-sm font-bold text-gray-900 dark:text-white">{item.title}</div>
                     {item.subtitle && <div title={item.subtitle} className="mt-1 truncate text-xs text-gray-400">{item.subtitle}</div>}
                   </div>
-                  {selected ? <span className="ml-auto text-cyan-500">›</span> : null}
+                  {selected ? <span className="ml-auto text-primary">›</span> : null}
                 </div>
               </button>
             );
           })}
         </div>
 
-        <div className="agent-feature-card group mx-auto flex max-h-[330px] min-h-[260px] w-full max-w-[640px] flex-col justify-center overflow-y-auto rounded-3xl border border-cyan-300/70 bg-white/65 p-4 shadow-xl shadow-cyan-950/10 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-cyan-400 hover:bg-white/75 hover:shadow-2xl hover:shadow-cyan-950/15 dark:border-cyan-400/30 dark:bg-transparent dark:shadow-black/30 dark:hover:bg-cyan-400/[0.04] sm:min-h-[300px] sm:p-6 lg:max-h-none lg:min-h-[330px] lg:p-7">
+        <div className="agent-feature-card group mx-auto flex max-h-[330px] min-h-[260px] w-full max-w-[640px] flex-col justify-center overflow-y-auto rounded-3xl border border-primary/30 bg-white/65 p-4 shadow-xl shadow-primary/20 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-primary/30 hover:bg-white/75 hover:shadow-2xl hover:shadow-primary/20 dark:border-primary/30 dark:bg-transparent dark:shadow-black/30 dark:hover:bg-primary/[0.04] sm:min-h-[300px] sm:p-6 lg:max-h-none lg:min-h-[330px] lg:p-7">
           <div className="mb-4 flex items-center justify-between gap-3 lg:mb-5">
-            <span className="rounded-xl bg-cyan-500/10 px-3 py-2 text-sm font-black text-cyan-700 dark:text-cyan-200">{String(Math.min(activeIndex + 1, safeFeatures.length)).padStart(2, "0")}</span>
+            <span className="rounded-xl bg-primary/10 px-3 py-2 text-sm font-black text-primary dark:text-primary">{String(Math.min(activeIndex + 1, safeFeatures.length)).padStart(2, "0")}</span>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">
               {generationType === "video" ? ts("支持视频生成链路") : ts("支持图片生成链路")}
             </span>
           </div>
           <div className="flex items-start gap-4 lg:gap-5">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-cyan-500/10 text-2xl text-cyan-600 transition duration-300 group-hover:rotate-3 group-hover:scale-110 dark:text-cyan-200 sm:h-14 sm:w-14 lg:h-16 lg:w-16">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-primary/10 text-2xl text-primary transition duration-300 group-hover:rotate-3 group-hover:scale-110 dark:text-primary sm:h-14 sm:w-14 lg:h-16 lg:w-16">
               <AgentIcon value={active.icon || workflowIcon} fallback={workflowIcon} alt={active.title} />
             </div>
             <div className="min-w-0">
@@ -2319,7 +2317,7 @@ function LegacyAgentLanding({
               </p>
               <div className="mt-3 flex flex-wrap gap-2 lg:mt-5">
                 {activeTags.map((tag) => (
-                  <span key={tag} title={tag} className="max-w-[170px] truncate rounded-lg bg-cyan-500/10 px-2.5 py-1 text-xs font-semibold text-cyan-700 dark:text-cyan-200">
+                  <span key={tag} title={tag} className="max-w-[170px] truncate rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary dark:text-primary">
                     {tag}
                   </span>
                 ))}
@@ -2333,7 +2331,7 @@ function LegacyAgentLanding({
                 type="button"
                 onClick={() => onSelect(idx)}
                 aria-label={`${ts("切换到")} ${feature.title}`}
-                className={(idx === activeIndex ? "h-3 w-9 bg-cyan-500 shadow-md shadow-cyan-500/30" : "h-3 w-3 bg-gray-300/70 hover:bg-cyan-300 dark:bg-white/20 dark:hover:bg-cyan-300/70") + " rounded-full transition-all duration-300 hover:scale-125"}
+                className={(idx === activeIndex ? "h-3 w-9 bg-primary/100 shadow-md shadow-primary/20" : "h-3 w-3 bg-gray-300/70 hover:bg-primary dark:bg-white/20 dark:hover:bg-primary/70") + " rounded-full transition-all duration-300 hover:scale-125"}
               />
             ))}
           </div>
@@ -2383,16 +2381,16 @@ function ComicFeatureSelector({ features, activeIndex, onSelect }: { features: D
       {features.map((item, idx) => {
         const active = activeIndex === idx;
         return (
-        <button key={item.title} type="button" onClick={() => onSelect(idx)} className={"group w-full min-w-0 max-w-full overflow-hidden box-border rounded-2xl border p-4 text-left backdrop-blur transition duration-300 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-xl hover:shadow-cyan-950/10 active:scale-[0.99] dark:hover:shadow-black/30 " + (active ? "border-cyan-300 bg-white/75 shadow-lg shadow-cyan-950/5 dark:border-cyan-400/40 dark:bg-white/10" : "border-gray-200 bg-white/55 hover:border-cyan-200 hover:bg-white/70 dark:border-white/10 dark:bg-transparent dark:hover:border-cyan-400/25 dark:hover:bg-cyan-400/5")}>
+        <button key={item.title} type="button" onClick={() => onSelect(idx)} className={"group w-full min-w-0 max-w-full overflow-hidden box-border rounded-2xl border p-4 text-left backdrop-blur transition duration-300 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-xl hover:shadow-primary/20 active:scale-[0.99] dark:hover:shadow-black/30 " + (active ? "border-primary/30 bg-white/75 shadow-lg shadow-primary/20 dark:border-primary/30 dark:bg-white/10" : "border-gray-200 bg-white/55 hover:border-primary/30 hover:bg-white/70 dark:border-white/10 dark:bg-transparent dark:hover:border-primary/30 dark:hover:bg-primary/5")}>
           <div className="flex items-center gap-3">
-            <div className={"flex h-10 w-10 items-center justify-center rounded-xl text-lg transition duration-300 group-hover:rotate-3 group-hover:scale-110 " + (active ? "bg-cyan-500/15 text-cyan-600 dark:text-cyan-200" : "bg-gray-500/10 text-gray-400 dark:bg-transparent dark:text-gray-300")}>
+            <div className={"flex h-10 w-10 items-center justify-center rounded-xl text-lg transition duration-300 group-hover:rotate-3 group-hover:scale-110 " + (active ? "bg-primary/15 text-primary dark:text-primary" : "bg-gray-500/10 text-gray-400 dark:bg-transparent dark:text-gray-300")}>
               {item.icon || "•"}
             </div>
             <div className="min-w-0">
               <div title={item.title} className="truncate text-sm font-bold text-gray-900 dark:text-white">{item.title}</div>
               {item.subtitle ? <div title={item.subtitle} className="mt-1 truncate text-xs text-gray-400">{item.subtitle}</div> : null}
             </div>
-            {active ? <span className="ml-auto text-cyan-500">›</span> : null}
+            {active ? <span className="ml-auto text-primary">›</span> : null}
           </div>
         </button>
         );
@@ -2406,13 +2404,13 @@ function ComicFeatureHero({ features, activeIndex, onSelect }: { features: Displ
   const item = features[activeIndex] || features[0];
   if (!item) return null;
   return (
-    <div className="comic-feature-card group mx-auto flex w-full max-w-[640px] flex-col overflow-hidden rounded-3xl border border-cyan-300/70 bg-white/65 p-4 shadow-xl shadow-cyan-950/10 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-cyan-400 hover:bg-white/75 hover:shadow-2xl hover:shadow-cyan-950/15 dark:border-cyan-400/30 dark:bg-transparent dark:shadow-black/30 dark:hover:bg-cyan-400/[0.04] sm:p-5 lg:p-6">
+    <div className="comic-feature-card group mx-auto flex w-full max-w-[640px] flex-col overflow-hidden rounded-3xl border border-primary/30 bg-white/65 p-4 shadow-xl shadow-primary/20 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-primary/30 hover:bg-white/75 hover:shadow-2xl hover:shadow-primary/20 dark:border-primary/30 dark:bg-transparent dark:shadow-black/30 dark:hover:bg-primary/[0.04] sm:p-5 lg:p-6">
       <div className="mb-4 flex items-center justify-between lg:mb-5">
-        <span className="rounded-xl bg-cyan-500/10 px-3 py-2 text-sm font-black text-cyan-700 dark:text-cyan-200">{String(activeIndex + 1).padStart(2, "0")}</span>
+        <span className="rounded-xl bg-primary/10 px-3 py-2 text-sm font-black text-primary dark:text-primary">{String(activeIndex + 1).padStart(2, "0")}</span>
         <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">{item.tags?.[0] || t("comic.tagControl")}</span>
       </div>
       <div className="flex items-start gap-4 lg:gap-5">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-500/10 text-2xl text-cyan-600 transition duration-300 group-hover:rotate-3 group-hover:scale-110 dark:text-cyan-200 sm:h-14 sm:w-14 lg:h-16 lg:w-16">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-2xl text-primary transition duration-300 group-hover:rotate-3 group-hover:scale-110 dark:text-primary sm:h-14 sm:w-14 lg:h-16 lg:w-16">
           {item.icon || "•"}
         </div>
         <div>
@@ -2420,7 +2418,7 @@ function ComicFeatureHero({ features, activeIndex, onSelect }: { features: Displ
           {item.subtitle ? <p title={item.subtitle} className="mt-2 line-clamp-3 max-w-[460px] text-xs leading-6 text-gray-500 dark:text-gray-300 sm:text-sm lg:mt-4 lg:leading-7">{item.subtitle}</p> : null}
           {item.tags?.length ? <div className="mt-3 flex flex-wrap gap-2 lg:mt-5">
             {item.tags.map((tag) => (
-              <span key={tag} title={tag} className="max-w-[170px] truncate rounded-lg bg-cyan-500/10 px-2.5 py-1 text-xs font-semibold text-cyan-700 dark:text-cyan-200">{tag}</span>
+              <span key={tag} title={tag} className="max-w-[170px] truncate rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary dark:text-primary">{tag}</span>
             ))}
           </div> : null}
         </div>
@@ -2432,7 +2430,7 @@ function ComicFeatureHero({ features, activeIndex, onSelect }: { features: Displ
             type="button"
             onClick={() => onSelect(idx)}
             aria-label={`${t("common.select")} ${feature.title}`}
-            className={(idx === activeIndex ? "h-3 w-9 bg-cyan-500 shadow-md shadow-cyan-500/30" : "h-3 w-3 bg-gray-300/70 hover:bg-cyan-300 dark:bg-white/20 dark:hover:bg-cyan-300/70") + " rounded-full transition-all duration-300 hover:scale-125"}
+            className={(idx === activeIndex ? "h-3 w-9 bg-primary/100 shadow-md shadow-primary/20" : "h-3 w-3 bg-gray-300/70 hover:bg-primary dark:bg-white/20 dark:hover:bg-primary/70") + " rounded-full transition-all duration-300 hover:scale-125"}
           />
         ))}
       </div>
@@ -2451,15 +2449,15 @@ function ComicTimeline({ nodes, mobileNodes, compact = false }: { nodes: string[
   return (
     <div className={"mx-auto w-full max-w-7xl lg:mb-5 " + (compact ? "py-1" : "py-4")}>
       <div className="mb-2 hidden flex-wrap justify-center gap-2 text-[11px] font-semibold sm:flex lg:justify-around">
-        <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-cyan-700 dark:text-cyan-200">01 {t("comic.stageCreative")}</span>
+        <span className="rounded-full bg-primary/10 px-3 py-1 text-primary dark:text-primary">01 {t("comic.stageCreative")}</span>
         <span className="rounded-full bg-violet-500/10 px-3 py-1 text-violet-700 dark:text-violet-200">02 {t("comic.stageScript")}</span>
         <span className="rounded-full bg-amber-500/10 px-3 py-1 text-amber-700 dark:text-amber-200">03 {t("comic.stageProduction")}</span>
       </div>
       <div className="relative grid grid-cols-4 gap-x-1 px-1 py-1 lg:hidden">
-        <div className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-[13px] h-px bg-gradient-to-r from-cyan-400 via-violet-400 to-amber-400" />
+        <div className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-[13px] h-px bg-primary/30" />
         {compactNodes.map((node, idx) => (
           <div key={node} className="relative z-10 flex min-w-0 flex-col items-center justify-start gap-1">
-            <span className={"h-6 w-6 rounded-full border-4 bg-white shadow-sm dark:bg-gray-950 " + (idx < 2 ? "border-cyan-400" : idx === 2 ? "border-violet-400" : "border-amber-400")} />
+            <span className={"h-6 w-6 rounded-full border-4 bg-white shadow-sm dark:bg-gray-950 " + (idx < 2 ? "border-primary/30" : idx === 2 ? "border-violet-400" : "border-amber-400")} />
             <span title={node} className={"line-clamp-2 w-full px-0.5 text-center text-[9px] font-semibold leading-tight sm:text-[10px] " + (idx === compactActiveIndex ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-300")}>
               {node}
             </span>
@@ -2467,10 +2465,10 @@ function ComicTimeline({ nodes, mobileNodes, compact = false }: { nodes: string[
         ))}
       </div>
       <div className="relative hidden items-center justify-between gap-2 lg:flex">
-        <div className="absolute left-4 right-4 top-3 h-px bg-gradient-to-r from-cyan-400 via-violet-400 to-amber-400" />
+        <div className="absolute left-4 right-4 top-3 h-px bg-primary/30" />
         {visibleNodes.map((node, idx) => (
           <div key={node} className="relative z-10 flex min-w-0 flex-1 flex-col items-center gap-2">
-            <span className={"h-6 w-6 rounded-full border-4 bg-white dark:bg-gray-950 " + (tone(idx) === "cyan" ? "border-cyan-400" : tone(idx) === "violet" ? "border-violet-400" : "border-amber-400")} />
+            <span className={"h-6 w-6 rounded-full border-4 bg-white dark:bg-gray-950 " + (tone(idx) === "cyan" ? "border-primary/30" : tone(idx) === "violet" ? "border-violet-400" : "border-amber-400")} />
             <span title={node} className={"max-w-full truncate text-[11px] " + (idx === activeIndex ? "font-black text-gray-900 dark:text-white" : "text-gray-400")}>{node}</span>
           </div>
         ))}
@@ -2509,7 +2507,7 @@ function ComicProjectModal({
       <div className="w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl dark:border dark:border-white/10 dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-gray-100 p-5 dark:border-white/10">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-200"><Folder size={22} /></div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary dark:text-primary"><Folder size={22} /></div>
             <div>
               <div className="text-lg font-bold text-gray-900 dark:text-white">{ts("新建项目")}</div>
               <div className="text-xs text-gray-400">{ts("创建一个新的漫剧项目")}</div>
@@ -2518,14 +2516,14 @@ function ComicProjectModal({
           <button onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-300"><X size={18} /></button>
         </div>
         <div className="max-h-[72vh] overflow-y-auto p-6">
-          <label className="mx-auto flex h-36 w-64 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-400 hover:border-cyan-300 hover:bg-cyan-50 dark:border-white/10 dark:bg-white/5">
+          <label className="mx-auto flex h-36 w-64 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-400 hover:border-primary/30 hover:bg-primary/10 dark:border-white/10 dark:bg-white/5">
             {draft.cover_url ? <Image src={draft.cover_url} alt="" width={512} height={288} sizes="256px" className="h-full w-full rounded-2xl object-cover" /> : uploading ? <Loader2 className="animate-spin" /> : <><ImageIcon size={30} /><span>{ts("点击上传封面")}</span></>}
             <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => { onUpload(e.target.files?.[0]); e.currentTarget.value = ""; }} />
           </label>
-          <button type="button" onClick={onChooseCoverAsset} className="mx-auto mb-5 mt-2 flex h-9 items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 text-xs font-semibold text-cyan-700 dark:border-cyan-400/20 dark:bg-cyan-400/10 dark:text-cyan-200"><Folder size={14} />{ts("从资产库选择封面")}</button>
+          <button type="button" onClick={onChooseCoverAsset} className="mx-auto mb-5 mt-2 flex h-9 items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-4 text-xs font-semibold text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary"><Folder size={14} />{ts("从资产库选择封面")}</button>
           <div className="space-y-4">
-            <label className="block text-sm text-gray-600 dark:text-gray-300">{ts("项目名称")} <span className="text-red-500">*</span><input value={draft.name} maxLength={100} onChange={(e) => update({ name: e.target.value })} placeholder={ts("请输入项目名称")} className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-cyan-400 dark:border-white/10 dark:bg-white/5 dark:text-white" /></label>
-            <label className="block text-sm text-gray-600 dark:text-gray-300">{ts("项目描述")}<textarea value={draft.description} maxLength={500} onChange={(e) => update({ description: e.target.value })} placeholder={ts("请输入项目描述（可选）")} className="mt-2 h-24 w-full resize-none rounded-xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-cyan-400 dark:border-white/10 dark:bg-white/5 dark:text-white" /></label>
+            <label className="block text-sm text-gray-600 dark:text-gray-300">{ts("项目名称")} <span className="text-red-500">*</span><input value={draft.name} maxLength={100} onChange={(e) => update({ name: e.target.value })} placeholder={ts("请输入项目名称")} className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-primary/30 dark:border-white/10 dark:bg-white/5 dark:text-white" /></label>
+            <label className="block text-sm text-gray-600 dark:text-gray-300">{ts("项目描述")}<textarea value={draft.description} maxLength={500} onChange={(e) => update({ description: e.target.value })} placeholder={ts("请输入项目描述（可选）")} className="mt-2 h-24 w-full resize-none rounded-xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-primary/30 dark:border-white/10 dark:bg-white/5 dark:text-white" /></label>
             <button type="button" onClick={onChooseStyle} className="flex h-14 w-full items-center gap-3 rounded-xl border border-dashed border-orange-200 bg-orange-50/50 px-4 text-left text-sm text-gray-600 hover:bg-orange-50 dark:border-orange-400/20 dark:bg-orange-400/10 dark:text-gray-200">
               <Star size={20} className="text-orange-500" />
               {selectedStyle ? selectedStyle.name : ts("点击选择画面风格")}
@@ -2534,7 +2532,7 @@ function ComicProjectModal({
               <div className="mb-2 text-sm text-gray-600 dark:text-gray-300">{ts("屏幕方向")}</div>
               <div className="grid grid-cols-2 gap-3">
                 {[["landscape", ts("横屏")], ["portrait", ts("竖屏")]].map(([value, label]) => (
-                  <button key={value} type="button" onClick={() => update({ orientation: value })} className={"rounded-xl border p-4 text-sm font-semibold " + (draft.orientation === value ? "border-cyan-300 bg-cyan-50 text-cyan-700 dark:border-cyan-400/40 dark:bg-cyan-400/10 dark:text-cyan-200" : "border-gray-200 text-gray-500 dark:border-white/10 dark:text-gray-300")}>{label}</button>
+                  <button key={value} type="button" onClick={() => update({ orientation: value })} className={"rounded-xl border p-4 text-sm font-semibold " + (draft.orientation === value ? "border-primary/30 bg-primary/10 text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary" : "border-gray-200 text-gray-500 dark:border-white/10 dark:text-gray-300")}>{label}</button>
                 ))}
               </div>
             </div>
@@ -2545,7 +2543,7 @@ function ComicProjectModal({
         </div>
         <div className="flex justify-between border-t border-gray-100 p-5 dark:border-white/10">
           <button onClick={onClose} className="rounded-xl border border-gray-200 px-5 py-2 text-sm text-gray-600 dark:border-white/10 dark:text-gray-300">{ts("取消")}</button>
-          <button onClick={onCreate} disabled={submitting} className="rounded-xl bg-cyan-500 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">{submitting ? ts("创建中...") : ts("创建项目")}</button>
+          <button onClick={onCreate} disabled={submitting} className="rounded-xl bg-primary/100 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">{submitting ? ts("创建中...") : ts("创建项目")}</button>
         </div>
       </div>
     </div>
@@ -2619,9 +2617,9 @@ function ComicImageLibraryModal({ target, items, selected, loading, onSelected, 
       <div className="w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl dark:border dark:border-white/10 dark:bg-gray-900" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-gray-100 p-5 dark:border-white/10"><div><div className="text-lg font-bold text-gray-900 dark:text-white">{ts("从资产库选择图片")}</div><div className="mt-1 text-xs text-gray-400">{multiple ? td("comic.library.maxSelection", "可选择最多 {max} 张角色、道具或场景参考图", { max }) : ts("选择一张图片作为项目封面或风格参考")}</div></div><button type="button" onClick={onClose} className="rounded-xl bg-gray-100 p-2 text-gray-500 dark:bg-white/10 dark:text-gray-300"><X size={18} /></button></div>
         <div className="max-h-[62vh] min-h-[320px] overflow-y-auto p-5">
-          {loading ? <div className="flex h-72 items-center justify-center text-cyan-500"><Loader2 className="animate-spin" /></div> : items.length === 0 ? <div className="flex h-72 flex-col items-center justify-center gap-3 text-gray-400"><ImageIcon size={36} /><span>{ts("资产库暂无图片")}</span></div> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">{items.map((asset) => { const active = selected.some((entry) => entry.url === asset.url); return <button key={asset.public_id} type="button" onClick={() => toggle(asset)} className={`overflow-hidden rounded-2xl border text-left transition ${active ? "border-cyan-400 ring-2 ring-cyan-300/40" : "border-gray-100 hover:border-cyan-200 dark:border-white/10"}`}><div className="relative aspect-square bg-gray-100 dark:bg-white/5"><img loading="lazy" decoding="async" src={asset.url} alt={asset.name || ""} className="h-full w-full object-cover" />{active ? <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-cyan-500 text-white"><Check size={14} /></span> : null}</div><div className="truncate px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-200">{asset.name || asset.public_id}</div></button>; })}</div>}
+          {loading ? <div className="flex h-72 items-center justify-center text-primary"><Loader2 className="animate-spin" /></div> : items.length === 0 ? <div className="flex h-72 flex-col items-center justify-center gap-3 text-gray-400"><ImageIcon size={36} /><span>{ts("资产库暂无图片")}</span></div> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">{items.map((asset) => { const active = selected.some((entry) => entry.url === asset.url); return <button key={asset.public_id} type="button" onClick={() => toggle(asset)} className={`overflow-hidden rounded-2xl border text-left transition ${active ? "border-primary/30 ring-2 ring-primary/30" : "border-gray-100 hover:border-primary/30 dark:border-white/10"}`}><div className="relative aspect-square bg-gray-100 dark:bg-white/5"><img loading="lazy" decoding="async" src={asset.url} alt={asset.name || ""} className="h-full w-full object-cover" />{active ? <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary/100 text-white"><Check size={14} /></span> : null}</div><div className="truncate px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-200">{asset.name || asset.public_id}</div></button>; })}</div>}
         </div>
-        <div className="flex items-center justify-between border-t border-gray-100 p-5 dark:border-white/10"><span className="text-sm text-gray-400">{td("comic.library.selectedCount", "已选择 {count}/{max}", { count: selected.length, max })}</span><div className="flex gap-2"><button type="button" onClick={onClose} className="rounded-xl border border-gray-200 px-5 py-2 text-sm text-gray-600 dark:border-white/10 dark:text-gray-300">{ts("取消")}</button><button type="button" disabled={selected.length === 0} onClick={onConfirm} className="rounded-xl bg-cyan-500 px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">{ts("确认选择")}</button></div></div>
+        <div className="flex items-center justify-between border-t border-gray-100 p-5 dark:border-white/10"><span className="text-sm text-gray-400">{td("comic.library.selectedCount", "已选择 {count}/{max}", { count: selected.length, max })}</span><div className="flex gap-2"><button type="button" onClick={onClose} className="rounded-xl border border-gray-200 px-5 py-2 text-sm text-gray-600 dark:border-white/10 dark:text-gray-300">{ts("取消")}</button><button type="button" disabled={selected.length === 0} onClick={onConfirm} className="rounded-xl bg-primary/100 px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">{ts("确认选择")}</button></div></div>
       </div>
     </div>
   );
@@ -2707,14 +2705,14 @@ function ComicAssetModal({ projectId, items, onClose, onChanged }: { projectId: 
             <div className="rounded-xl border border-gray-200 bg-white p-3 dark:border-white/10 dark:bg-gray-950">
               <div className="mb-2 flex items-center justify-between"><div><div className="text-sm font-semibold text-gray-800 dark:text-gray-100">{ts("角色 / 道具 / 场景参考图")}</div><div className="text-[11px] text-gray-400">{ts("最多 8 张，将用于关键帧一致性生成")}</div></div><span className="text-xs text-gray-400">{assetReferences.length}/8</span></div>
               {assetReferences.length ? <div className="mb-3 grid grid-cols-4 gap-2">{assetReferences.map((item) => <div key={item.url} className="group relative aspect-square overflow-hidden rounded-lg bg-gray-100"><img loading="lazy" decoding="async" src={item.url} alt={item.name} className="h-full w-full object-cover" /><button type="button" onClick={() => setReferences(assetReferences.filter((entry) => entry.url !== item.url))} className="absolute right-1 top-1 hidden h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white group-hover:flex"><X size={12} /></button></div>)}</div> : null}
-              <div className="grid grid-cols-2 gap-2"><label className="flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-cyan-200 text-xs font-semibold text-cyan-700 dark:border-cyan-400/30 dark:text-cyan-200">{uploading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}{ts("上传图片")}<input type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" disabled={uploading} onChange={(event) => { void uploadReferences(event.target.files); event.currentTarget.value = ""; }} /></label><button type="button" onClick={() => void openLibrary()} className="flex h-9 items-center justify-center gap-2 rounded-lg border border-violet-200 text-xs font-semibold text-violet-700 dark:border-violet-400/30 dark:text-violet-200"><Folder size={14} />{ts("资产库")}</button></div>
+              <div className="grid grid-cols-2 gap-2"><label className="flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-primary/30 text-xs font-semibold text-primary dark:border-primary/30 dark:text-primary">{uploading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}{ts("上传图片")}<input type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" disabled={uploading} onChange={(event) => { void uploadReferences(event.target.files); event.currentTarget.value = ""; }} /></label><button type="button" onClick={() => void openLibrary()} className="flex h-9 items-center justify-center gap-2 rounded-lg border border-violet-200 text-xs font-semibold text-violet-700 dark:border-violet-400/30 dark:text-violet-200"><Folder size={14} />{ts("资产库")}</button></div>
             </div>
             {message && <p className="text-xs text-red-500">{message}</p>}
-            <button type="button" disabled={saving || !draft.name.trim()} onClick={() => void save()} className="h-10 w-full rounded-xl bg-cyan-500 text-sm font-semibold text-white disabled:opacity-40">{saving ? t("common.saving") : t("common.save")}</button>
+            <button type="button" disabled={saving || !draft.name.trim()} onClick={() => void save()} className="h-10 w-full rounded-xl bg-primary/100 text-sm font-semibold text-white disabled:opacity-40">{saving ? t("common.saving") : t("common.save")}</button>
           </div>
         </div>
       </div>
-      {libraryOpen ? <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4" onClick={() => setLibraryOpen(false)}><div className="w-full max-w-3xl rounded-3xl bg-white p-5 shadow-2xl dark:border dark:border-white/10 dark:bg-gray-900" onClick={(event) => event.stopPropagation()}><div className="mb-4 flex items-center justify-between"><div><div className="font-bold text-gray-900 dark:text-white">{ts("选择资产参考图")}</div><div className="text-xs text-gray-400">{ts("可多选，最多 8 张")}</div></div><button type="button" onClick={() => setLibraryOpen(false)} className="rounded-lg bg-gray-100 p-2 dark:bg-white/10"><X size={16} /></button></div><div className="grid max-h-[58vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 md:grid-cols-4">{libraryItems.map((asset) => { const active = assetReferences.some((item) => item.url === asset.url); return <button key={asset.public_id} type="button" onClick={() => setReferences(active ? assetReferences.filter((item) => item.url !== asset.url) : [...assetReferences, { url: asset.url, name: asset.name || asset.public_id, public_id: asset.public_id }].slice(0, 8))} className={`overflow-hidden rounded-xl border ${active ? "border-cyan-400 ring-2 ring-cyan-300/30" : "border-gray-100 dark:border-white/10"}`}><div className="relative aspect-square"><img loading="lazy" decoding="async" src={asset.url} alt="" className="h-full w-full object-cover" />{active ? <Check className="absolute right-2 top-2 rounded-full bg-cyan-500 p-1 text-white" size={22} /> : null}</div><div className="truncate p-2 text-left text-xs text-gray-700 dark:text-gray-200">{asset.name || asset.public_id}</div></button>; })}</div><button type="button" onClick={() => setLibraryOpen(false)} className="mt-4 h-10 w-full rounded-xl bg-cyan-500 text-sm font-semibold text-white">{ts("完成选择")}</button></div></div> : null}
+      {libraryOpen ? <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4" onClick={() => setLibraryOpen(false)}><div className="w-full max-w-3xl rounded-3xl bg-white p-5 shadow-2xl dark:border dark:border-white/10 dark:bg-gray-900" onClick={(event) => event.stopPropagation()}><div className="mb-4 flex items-center justify-between"><div><div className="font-bold text-gray-900 dark:text-white">{ts("选择资产参考图")}</div><div className="text-xs text-gray-400">{ts("可多选，最多 8 张")}</div></div><button type="button" onClick={() => setLibraryOpen(false)} className="rounded-lg bg-gray-100 p-2 dark:bg-white/10"><X size={16} /></button></div><div className="grid max-h-[58vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 md:grid-cols-4">{libraryItems.map((asset) => { const active = assetReferences.some((item) => item.url === asset.url); return <button key={asset.public_id} type="button" onClick={() => setReferences(active ? assetReferences.filter((item) => item.url !== asset.url) : [...assetReferences, { url: asset.url, name: asset.name || asset.public_id, public_id: asset.public_id }].slice(0, 8))} className={`overflow-hidden rounded-xl border ${active ? "border-primary/30 ring-2 ring-primary/30" : "border-gray-100 dark:border-white/10"}`}><div className="relative aspect-square"><img loading="lazy" decoding="async" src={asset.url} alt="" className="h-full w-full object-cover" />{active ? <Check className="absolute right-2 top-2 rounded-full bg-primary/100 p-1 text-white" size={22} /> : null}</div><div className="truncate p-2 text-left text-xs text-gray-700 dark:text-gray-200">{asset.name || asset.public_id}</div></button>; })}</div><button type="button" onClick={() => setLibraryOpen(false)} className="mt-4 h-10 w-full rounded-xl bg-primary/100 text-sm font-semibold text-white">{ts("完成选择")}</button></div></div> : null}
     </div>
   );
 }
@@ -2752,7 +2750,7 @@ function ComicPreferenceModal({
             <div className={`mt-2 rounded-lg px-2.5 py-2 text-[11px] ${selectedVideoModel && !videoReferenceCompatible ? "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-200" : "text-gray-400"}`}>{selectedVideoModel ? (videoReferenceCompatible ? ts("兼容：会自动把每个分镜关键帧作为图生视频参考。") : ts("不兼容：该模型未声明关键帧/参考图能力，运行前会要求更换模型。")) : ts("AI 漫剧应选择支持图生视频或关键帧参考的视频模型。")}</div>
           </ComicSettingCard>
         </div>
-        <button onClick={onClose} className="mt-4 h-11 w-full rounded-xl bg-cyan-500 text-sm font-semibold text-white">{ts("保存设置")}</button>
+        <button onClick={onClose} className="mt-4 h-11 w-full rounded-xl bg-primary/100 text-sm font-semibold text-white">{ts("保存设置")}</button>
       </div>
     </div>
   );
@@ -2844,13 +2842,13 @@ function ComicProjectPanel({ project }: { project: Project }) {
   const visibleSegments = showAllSegments ? segments : segments.slice(0, 6);
   if (!storyboards.length && !keyframes.length && !segments.length) return null;
   return (
-    <div className="space-y-3 rounded-2xl border border-cyan-100 bg-cyan-50/40 p-4 dark:border-cyan-400/15 dark:bg-cyan-400/5">
+    <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/10 p-4 dark:border-primary/30 dark:bg-primary/5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-gray-900 dark:text-white">{t("comic.workflowAssets")}</div>
           <div className="mt-0.5 text-xs text-gray-400">{t("comic.workflowAssetsHint")}</div>
         </div>
-        <span className="rounded-full bg-cyan-500/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 dark:text-cyan-200">{stepLabels[currentStep] || currentStep}</span>
+        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary dark:text-primary">{stepLabels[currentStep] || currentStep}</span>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
@@ -2861,13 +2859,13 @@ function ComicProjectPanel({ project }: { project: Project }) {
         ].map(([label, value, maximum]) => (
           <div key={String(label)} className="rounded-xl border border-white bg-white/80 px-3 py-2 dark:border-white/10 dark:bg-white/5">
             <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-gray-300"><span className="truncate">{String(label)}</span><b className="text-gray-800 dark:text-white">{Number(value)}/{Number(maximum)}</b></div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10"><div className="h-full rounded-full bg-cyan-500 transition-all" style={{ width: `${Number(maximum) ? Math.min(100, Number(value) / Number(maximum) * 100) : 0}%` }} /></div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10"><div className="h-full rounded-full bg-primary/100 transition-all" style={{ width: `${Number(maximum) ? Math.min(100, Number(value) / Number(maximum) * 100) : 0}%` }} /></div>
           </div>
         ))}
       </div>
       {currentStep === "consistency_assets" && <p className="text-xs leading-5 text-gray-500 dark:text-gray-300">{project.status === "failed" ? t("角色、道具或场景的定稿图生成失败，关键帧和视频片段尚未开始。分镜数量表示脚本已规划，并非图片已生成。") : t("正在生成角色、道具和场景的定稿图，完成后才开始生成关键帧与视频；当前无需确认分镜。")}</p>}
       {project.status === "failed" && <p className="text-xs leading-5 text-amber-700 dark:text-amber-200">{ts("重试将复用输入仍匹配的成功素材，仅补齐失败、缺失或因修改而失效的镜头。已完成素材可在下方预览。")}</p>}
-      {Array.isArray(project.outputs?.media_history) && project.outputs.media_history.length > 0 && <details className="text-xs text-gray-500 dark:text-gray-300"><summary className="cursor-pointer">{ts("历史素材 ·")} {project.outputs.media_history.length}{ts("（保留供对比，不参与当前合成）")}</summary><div className="mt-2 flex flex-wrap gap-2">{project.outputs.media_history.map((entry: any, index: number) => { const url = textOf(entry.item?.image_url || entry.item?.video_url); return url ? <a key={index} href={url} target="_blank" rel="noreferrer" className="rounded-lg border px-2 py-1 text-cyan-600">{textOf(entry.item?.id)} · {entry.kind === "keyframes" ? t("关键帧") : t("视频")}  {ts("· 版本")} {index + 1}</a> : null; })}</div></details>}
+      {Array.isArray(project.outputs?.media_history) && project.outputs.media_history.length > 0 && <details className="text-xs text-gray-500 dark:text-gray-300"><summary className="cursor-pointer">{ts("历史素材 ·")} {project.outputs.media_history.length}{ts("（保留供对比，不参与当前合成）")}</summary><div className="mt-2 flex flex-wrap gap-2">{project.outputs.media_history.map((entry: any, index: number) => { const url = textOf(entry.item?.image_url || entry.item?.video_url); return url ? <a key={index} href={url} target="_blank" rel="noreferrer" className="rounded-lg border px-2 py-1 text-primary">{textOf(entry.item?.id)} · {entry.kind === "keyframes" ? t("关键帧") : t("视频")}  {ts("· 版本")} {index + 1}</a> : null; })}</div></details>}
       {(project.status === "running" || project.status === "pending") && <p role="status" className="text-xs leading-5 text-gray-500 dark:text-gray-300">{ts("正在执行：")}{stepLabels[currentStep] || currentStep}{ts("。已完成")} {completedKeyframes}  {ts("张关键帧、")}{completedSegments}  {ts("段视频，可边生成边预览。")}</p>}
       {failedItems.length > 0 && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-200">
@@ -2881,7 +2879,7 @@ function ComicProjectPanel({ project }: { project: Project }) {
             <div key={String(label)} className="rounded-xl border border-white bg-white/80 p-3 dark:border-white/10 dark:bg-white/5">
               <div className="mb-2 text-xs font-semibold text-gray-800 dark:text-gray-100">{String(label)} · {(items as any[]).length}</div>
               <div className="flex flex-wrap gap-1.5">
-                {(items as any[]).slice(0, 8).map((item, index) => <span key={textOf(item.code || index)} title={textOf(item.description || item.visual_prompt)} className="max-w-full truncate rounded-full bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-700 dark:text-cyan-200">{textOf(item.name || item.code)}</span>)}
+                {(items as any[]).slice(0, 8).map((item, index) => <span key={textOf(item.code || index)} title={textOf(item.description || item.visual_prompt)} className="max-w-full truncate rounded-full bg-primary/10 px-2 py-1 text-[11px] text-primary dark:text-primary">{textOf(item.name || item.code)}</span>)}
               </div>
             </div>
           ))}
@@ -2889,7 +2887,7 @@ function ComicProjectPanel({ project }: { project: Project }) {
       )}
       {storyboards.length > 0 && (
         <section>
-          <div className="mb-2 flex items-center justify-between"><h4 className="text-xs font-semibold text-gray-700 dark:text-gray-200">{t("comic.storyboards")} · {storyboards.length}</h4>{storyboards.length > 6 && <button type="button" onClick={() => setShowAllStoryboards((value) => !value)} className="text-[11px] font-medium text-cyan-600 dark:text-cyan-300">{showAllStoryboards ? t("comic.collapse") : t("comic.showAll")}</button>}</div>
+          <div className="mb-2 flex items-center justify-between"><h4 className="text-xs font-semibold text-gray-700 dark:text-gray-200">{t("comic.storyboards")} · {storyboards.length}</h4>{storyboards.length > 6 && <button type="button" onClick={() => setShowAllStoryboards((value) => !value)} className="text-[11px] font-medium text-primary dark:text-primary">{showAllStoryboards ? t("comic.collapse") : t("comic.showAll")}</button>}</div>
           <div className="grid gap-2 md:grid-cols-2">
           {visibleStoryboards.map((item: any, idx: number) => (
             <div key={textOf(item.id || idx)} className="rounded-xl border border-white bg-white/80 p-3 dark:border-white/10 dark:bg-white/5">
@@ -2906,7 +2904,7 @@ function ComicProjectPanel({ project }: { project: Project }) {
       )}
       {keyframes.length > 0 && (
         <section>
-          <div className="mb-2 flex items-center justify-between"><h4 className="text-xs font-semibold text-gray-700 dark:text-gray-200">{t("comic.keyframes")} · {completedKeyframes}/{total}</h4>{keyframes.length > 6 && <button type="button" onClick={() => setShowAllKeyframes((value) => !value)} className="text-[11px] font-medium text-cyan-600 dark:text-cyan-300">{showAllKeyframes ? t("comic.collapse") : t("comic.showAll")}</button>}</div>
+          <div className="mb-2 flex items-center justify-between"><h4 className="text-xs font-semibold text-gray-700 dark:text-gray-200">{t("comic.keyframes")} · {completedKeyframes}/{total}</h4>{keyframes.length > 6 && <button type="button" onClick={() => setShowAllKeyframes((value) => !value)} className="text-[11px] font-medium text-primary dark:text-primary">{showAllKeyframes ? t("comic.collapse") : t("comic.showAll")}</button>}</div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {visibleKeyframes.map((item: any, idx: number) => {
             const failed = item.status === "failed" || !!textOf(item.error_message);
@@ -2931,7 +2929,7 @@ function ComicProjectPanel({ project }: { project: Project }) {
       )}
       {segments.length > 0 && (
         <section>
-          <div className="mb-2 flex items-center justify-between"><h4 className="text-xs font-semibold text-gray-700 dark:text-gray-200">{t("comic.videoSegments")} · {completedSegments}/{total}</h4>{segments.length > 6 && <button type="button" onClick={() => setShowAllSegments((value) => !value)} className="text-[11px] font-medium text-cyan-600 dark:text-cyan-300">{showAllSegments ? t("comic.collapse") : t("comic.showAll")}</button>}</div>
+          <div className="mb-2 flex items-center justify-between"><h4 className="text-xs font-semibold text-gray-700 dark:text-gray-200">{t("comic.videoSegments")} · {completedSegments}/{total}</h4>{segments.length > 6 && <button type="button" onClick={() => setShowAllSegments((value) => !value)} className="text-[11px] font-medium text-primary dark:text-primary">{showAllSegments ? t("comic.collapse") : t("comic.showAll")}</button>}</div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {visibleSegments.map((item: any, idx: number) => {
             const failed = item.status === "failed" || !!textOf(item.error_message);
@@ -2967,7 +2965,7 @@ function Segmented({ value, options, onChange }: { value: string; options: [stri
   return (
     <div className="grid gap-2">
       {options.map(([code, label]) => (
-        <button key={code} type="button" onClick={() => onChange(code)} className={"rounded-xl border px-3 py-2 text-left text-sm transition " + (value === code ? "border-secondary bg-secondary/10 text-secondary dark:text-cyan-200" : "border-gray-100 bg-white text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:bg-white/5 dark:text-gray-300")}>
+        <button key={code} type="button" onClick={() => onChange(code)} className={"rounded-xl border px-3 py-2 text-left text-sm transition " + (value === code ? "border-secondary bg-secondary/10 text-secondary dark:text-primary" : "border-gray-100 bg-white text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:bg-white/5 dark:text-gray-300")}>
           {label}
         </button>
       ))}
@@ -2992,7 +2990,7 @@ function NumberRow({ label, value, min, max, onChange }: { label: string; value:
 function FinalComicVideo({ url }: { url: string }) {
   const { t } = useI18n();
   return (
-    <div className="rounded-2xl border border-cyan-100 bg-white p-3 dark:border-cyan-400/20 dark:bg-white/5">
+    <div className="rounded-2xl border border-primary/30 bg-white p-3 dark:border-primary/30 dark:bg-white/5">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="text-sm font-semibold text-gray-900 dark:text-white">{t("comic.finalVideo")}</div>
         <a href={url} target="_blank" rel="noreferrer" className="text-xs font-medium text-secondary">{t("comic.openVideo")}</a>

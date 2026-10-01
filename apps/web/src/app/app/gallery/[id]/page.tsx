@@ -60,7 +60,7 @@ export default function GalleryDetailPage() {
   const poster = item.thumbnail_url || (item.cover_url && item.cover_url !== mediaURL ? item.cover_url : "");
 
   return (
-    <div className="flex-1 overflow-y-auto page-padding py-6 sm:py-8 page-container">
+    <div className="mcdl-page flex-1 overflow-y-auto page-padding py-6 sm:py-8 page-container">
       <div className="max-w-4xl mx-auto">
         <button onClick={() => router.back()} className="text-sm text-gray-400 hover:text-gray-600 mb-4">
           ← 返回广场

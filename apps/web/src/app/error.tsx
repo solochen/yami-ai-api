@@ -9,8 +9,8 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
   }, [error]);
   const { ts } = useI18n();
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-6 dark:bg-gray-950">
-      <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-white/10 dark:bg-gray-900">
+    <div className="mcdl-standalone-page flex min-h-screen items-center justify-center bg-gray-50 p-6 dark:bg-gray-950">
+      <div className="mcdl-standalone-card w-full max-w-md rounded-3xl border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-white/10 dark:bg-gray-900">
         <div className="text-lg font-bold text-gray-900 dark:text-white">{ts("页面暂时无法加载")}</div>
         <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-300">{ts("可能是网络波动或服务正在更新，请稍后重试。")}</p>
         {error.digest ? <div className="mt-2 text-xs text-gray-400">{ts("错误编号")}：{error.digest}</div> : null}

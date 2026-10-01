@@ -115,7 +115,7 @@ export function ForcedAnnouncementModal() {
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4">
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl dark:border dark:border-white/10 dark:bg-gray-900">
+      <div className="mcdl-dialog-surface w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl dark:border dark:border-white/10 dark:bg-gray-900">
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-white/10">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700">

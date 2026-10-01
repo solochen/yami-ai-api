@@ -25,6 +25,7 @@ export default function AppLayoutClient({ children, defaultTheme, initialSession
     : undefined;
 
   useLayoutEffect(() => {
+    document.documentElement.classList.add("mcdl-product-ui");
     const apply = () => {
       let preference: string | null = null;
       try { preference = localStorage.getItem("theme"); } catch { /* Storage may be disabled. */ }
@@ -33,7 +34,10 @@ export default function AppLayoutClient({ children, defaultTheme, initialSession
     apply();
     const onStorage = (event: StorageEvent) => { if (event.key === "theme" || event.key === null) apply(); };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      document.documentElement.classList.remove("mcdl-product-ui");
+    };
   }, [defaultTheme]);
 
   useEffect(() => {
@@ -57,7 +61,7 @@ export default function AppLayoutClient({ children, defaultTheme, initialSession
 
   if (!authReady) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 px-6 text-center dark:bg-gray-950">
+      <div className="mcdl-auth-stage flex min-h-[100dvh] items-center justify-center bg-gray-50 px-6 text-center dark:bg-gray-950">
         {authError ? (
           <div>
             <p className="text-sm text-gray-600 dark:text-gray-300">暂时无法验证登录状态</p>

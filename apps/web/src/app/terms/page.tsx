@@ -12,8 +12,8 @@ export default async function TermsPage() {
   const content = String(cfg.terms_content || "").trim();
 
   return (
-    <main className="min-h-screen bg-[#071316] px-4 py-10 text-white">
-      <div className="mx-auto max-w-3xl rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20 md:p-10">
+    <main className="mcdl-standalone-page min-h-screen bg-[#071316] px-4 py-10 text-white">
+      <div className="mcdl-standalone-card mx-auto max-w-3xl rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20 md:p-10">
         <Link href="/" className="text-sm text-primary hover:underline">← {staticT(locale, "common.backHome")}</Link>
         <div className="mt-6 text-sm text-white/45">{siteName}</div>
         <h1 className="mt-2 text-3xl font-bold">{title}</h1>

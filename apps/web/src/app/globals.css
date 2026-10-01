@@ -3,6 +3,41 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --mcdl-color-accent: #ff8711;
+  --mcdl-color-on-accent: #160b03;
+  --mcdl-color-surface: #0a0a0a;
+  --mcdl-color-surface-subtle: #161616;
+  --mcdl-color-surface-card: #222222;
+  --mcdl-color-stage: #1a1715;
+  --mcdl-text-title: #f5efeb;
+  --mcdl-text-body: #a99a92;
+  --mcdl-text-muted: #796d67;
+  --mcdl-border-ghost: rgb(245 239 235 / 0.12);
+  --mcdl-color-positive: #62c693;
+  --mcdl-color-negative: #ff7b74;
+  --mcdl-font-body: "Manrope", "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mcdl-font-numeric: "Commissioner", "Avenir Next", var(--mcdl-font-body);
+  --mcdl-font-display: "Epilogue", "Avenir Next", var(--mcdl-font-body);
+  --mcdl-radius-card: 1.75rem;
+  --mcdl-radius-stage: 1.35rem;
+  --mcdl-shadow-soft: 0 1.25rem 3.5rem rgb(0 0 0 / 0.2);
+  --mcdl-shadow-strong: 0 1.75rem 5rem rgb(0 0 0 / 0.34);
+  --mcdl-hover-duration: 220ms;
+  --mcdl-hover-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --mcdl-hover-lift-quiet: -0.125rem;
+  --mcdl-hover-lift-card: -0.3rem;
+  --mcdl-press-scale: 0.985;
+  --mcdl-hover-surface: #292725;
+  --mcdl-hover-border: rgb(255 135 17 / 0.5);
+  --mcdl-hover-shadow-card: 0 1.75rem 4.5rem rgb(0 0 0 / 0.38);
+  --mcdl-hover-shadow-control: 0 0.75rem 2rem rgb(0 0 0 / 0.26);
+  --mcdl-hover-shadow-action: 0 0.9rem 2.5rem rgb(255 135 17 / 0.18);
+  --mcdl-hover-brightness-action: 1.07;
+  --mcdl-hover-media-scale: 1.025;
+  --mcdl-hover-icon-shift: 0.2rem;
+}
+
 body {
   @apply bg-[#EEF1F6] text-gray-900 antialiased;
   scrollbar-width: thin;
@@ -356,6 +391,488 @@ body {
   }
 }
 
+/* Market Cards product shell: Ethereal Vault (light) / Midnight Editorial (dark). */
+html.mcdl-product-ui {
+  --mcdl-color-accent: #ff8711;
+  --mcdl-color-on-accent: #241006;
+  --mcdl-color-surface: #eee8e2;
+  --mcdl-color-surface-subtle: #e6ddd6;
+  --mcdl-color-surface-card: #f8f4f0;
+  --mcdl-color-stage: #1b1715;
+  --mcdl-text-title: #281f1a;
+  --mcdl-text-body: #665952;
+  --mcdl-text-muted: #8d7e76;
+  --mcdl-border-ghost: rgb(73 52 41 / 0.13);
+  --mcdl-color-positive: #397c5b;
+  --mcdl-color-negative: #bb514c;
+  --mcdl-color-warning: #a96620;
+  --mcdl-field-surface: #fffaf6;
+  --mcdl-overlay-surface: rgb(248 244 240 / 0.9);
+  --mcdl-accent-soft: rgb(255 135 17 / 0.11);
+  --mcdl-accent-border: rgb(255 135 17 / 0.38);
+  --mcdl-shadow-soft: 0 1.15rem 3rem rgb(74 48 32 / 0.09);
+  --mcdl-shadow-strong: 0 1.65rem 4.5rem rgb(61 38 24 / 0.16);
+  --mcdl-hover-surface: #fff8f2;
+  --mcdl-hover-border: rgb(255 135 17 / 0.48);
+  --mcdl-hover-shadow-card: 0 1.5rem 3.8rem rgb(61 38 24 / 0.14);
+  --mcdl-hover-shadow-control: 0 0.65rem 1.8rem rgb(61 38 24 / 0.11);
+  color-scheme: light;
+}
+
+html.dark.mcdl-product-ui {
+  --mcdl-color-surface: #0b0a09;
+  --mcdl-color-surface-subtle: #151311;
+  --mcdl-color-surface-card: #1e1b19;
+  --mcdl-color-stage: #12100e;
+  --mcdl-text-title: #f5efeb;
+  --mcdl-text-body: #b7a9a0;
+  --mcdl-text-muted: #82756e;
+  --mcdl-border-ghost: rgb(245 239 235 / 0.12);
+  --mcdl-color-positive: #62c693;
+  --mcdl-color-negative: #ff7b74;
+  --mcdl-color-warning: #e4a35d;
+  --mcdl-field-surface: #181513;
+  --mcdl-overlay-surface: rgb(30 27 25 / 0.9);
+  --mcdl-accent-soft: rgb(255 135 17 / 0.12);
+  --mcdl-accent-border: rgb(255 135 17 / 0.42);
+  --mcdl-shadow-soft: 0 1.25rem 3.5rem rgb(0 0 0 / 0.22);
+  --mcdl-shadow-strong: 0 1.75rem 5rem rgb(0 0 0 / 0.38);
+  --mcdl-hover-surface: #292521;
+  --mcdl-hover-border: rgb(255 135 17 / 0.5);
+  --mcdl-hover-shadow-card: 0 1.75rem 4.5rem rgb(0 0 0 / 0.4);
+  --mcdl-hover-shadow-control: 0 0.75rem 2rem rgb(0 0 0 / 0.28);
+  color-scheme: dark;
+}
+
+html.mcdl-product-ui body {
+  background: var(--mcdl-color-surface);
+  color: var(--mcdl-text-title);
+  font-family: var(--mcdl-font-body);
+  scrollbar-color: var(--mcdl-text-muted) transparent;
+}
+
+html.mcdl-product-ui body::selection,
+html.mcdl-product-ui ::selection {
+  background: rgb(255 135 17 / 0.3);
+  color: var(--mcdl-text-title);
+}
+
+.mcdl-product-shell,
+.mcdl-auth-stage {
+  background: var(--mcdl-color-surface);
+  color: var(--mcdl-text-title);
+  font-family: var(--mcdl-font-body);
+}
+
+.mcdl-product-shell :where(h1, h2, h3) {
+  color: var(--mcdl-text-title);
+  letter-spacing: -0.025em;
+}
+
+.mcdl-product-shell :where(h1, h2) {
+  font-family: var(--mcdl-font-display);
+}
+
+.mcdl-product-shell :where(.tabular-nums, [class*="font-mono"]) {
+  font-variant-numeric: tabular-nums;
+}
+
+html.mcdl-product-ui :where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 0.15rem solid var(--mcdl-color-accent);
+  outline-offset: 0.16rem;
+}
+
+html.mcdl-product-ui :where(button, a, summary) {
+  transition:
+    transform var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+    color var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+    border-color var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+    background-color var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+    box-shadow var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+    opacity var(--mcdl-hover-duration) var(--mcdl-hover-ease);
+}
+
+html.mcdl-product-ui :where(button, a):active {
+  transform: scale(var(--mcdl-press-scale));
+}
+
+html.mcdl-product-ui *::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--mcdl-text-muted) 58%, transparent);
+  border-color: transparent;
+}
+
+html.mcdl-product-ui *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html.mcdl-product-ui .page-padding {
+  padding-inline: clamp(1rem, 2.2vw, 1.75rem);
+}
+
+html.mcdl-product-ui .page-container {
+  position: relative;
+}
+
+html.mcdl-product-ui .soft-card,
+html.mcdl-product-ui .soft-input,
+html.mcdl-product-ui .tech-card,
+html.mcdl-product-ui .result-scan {
+  border: 1px solid var(--mcdl-border-ghost);
+  border-radius: var(--mcdl-radius-card);
+  background: var(--mcdl-color-surface-card);
+  box-shadow: var(--mcdl-shadow-soft);
+}
+
+html.mcdl-product-ui .soft-card,
+html.mcdl-product-ui .tech-card,
+html.mcdl-product-ui .result-scan {
+  transition:
+    transform var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+    border-color var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+    background-color var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+    box-shadow var(--mcdl-hover-duration) var(--mcdl-hover-ease);
+}
+
+html.mcdl-product-ui .soft-card:hover,
+html.mcdl-product-ui .tech-card:hover {
+  transform: translateY(var(--mcdl-hover-lift-quiet));
+  border-color: var(--mcdl-hover-border);
+  box-shadow: var(--mcdl-hover-shadow-card);
+}
+
+html.mcdl-product-ui .tech-card::before,
+html.mcdl-product-ui .tech-card::after,
+html.mcdl-product-ui .result-scan::after {
+  display: none;
+}
+
+html.mcdl-product-ui :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select) {
+  border-color: var(--mcdl-border-ghost);
+  background: var(--mcdl-field-surface);
+  color: var(--mcdl-text-title);
+  box-shadow: none;
+}
+
+html.mcdl-product-ui :where(input, textarea)::placeholder {
+  color: var(--mcdl-text-muted);
+}
+
+html.mcdl-product-ui select option,
+html.mcdl-product-ui select optgroup,
+html.mcdl-product-ui .infinite-canvas-flow select option,
+html.mcdl-product-ui .infinite-canvas-flow select optgroup {
+  background: var(--mcdl-color-surface-card);
+  color: var(--mcdl-text-title);
+}
+
+html.mcdl-product-ui :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select):focus {
+  border-color: var(--mcdl-color-accent);
+  box-shadow: 0 0 0 0.2rem rgb(255 135 17 / 0.12);
+}
+
+html.mcdl-product-ui .bg-primary {
+  background-color: var(--mcdl-color-accent);
+}
+
+html.mcdl-product-ui .text-primary {
+  color: var(--mcdl-color-accent);
+}
+
+html.mcdl-product-ui .border-primary {
+  border-color: var(--mcdl-color-accent);
+}
+
+html.mcdl-product-ui .bg-primary\/5,
+html.mcdl-product-ui .bg-primary\/10,
+html.mcdl-product-ui .bg-primary\/15 {
+  background-color: var(--mcdl-accent-soft);
+}
+
+html.mcdl-product-ui .border-primary\/20,
+html.mcdl-product-ui .border-primary\/30,
+html.mcdl-product-ui .border-primary\/40,
+html.mcdl-product-ui .border-primary\/50 {
+  border-color: var(--mcdl-accent-border);
+}
+
+html.mcdl-product-ui .bg-white:not(img),
+html.mcdl-product-ui .dark\:bg-gray-900 {
+  background-color: var(--mcdl-color-surface-card);
+}
+
+html.mcdl-product-ui .bg-gray-50,
+html.mcdl-product-ui .bg-gray-100,
+html.mcdl-product-ui .dark\:bg-white\/5 {
+  background-color: var(--mcdl-color-surface-subtle);
+}
+
+html.mcdl-product-ui .bg-\[\#EEF1F6\],
+html.mcdl-product-ui .dark\:bg-gray-950 {
+  background-color: var(--mcdl-color-surface);
+}
+
+html.mcdl-product-ui :where(.text-gray-950, .text-gray-900, .text-gray-800, .dark\:text-gray-100, .dark\:text-white) {
+  color: var(--mcdl-text-title);
+}
+
+html.mcdl-product-ui :where(.text-gray-700, .text-gray-600, .dark\:text-gray-200, .dark\:text-gray-300) {
+  color: var(--mcdl-text-body);
+}
+
+html.mcdl-product-ui :where(.text-gray-500, .text-gray-400, .dark\:text-gray-400, .dark\:text-gray-500) {
+  color: var(--mcdl-text-muted);
+}
+
+html.mcdl-product-ui :where(.border-gray-50, .border-gray-100, .border-gray-200, .border-white\/60, .border-white\/80, .dark\:border-white\/10, .dark\:border-white\/15, .dark\:border-white\/20) {
+  border-color: var(--mcdl-border-ghost);
+}
+
+html.mcdl-product-ui :where(.divide-gray-50, .divide-gray-100, .divide-gray-200, .dark\:divide-white\/10) > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--mcdl-border-ghost);
+}
+
+html.mcdl-product-ui :where(.shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl) {
+  --tw-shadow-color: rgb(54 34 22 / 0.12);
+}
+
+.mcdl-app-sidebar,
+.mcdl-app-rail,
+.mcdl-app-mobile-topbar,
+.mcdl-app-desktop-header,
+.mcdl-app-drawer-panel {
+  border-color: var(--mcdl-border-ghost);
+  background: var(--mcdl-overlay-surface);
+  box-shadow: var(--mcdl-shadow-soft);
+  backdrop-filter: blur(1.25rem);
+}
+
+.mcdl-app-sidebar {
+  box-shadow: 0.75rem 0 2.75rem rgb(55 36 24 / 0.06);
+}
+
+.dark .mcdl-app-sidebar {
+  box-shadow: 0.75rem 0 3rem rgb(0 0 0 / 0.2);
+}
+
+.mcdl-app-rail {
+  gap: 0.25rem;
+  padding-top: 1.25rem;
+}
+
+.mcdl-app-content,
+.mcdl-subpage-shell,
+.mcdl-workbench-shell {
+  background: var(--mcdl-color-surface);
+}
+
+.mcdl-app-mobile-topbar,
+.mcdl-app-desktop-header {
+  min-height: 3.75rem;
+}
+
+.mcdl-app-drawer > button {
+  background: rgb(18 15 13 / 0.58);
+  backdrop-filter: blur(0.25rem);
+}
+
+.mcdl-app-drawer-panel {
+  border-left: 1px solid var(--mcdl-border-ghost);
+}
+
+.mcdl-sidebar-body > div:first-child button,
+.mcdl-app-rail a,
+.mcdl-app-drawer-panel a,
+.mcdl-app-drawer-panel button {
+  border-radius: 1rem;
+}
+
+.mcdl-sidebar-body > div:first-child button:hover,
+.mcdl-app-rail a:hover,
+.mcdl-app-drawer-panel a:hover,
+.mcdl-app-drawer-panel button:hover {
+  background: var(--mcdl-hover-surface);
+}
+
+.mcdl-sidebar-body > div:first-child button.bg-primary\/10,
+.mcdl-app-rail a.bg-primary\/10 {
+  color: var(--mcdl-color-accent);
+  background: var(--mcdl-accent-soft);
+}
+
+.mcdl-sidebar-footer {
+  border-color: var(--mcdl-border-ghost);
+  background: color-mix(in srgb, var(--mcdl-color-surface-card) 66%, transparent);
+}
+
+html.mcdl-product-ui .workspace-surface,
+html.mcdl-product-ui .model-workspace.workspace-surface,
+html.mcdl-product-ui .tech-bg-grid {
+  background-color: var(--mcdl-color-surface);
+  background-image: none;
+}
+
+html.mcdl-product-ui .model-workspace .soft-card:hover,
+html.mcdl-product-ui .model-workspace .tech-card:hover {
+  border-color: var(--mcdl-hover-border);
+  box-shadow: var(--mcdl-hover-shadow-card);
+}
+
+html.mcdl-product-ui .tech-list-card {
+  border: 1px solid transparent;
+  border-radius: 1.15rem;
+  background: var(--mcdl-color-surface-subtle);
+  box-shadow: none;
+}
+
+html.mcdl-product-ui .tech-list-card:hover {
+  transform: translateY(var(--mcdl-hover-lift-quiet));
+  border-color: var(--mcdl-hover-border);
+  background: var(--mcdl-hover-surface);
+  box-shadow: var(--mcdl-hover-shadow-control);
+}
+
+html.mcdl-product-ui .tech-list-card[data-active="true"] {
+  border-color: var(--mcdl-color-accent);
+  background: var(--mcdl-color-surface-card);
+  box-shadow: inset 0 0 0 1px rgb(255 135 17 / 0.1), var(--mcdl-shadow-soft);
+}
+
+html.mcdl-product-ui .tech-list-card[data-active="true"] .tech-title {
+  color: var(--mcdl-color-accent);
+}
+
+html.mcdl-product-ui .tech-icon {
+  border-color: var(--mcdl-border-ghost);
+  background: var(--mcdl-color-stage);
+  color: #f5efeb;
+  box-shadow: none;
+}
+
+html.mcdl-product-ui .pulse-dot::before,
+html.mcdl-product-ui .input-status-line::before {
+  background: var(--mcdl-color-accent);
+  box-shadow: none;
+}
+
+html.mcdl-product-ui .input-status-line {
+  border-color: var(--mcdl-border-ghost);
+  background: var(--mcdl-overlay-surface);
+  color: var(--mcdl-text-body);
+  box-shadow: var(--mcdl-shadow-soft);
+}
+
+html.mcdl-product-ui .agent-feature-card,
+html.mcdl-product-ui .comic-feature-card,
+html.mcdl-product-ui .agent-feature-list > button {
+  border-color: var(--mcdl-border-ghost);
+  background: var(--mcdl-color-surface-card);
+  box-shadow: var(--mcdl-shadow-soft);
+  backdrop-filter: none;
+}
+
+html.mcdl-product-ui .agent-feature-card:hover,
+html.mcdl-product-ui .comic-feature-card:hover,
+html.mcdl-product-ui .agent-feature-list > button:hover {
+  transform: translateY(var(--mcdl-hover-lift-card));
+  border-color: var(--mcdl-hover-border);
+  background: var(--mcdl-hover-surface);
+  box-shadow: var(--mcdl-hover-shadow-card);
+}
+
+html.mcdl-product-ui .infinite-canvas-flow .react-flow__node.selected > div {
+  border-color: var(--mcdl-color-accent);
+  box-shadow: 0 0 0 0.15rem rgb(255 135 17 / 0.13), var(--mcdl-shadow-strong);
+}
+
+html.mcdl-product-ui .infinite-canvas-flow .react-flow__selection {
+  border-color: var(--mcdl-color-accent);
+  background: var(--mcdl-accent-soft);
+}
+
+html.mcdl-product-ui :where(table) {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+html.mcdl-product-ui :where(thead) {
+  background: var(--mcdl-color-surface-subtle);
+  color: var(--mcdl-text-body);
+}
+
+html.mcdl-product-ui :where(tbody tr) {
+  transition: background-color var(--mcdl-hover-duration) var(--mcdl-hover-ease);
+}
+
+html.mcdl-product-ui :where(tbody tr:hover) {
+  background: color-mix(in srgb, var(--mcdl-color-accent) 5%, transparent);
+}
+
+html.mcdl-product-ui :where(pre, code) {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+html.mcdl-product-ui pre,
+html.mcdl-product-ui .bg-gray-950 {
+  background: var(--mcdl-color-stage);
+  color: #f5efeb;
+}
+
+html.mcdl-product-ui :where([role="dialog"], .modal-shell) {
+  border: 1px solid var(--mcdl-border-ghost);
+  border-radius: var(--mcdl-radius-card);
+  background: var(--mcdl-color-surface-card);
+  color: var(--mcdl-text-title);
+  box-shadow: var(--mcdl-shadow-strong);
+}
+
+html.mcdl-product-ui [data-radix-popper-content-wrapper] > div,
+html.mcdl-product-ui .fixed.z-\[110\],
+html.mcdl-product-ui .absolute.z-\[90\] {
+  border-color: var(--mcdl-border-ghost);
+  background: var(--mcdl-overlay-surface);
+  box-shadow: var(--mcdl-shadow-strong);
+  backdrop-filter: blur(1.25rem);
+}
+
+html.mcdl-product-ui .rounded-xl {
+  border-radius: 0.9rem;
+}
+
+html.mcdl-product-ui .rounded-2xl {
+  border-radius: 1.25rem;
+}
+
+html.mcdl-product-ui .rounded-3xl {
+  border-radius: var(--mcdl-radius-card);
+}
+
+@media (hover: hover) {
+  html.mcdl-product-ui .bg-primary:hover,
+  html.mcdl-product-ui button.bg-primary:hover,
+  html.mcdl-product-ui a.bg-primary:hover {
+    filter: brightness(var(--mcdl-hover-brightness-action));
+    box-shadow: var(--mcdl-hover-shadow-action);
+    transform: translateY(var(--mcdl-hover-lift-quiet));
+  }
+}
+
+@media (max-width: 30rem) {
+  html.mcdl-product-ui .page-padding {
+    padding-inline: 1rem;
+  }
+
+  .mcdl-app-mobile-topbar {
+    min-height: 3.5rem;
+  }
+
+  html.mcdl-product-ui .soft-card,
+  html.mcdl-product-ui .tech-card,
+  html.mcdl-product-ui .result-scan {
+    border-radius: 1.25rem;
+  }
+}
+
 @media (hover: none) {
   .tech-list-card:hover {
     transform: none;
@@ -409,12 +926,12 @@ body {
 }
 
 .dark .bg-white {
-  background-color: rgb(17 24 39 / var(--tw-bg-opacity, 1));
+  background-color: rgb(17 24 39 / var(--mcdl-color-accent, 1));
 }
 
 .dark .bg-gray-50,
 .dark .bg-gray-100 {
-  background-color: rgb(31 41 55 / var(--tw-bg-opacity, 1));
+  background-color: rgb(31 41 55 / var(--mcdl-color-accent, 1));
 }
 
 .dark .border-white,
@@ -563,3 +1080,534 @@ body {
 }
  .hero-tag { border: 1px solid rgb(229 231 235); border-radius: 999px; background: rgb(255 255 255 / .7); padding: .3rem .7rem; color: rgb(107 114 128); font-size: .7rem; }
  .dark .hero-tag { border-color: rgb(255 255 255 / .1); background: rgb(255 255 255 / .05); color: rgb(203 213 225); }
+
+@layer components {
+  .mcdl-marketing-page {
+    min-height: 100vh;
+    overflow-x: clip;
+    background: var(--mcdl-color-surface);
+    color: var(--mcdl-text-title);
+    font-family: var(--mcdl-font-body);
+  }
+
+  .mcdl-marketing-page ::selection {
+    background: rgb(255 135 17 / 0.3);
+    color: var(--mcdl-text-title);
+  }
+
+  .mcdl-marketing-section {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(4.75rem, 9vw, 8rem) 1.25rem;
+  }
+
+  .mcdl-marketing-section--base { background: var(--mcdl-color-surface); }
+  .mcdl-marketing-section--subtle { background: var(--mcdl-color-surface-subtle); }
+  .mcdl-marketing-section--card { background: var(--mcdl-color-surface-card); }
+
+  .mcdl-marketing-inner {
+    position: relative;
+    width: 100%;
+    max-width: 80rem;
+    margin-inline: auto;
+  }
+
+  .mcdl-display {
+    color: var(--mcdl-text-title);
+    font-family: var(--mcdl-font-display);
+    letter-spacing: -0.045em;
+  }
+
+  .mcdl-numeric {
+    font-family: var(--mcdl-font-numeric);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mcdl-body-copy { color: var(--mcdl-text-body); }
+  .mcdl-muted-copy { color: var(--mcdl-text-muted); }
+
+  .mcdl-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: var(--mcdl-color-accent);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .mcdl-eyebrow::before {
+    width: 0.38rem;
+    height: 0.38rem;
+    border-radius: 999px;
+    background: currentColor;
+    content: "";
+  }
+
+  .mcdl-editorial-card {
+    border: 1px solid var(--mcdl-border-ghost);
+    border-radius: var(--mcdl-radius-card);
+    background: var(--mcdl-color-surface-card);
+    box-shadow: var(--mcdl-shadow-soft);
+  }
+
+  .mcdl-stage {
+    border-radius: var(--mcdl-radius-stage);
+    background: var(--mcdl-color-stage);
+  }
+
+  .mcdl-glass {
+    border: 1px solid var(--mcdl-border-ghost);
+    background: rgb(22 22 22 / 0.76);
+    box-shadow: var(--mcdl-shadow-soft);
+    backdrop-filter: blur(1.25rem);
+  }
+
+  .mcdl-button-primary,
+  .mcdl-button-secondary,
+  .mcdl-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      transform var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+      color var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+      border-color var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+      background-color var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+      box-shadow var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+      filter var(--mcdl-hover-duration) var(--mcdl-hover-ease);
+  }
+
+  .mcdl-button-primary {
+    border-radius: 999px;
+    background: var(--mcdl-color-accent);
+    color: var(--mcdl-color-on-accent);
+    box-shadow: 0 0.65rem 1.8rem rgb(255 135 17 / 0.12);
+  }
+
+  .mcdl-button-secondary {
+    border: 1px solid var(--mcdl-border-ghost);
+    border-radius: 999px;
+    background: rgb(245 239 235 / 0.035);
+    color: var(--mcdl-text-title);
+  }
+
+  .mcdl-icon-button {
+    border: 1px solid var(--mcdl-border-ghost);
+    background: rgb(245 239 235 / 0.04);
+    color: var(--mcdl-text-body);
+  }
+
+  .mcdl-hover-quiet:hover {
+    border-color: var(--mcdl-hover-border);
+    color: var(--mcdl-text-title);
+    background-color: rgb(245 239 235 / 0.065);
+  }
+
+  .mcdl-hover-control:hover {
+    transform: translateY(var(--mcdl-hover-lift-quiet));
+    border-color: var(--mcdl-hover-border);
+    background-color: var(--mcdl-hover-surface);
+    box-shadow: var(--mcdl-hover-shadow-control);
+  }
+
+  .mcdl-hover-card {
+    transition:
+      transform var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+      border-color var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+      background-color var(--mcdl-hover-duration) var(--mcdl-hover-ease),
+      box-shadow var(--mcdl-hover-duration) var(--mcdl-hover-ease);
+  }
+
+  .mcdl-hover-card:hover {
+    transform: translateY(var(--mcdl-hover-lift-card));
+    border-color: var(--mcdl-hover-border);
+    background-color: var(--mcdl-hover-surface);
+    box-shadow: var(--mcdl-hover-shadow-card);
+  }
+
+  .mcdl-hover-primary-action:hover {
+    filter: brightness(var(--mcdl-hover-brightness-action));
+    transform: translateY(var(--mcdl-hover-lift-quiet));
+    box-shadow: var(--mcdl-hover-shadow-action);
+  }
+
+  .mcdl-hover-press:active {
+    transform: translateY(0) scale(var(--mcdl-press-scale));
+  }
+
+  .mcdl-marketing-page :where(a, button, [tabindex]):focus-visible {
+    outline: 2px solid var(--mcdl-color-accent);
+    outline-offset: 3px;
+  }
+
+  .mcdl-marketing-page .mcdl-media-hover {
+    transition: transform calc(var(--mcdl-hover-duration) * 1.35) var(--mcdl-hover-ease);
+  }
+
+  .mcdl-marketing-page .group:hover .mcdl-media-hover {
+    transform: scale(var(--mcdl-hover-media-scale));
+  }
+
+  .mcdl-landing-language > button {
+    border-color: var(--mcdl-border-ghost) !important;
+    background: rgb(22 22 22 / 0.8) !important;
+    color: var(--mcdl-text-title) !important;
+    box-shadow: none !important;
+  }
+
+  .mcdl-landing-language > div {
+    border-color: var(--mcdl-border-ghost) !important;
+    background: var(--mcdl-color-surface-card) !important;
+  }
+
+  @media (min-width: 48rem) {
+    .mcdl-marketing-section { padding-inline: 1.75rem; }
+  }
+
+@media (prefers-reduced-motion: reduce) {
+  .mcdl-marketing-page *,
+    .mcdl-marketing-page *::before,
+    .mcdl-marketing-page *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+
+    .mcdl-hover-control:hover,
+    .mcdl-hover-card:hover,
+    .mcdl-hover-primary-action:hover,
+    .mcdl-hover-press:active,
+    .mcdl-marketing-page .group:hover .mcdl-media-hover {
+      transform: none;
+    }
+  }
+}
+
+.mcdl-dialog-surface,
+.mcdl-standalone-card {
+  border: 1px solid var(--mcdl-border-ghost);
+  border-radius: var(--mcdl-radius-card);
+  background: var(--mcdl-color-surface-card);
+  color: var(--mcdl-text-title);
+  box-shadow: var(--mcdl-shadow-strong);
+}
+
+.mcdl-dialog-surface {
+  font-family: var(--mcdl-font-body);
+}
+
+.mcdl-dialog-surface :where(input:not([type="checkbox"]):not([type="radio"]), textarea, select) {
+  border-color: var(--mcdl-border-ghost);
+  background: var(--mcdl-field-surface, #181513);
+  color: var(--mcdl-text-title);
+}
+
+.mcdl-dialog-surface :where(input, textarea)::placeholder {
+  color: var(--mcdl-text-muted);
+}
+
+.mcdl-dialog-surface :where(h1, h2, h3, [role="heading"]) {
+  color: var(--mcdl-text-title);
+  font-family: var(--mcdl-font-display);
+  letter-spacing: -0.025em;
+}
+
+.mcdl-dialog-surface .bg-gray-100,
+.mcdl-dialog-surface .bg-gray-50 {
+  background: var(--mcdl-color-surface-subtle);
+}
+
+.mcdl-dialog-surface .bg-white:not(img) {
+  background: var(--mcdl-color-surface-card);
+}
+
+.mcdl-dialog-surface :where(.text-gray-900, .text-gray-800, .text-gray-700) {
+  color: var(--mcdl-text-title);
+}
+
+.mcdl-dialog-surface :where(.text-gray-600, .text-gray-500, .text-gray-400) {
+  color: var(--mcdl-text-body);
+}
+
+.mcdl-dialog-surface :where(.border-gray-100, .border-gray-200, .border-white\/10) {
+  border-color: var(--mcdl-border-ghost);
+}
+
+.mcdl-standalone-page {
+  min-height: 100dvh;
+  background: var(--mcdl-color-surface);
+  color: var(--mcdl-text-title);
+  font-family: var(--mcdl-font-body);
+}
+
+.mcdl-standalone-page::before {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 8%, rgb(255 135 17 / 0.09), transparent 26rem),
+    radial-gradient(circle at 88% 90%, rgb(245 239 235 / 0.035), transparent 30rem);
+  content: "";
+}
+
+.mcdl-standalone-card {
+  position: relative;
+  background: rgb(30 27 25 / 0.86);
+  backdrop-filter: blur(1.25rem);
+}
+
+.mcdl-standalone-card h1 {
+  font-family: var(--mcdl-font-display);
+  letter-spacing: -0.04em;
+}
+
+html.mcdl-product-ui .mcdl-page {
+  background: var(--mcdl-color-surface);
+  color: var(--mcdl-text-title);
+}
+
+html.mcdl-product-ui .mcdl-page > :where(h1, div:first-child h1),
+html.mcdl-product-ui .mcdl-page h1 {
+  font-family: var(--mcdl-font-display);
+  letter-spacing: -0.04em;
+}
+
+html.mcdl-product-ui .mcdl-page > h1,
+html.mcdl-product-ui .mcdl-page > div:first-child h1 {
+  font-size: clamp(1.65rem, 2.6vw, 2.4rem);
+  line-height: 1.05;
+}
+
+html.mcdl-product-ui .mcdl-page > div:first-child {
+  position: relative;
+}
+
+html.mcdl-product-ui .mcdl-page article {
+  border-color: var(--mcdl-border-ghost);
+  background: var(--mcdl-color-surface-card);
+  box-shadow: var(--mcdl-shadow-soft);
+}
+
+html.mcdl-product-ui .mcdl-page article:hover {
+  border-color: var(--mcdl-hover-border);
+  box-shadow: var(--mcdl-hover-shadow-card);
+}
+
+html.mcdl-product-ui .mcdl-page-wide > div > div:first-child {
+  border-color: var(--mcdl-border-ghost);
+  border-radius: var(--mcdl-radius-card);
+  background: var(--mcdl-color-surface-card);
+  box-shadow: var(--mcdl-shadow-soft);
+}
+
+html.mcdl-product-ui .mcdl-workspace-scene {
+  background: var(--mcdl-color-surface);
+  color: var(--mcdl-text-title);
+}
+
+html.mcdl-product-ui :where(.mcdl-workspace, .mcdl-infinite-canvas) {
+  background: var(--mcdl-color-surface);
+  color: var(--mcdl-text-title);
+  font-family: var(--mcdl-font-body);
+}
+
+html.mcdl-product-ui .mcdl-workspace-atmosphere {
+  background:
+    radial-gradient(circle at 78% 8%, rgb(255 135 17 / 0.1), transparent 28rem),
+    radial-gradient(circle at 10% 88%, rgb(105 78 60 / 0.08), transparent 24rem);
+}
+
+html.dark.mcdl-product-ui .mcdl-workspace-atmosphere {
+  background:
+    radial-gradient(circle at 78% 8%, rgb(255 135 17 / 0.11), transparent 30rem),
+    radial-gradient(circle at 10% 88%, rgb(245 239 235 / 0.035), transparent 26rem);
+}
+
+html.mcdl-product-ui .mcdl-workspace--viral {
+  background: var(--mcdl-color-stage);
+  color: #f5efeb;
+}
+
+html.mcdl-product-ui .mcdl-workspace--viral :where(textarea, input, select) {
+  border-color: var(--mcdl-border-ghost);
+  background: rgb(245 239 235 / 0.045);
+  color: #f5efeb;
+}
+
+html.mcdl-product-ui .mcdl-workspace--digital-human > :where(header, aside),
+html.mcdl-product-ui .mcdl-workspace--digital-human > div > aside {
+  border-color: var(--mcdl-border-ghost);
+  background: var(--mcdl-color-surface-card);
+}
+
+html.mcdl-product-ui .mcdl-infinite-canvas .react-flow__renderer {
+  background: var(--mcdl-color-surface-subtle);
+}
+
+html.mcdl-product-ui .mcdl-infinite-canvas .react-flow__controls,
+html.mcdl-product-ui .mcdl-infinite-canvas .react-flow__minimap {
+  border-color: var(--mcdl-border-ghost) !important;
+  background: var(--mcdl-overlay-surface) !important;
+  box-shadow: var(--mcdl-shadow-soft);
+  backdrop-filter: blur(1rem);
+}
+
+html.mcdl-product-ui .mcdl-infinite-canvas .react-flow__controls-button {
+  border-color: var(--mcdl-border-ghost);
+  background: transparent;
+  color: var(--mcdl-text-body);
+}
+
+html.mcdl-product-ui .mcdl-infinite-canvas .react-flow__controls-button:hover {
+  background: var(--mcdl-hover-surface);
+  color: var(--mcdl-color-accent);
+}
+
+html.mcdl-product-ui .mcdl-workbench-shell :where(.bg-primary, button.bg-primary, a.bg-primary) {
+  color: var(--mcdl-color-on-accent);
+}
+
+html.mcdl-product-ui .mcdl-workbench-shell :where(.text-primary) {
+  color: var(--mcdl-color-accent);
+}
+
+html.mcdl-product-ui .mcdl-workbench-shell :where(.border-primary\/30, .border-primary\/40, .border-primary\/50, .border-primary\/60) {
+  border-color: var(--mcdl-accent-border);
+}
+
+html.mcdl-product-ui .mcdl-workbench-shell :where(.bg-primary\/5, .bg-primary\/10, .bg-primary\/15, .bg-primary\/20) {
+  background-color: var(--mcdl-accent-soft);
+}
+
+html.mcdl-product-ui .mcdl-workbench-shell :where(.focus\:border-primary:focus, .hover\:border-primary:hover) {
+  border-color: var(--mcdl-color-accent);
+}
+
+html.mcdl-product-ui .gallery-experience > div {
+  max-width: 92rem;
+}
+
+html.mcdl-product-ui .gallery-experience > div > header {
+  padding-block: 0.5rem 0.75rem;
+}
+
+html.mcdl-product-ui .gallery-experience > div > header h1 {
+  font-family: var(--mcdl-font-display);
+  font-size: clamp(2rem, 4vw, 3.35rem);
+  letter-spacing: -0.055em;
+}
+
+html.mcdl-product-ui .gallery-experience :where(section, article) {
+  border-color: var(--mcdl-border-ghost);
+  background: var(--mcdl-color-surface-card);
+  box-shadow: var(--mcdl-shadow-soft);
+}
+
+html.mcdl-product-ui .gallery-experience article:hover {
+  border-color: var(--mcdl-hover-border);
+  box-shadow: var(--mcdl-hover-shadow-card);
+}
+
+html.mcdl-product-ui .mcdl-sidebar-nav {
+  padding-block: 1rem 0.75rem;
+}
+
+html.mcdl-product-ui .mcdl-sidebar-nav button {
+  min-height: 4.5rem;
+}
+
+html.mcdl-product-ui .mcdl-sidebar-filter {
+  border-color: var(--mcdl-border-ghost);
+}
+
+html.mcdl-product-ui .mcdl-sidebar-filter button:hover {
+  border-color: var(--mcdl-hover-border);
+  background: var(--mcdl-hover-surface);
+}
+
+html.mcdl-product-ui .mcdl-workspace-scene > .pointer-events-none.absolute.inset-0 {
+  display: none;
+}
+
+html.mcdl-product-ui :where(.mcdl-workspace-scene, .mcdl-workspace, .mcdl-infinite-canvas) :where(.border-fuchsia-100, .border-fuchsia-200, .border-fuchsia-300, .border-fuchsia-400, .border-cyan-100, .border-cyan-200, .border-cyan-300, .border-cyan-400, .border-indigo-200, .border-indigo-300, .border-indigo-400, .border-violet-200, .border-violet-300, .border-violet-400, .border-rose-200, .border-rose-300) {
+  border-color: var(--mcdl-accent-border);
+}
+
+html.mcdl-product-ui :where(.mcdl-workspace-scene, .mcdl-workspace, .mcdl-infinite-canvas) :where(.text-fuchsia-300, .text-fuchsia-400, .text-fuchsia-500, .text-fuchsia-600, .text-cyan-200, .text-cyan-500, .text-cyan-600, .text-indigo-300, .text-indigo-500, .text-indigo-600, .text-violet-300, .text-violet-500, .text-violet-600, .text-purple-500, .text-purple-600, .text-rose-400, .text-rose-500, .text-rose-600) {
+  color: var(--mcdl-color-accent);
+}
+
+html.mcdl-product-ui :where(.mcdl-workspace-scene, .mcdl-workspace, .mcdl-infinite-canvas) :where(.bg-fuchsia-50, .bg-fuchsia-100, .bg-cyan-50, .bg-cyan-100, .bg-indigo-50, .bg-indigo-100, .bg-violet-50, .bg-violet-100, .bg-purple-50, .bg-purple-100, .bg-rose-50, .bg-rose-100) {
+  background: var(--mcdl-accent-soft);
+}
+
+html.mcdl-product-ui :where(.mcdl-workspace-scene, .mcdl-workspace, .mcdl-infinite-canvas) :where(button.bg-fuchsia-500, button.bg-indigo-500, button.bg-violet-500, button.bg-purple-500, a.bg-fuchsia-500, a.bg-indigo-500, a.bg-violet-500, a.bg-purple-500) {
+  background: var(--mcdl-color-accent);
+  color: var(--mcdl-color-on-accent);
+}
+
+html.mcdl-product-ui :where(.mcdl-workspace-scene, .mcdl-workspace, .mcdl-infinite-canvas) :where(.hover\:bg-fuchsia-400:hover, .hover\:bg-indigo-400:hover, .hover\:bg-violet-400:hover, .hover\:bg-purple-400:hover) {
+  background: color-mix(in srgb, var(--mcdl-color-accent) 88%, white);
+}
+
+html.mcdl-product-ui .mcdl-api-docs {
+  background: var(--mcdl-color-surface);
+  color: var(--mcdl-text-title);
+}
+
+html.mcdl-product-ui .mcdl-api-docs > aside {
+  border-color: var(--mcdl-border-ghost);
+  background: var(--mcdl-color-surface-subtle);
+}
+
+html.mcdl-product-ui .mcdl-api-docs > main > div:first-child {
+  border-color: var(--mcdl-border-ghost);
+  background: var(--mcdl-overlay-surface);
+  backdrop-filter: blur(1.25rem);
+}
+
+html.mcdl-product-ui .mcdl-api-docs section {
+  border-color: var(--mcdl-border-ghost);
+  border-radius: 1.35rem;
+  background: var(--mcdl-color-surface-card);
+  box-shadow: var(--mcdl-shadow-soft);
+}
+
+html.mcdl-product-ui .mcdl-api-docs :where(.bg-\[\#F5F7FB\], .bg-\[\#FAFBFD\], .bg-\[\#070B14\], .bg-\[\#0D1422\], .bg-\[\#101827\]) {
+  background: var(--mcdl-color-surface);
+}
+
+html.mcdl-product-ui .mcdl-api-docs aside :where(.bg-\[\#FAFBFD\], .bg-\[\#0D1422\]) {
+  background: var(--mcdl-color-surface-subtle);
+}
+
+html.mcdl-product-ui .mcdl-api-docs :where(.border-blue-100, .border-blue-200, .border-blue-400\/20, .border-violet-200, .border-violet-400\/20, .border-emerald-200, .border-emerald-400\/20) {
+  border-color: var(--mcdl-border-ghost);
+}
+
+html.mcdl-product-ui .mcdl-api-docs :where(.bg-blue-50\/80, .bg-blue-500\/10, .bg-violet-50\/70, .bg-violet-500\/10, .bg-emerald-50\/80, .bg-emerald-500\/10) {
+  background: var(--mcdl-color-surface-card);
+}
+
+html.mcdl-product-ui .mcdl-api-docs :where(.text-blue-600, .text-blue-700, .text-violet-700, .text-violet-200, .text-indigo-700, .text-indigo-300) {
+  color: var(--mcdl-color-accent);
+}
+
+html.mcdl-product-ui .mcdl-api-docs button[aria-current="page"],
+html.mcdl-product-ui .mcdl-api-docs button.bg-gray-900 {
+  background: var(--mcdl-color-stage);
+  color: #f5efeb;
+}
+
+@media (max-width: 48rem) {
+  html.mcdl-product-ui .mcdl-page {
+    padding-top: 1.25rem;
+    padding-bottom: 2rem;
+  }
+
+  html.mcdl-product-ui .mcdl-page-wide > div > div:first-child {
+    border-radius: 1.25rem;
+  }
+}

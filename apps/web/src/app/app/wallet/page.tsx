@@ -151,7 +151,7 @@ export default function WalletPage() {
   };
 
   return (
-    <div className="page-container page-padding max-w-4xl flex-1 overflow-y-auto py-6 sm:py-8">
+    <div className="mcdl-page page-container page-padding max-w-4xl flex-1 overflow-y-auto py-6 sm:py-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold">{ts("钱包")}</h1>
         <div className="flex gap-2">

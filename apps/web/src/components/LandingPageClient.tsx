@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Bot, Boxes, Check, Clock3, Code2, Compass, Copy, Download, Headphones, ImageIcon, KeyRound, MessageCircle, Phone, Play, Sparkles, UserRound, Wand2, X } from "lucide-react";
+import { ArrowRight, Bot, Boxes, Check, Clock3, Code2, Compass, Copy, Download, Headphones, ImageIcon, KeyRound, MessageCircle, Phone, Play, UserRound, Wand2, X } from "lucide-react";
 import { siAlibabacloud, siAnthropic, siDeepseek, siFlux, siGooglegemini, siHuggingface, siKuaishou, type SimpleIcon } from "simple-icons";
 import { LoginModal } from "@/components/LoginModal";
 import { SiteBrand, useSiteBranding } from "@/components/SiteBrand";
@@ -90,14 +90,14 @@ function InteractiveHeroCanvas() {
     };
 
     const addWave = (x: number, y: number) => {
-      waves.push({ x, y, r: 5, life: 1, hue: Math.random() > 0.5 ? 164 : 218 });
+      waves.push({ x, y, r: 5, life: 1, hue: Math.random() > 0.5 ? 28 : 38 });
       if (waves.length > 24) waves.shift();
     };
 
     const addMeteor = (x: number, y: number, dx: number, dy: number) => {
       const speed = Math.max(3, Math.min(16, Math.hypot(dx, dy) * 0.28));
       const len = Math.max(1, Math.hypot(dx, dy));
-      meteors.push({ x, y, vx: (dx / len) * speed, vy: (dy / len) * speed, life: 1, hue: Math.random() > 0.5 ? 164 : 220 });
+      meteors.push({ x, y, vx: (dx / len) * speed, vy: (dy / len) * speed, life: 1, hue: Math.random() > 0.5 ? 28 : 38 });
       if (meteors.length > 36) meteors.shift();
     };
 
@@ -125,29 +125,8 @@ function InteractiveHeroCanvas() {
 
     const onPointerDown = (event: PointerEvent) => {
       for (let i = 0; i < 5; i++) {
-        waves.push({ x: event.clientX, y: event.clientY, r: 12 + i * 15, life: 1, hue: i % 2 ? 164 : 218 });
+        waves.push({ x: event.clientX, y: event.clientY, r: 12 + i * 15, life: 1, hue: i % 2 ? 28 : 38 });
       }
-    };
-
-    const drawGrid = () => {
-      ctx.save();
-      ctx.globalAlpha = 0.18;
-      ctx.strokeStyle = "rgba(255,255,255,0.18)";
-      ctx.lineWidth = 1;
-      const gap = 58;
-      for (let x = (frame * 0.2) % gap; x < width; x += gap) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x - width * 0.22, height);
-        ctx.stroke();
-      }
-      for (let y = (frame * 0.16) % gap; y < height; y += gap) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y - height * 0.14);
-        ctx.stroke();
-      }
-      ctx.restore();
     };
 
     const draw = () => {
@@ -158,14 +137,8 @@ function InteractiveHeroCanvas() {
       frame += 1;
       idleFrames += 1;
       ctx.clearRect(0, 0, width, height);
-      const bg = ctx.createLinearGradient(0, 0, width, height);
-      bg.addColorStop(0, "#071316");
-      bg.addColorStop(0.34, "#120d22");
-      bg.addColorStop(0.68, "#10111c");
-      bg.addColorStop(1, "#152011");
-      ctx.fillStyle = bg;
+      ctx.fillStyle = "#0a0a0a";
       ctx.fillRect(0, 0, width, height);
-      drawGrid();
 
       nodes.forEach((p, i) => {
         p.x += p.vx / width;
@@ -179,7 +152,7 @@ function InteractiveHeroCanvas() {
         const pull = Math.max(0, 1 - Math.hypot(dx, dy) / 260);
         ctx.beginPath();
         ctx.arc(x + dx * pull * 0.018, y + dy * pull * 0.018, p.r + pull * 1.8, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${pull > 0 ? "18,214,163" : "115,138,255"},${0.28 + pull * 0.38})`;
+        ctx.fillStyle = `rgba(${pull > 0 ? "255,135,17" : "245,239,235"},${0.14 + pull * 0.32})`;
         ctx.fill();
         for (let j = i + 1; j < nodes.length; j++) {
           const b = nodes[j];
@@ -190,7 +163,7 @@ function InteractiveHeroCanvas() {
             ctx.beginPath();
             ctx.moveTo(x, y);
             ctx.lineTo(bx, by);
-            ctx.strokeStyle = `rgba(90,125,255,${0.12 * (1 - dist / 120)})`;
+            ctx.strokeStyle = `rgba(245,239,235,${0.055 * (1 - dist / 120)})`;
             ctx.stroke();
           }
         }
@@ -227,16 +200,16 @@ function InteractiveHeroCanvas() {
         const alpha = Math.max(0, Math.min(1, logo.life));
         ctx.save();
         ctx.globalAlpha = alpha;
-        ctx.font = "600 13px Inter, ui-sans-serif, system-ui";
+        ctx.font = "600 13px Manrope, ui-sans-serif, system-ui";
         const tw = ctx.measureText(logo.text).width + 24;
-        ctx.fillStyle = "rgba(7, 12, 25, 0.74)";
-        ctx.strokeStyle = "rgba(255,255,255,0.22)";
+        ctx.fillStyle = "rgba(22, 22, 22, 0.84)";
+        ctx.strokeStyle = "rgba(245,239,235,0.14)";
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.roundRect(logo.x - tw / 2, logo.y - 16, tw, 30, 15);
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.fillStyle = "rgba(245,239,235,0.9)";
         ctx.fillText(logo.text, logo.x - tw / 2 + 12, logo.y + 4);
         ctx.restore();
         if (logo.life <= 0) logos.splice(idx, 1);
@@ -311,11 +284,11 @@ function AnimatedHeadline() {
   }, [deleting, index, phrases, text]);
 
   return (
-    <h1 className="max-w-5xl text-5xl font-black leading-[0.96] tracking-normal sm:text-7xl lg:text-8xl">
+    <h1 className="mcdl-display max-w-5xl text-[clamp(3rem,7vw,6.5rem)] font-semibold leading-[0.92]">
       {t("landing.titlePrefix")}
-      <span className="mt-2 block min-h-[1.05em] text-primary">
+      <span className="mt-3 block min-h-[1.05em] text-[var(--mcdl-color-accent)]">
         {t("landing.titleSuffix", { value: text })}
-        <span className="ml-1 inline-block h-[0.78em] w-[0.08em] translate-y-[0.08em] animate-[landingBlink_1s_steps(2,end)_infinite] bg-primary" />
+        <span className="ml-1 inline-block h-[0.78em] w-[0.06em] translate-y-[0.08em] animate-[landingBlink_1s_steps(2,end)_infinite] bg-[var(--mcdl-color-accent)]" />
       </span>
     </h1>
   );
@@ -362,13 +335,13 @@ function ModelTickerLogo({ item }: { item: TickerLogo }) {
 function ModelTicker() {
   const items = [...MODEL_TICKER, ...MODEL_TICKER];
   return (
-    <div className="mt-9 w-full max-w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] py-3 backdrop-blur lg:hidden">
+    <div className="mcdl-glass mt-9 w-full max-w-full overflow-hidden rounded-[1.35rem] py-3 lg:hidden">
       <div className="flex w-max animate-[landingMarquee_26s_linear_infinite] items-center gap-3 px-3">
         {items.map((item, index) => (
           <span
             key={`${item.name}-${index}`}
             title={item.name}
-            className="group flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-white/[0.14]"
+            className="mcdl-hover-control mcdl-hover-press group flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--mcdl-border-ghost)] bg-[rgba(245,239,235,.055)]"
           >
             <ModelTickerLogo item={item} />
           </span>
@@ -428,16 +401,16 @@ function OrbitTypewriter({ items, activeIndex, setActiveIndex }: { items: Ticker
   if (!active) return null;
 
   return (
-    <div className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center opacity-55 transition duration-500 group-hover/orbit:opacity-90">
-      <div key={active.name} className="relative flex h-14 w-14 animate-[landingOrbitFocusIn_.65s_ease-out] items-center justify-center rounded-2xl bg-white/[0.025] text-white/70 shadow-[0_0_36px_rgba(18,214,163,.08)]">
-        <span className="absolute inset-0 rounded-2xl bg-primary/5 blur-xl" />
+    <div className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center opacity-60 transition duration-500 group-hover/orbit:opacity-100">
+      <div key={active.name} className="relative flex h-14 w-14 animate-[landingOrbitFocusIn_.65s_ease-out] items-center justify-center rounded-2xl border border-[var(--mcdl-border-ghost)] bg-[rgba(245,239,235,.035)] text-[var(--mcdl-text-body)] shadow-[0_0_36px_rgba(255,135,17,.08)]">
+        <span className="absolute inset-0 rounded-2xl bg-[rgba(255,135,17,.05)] blur-xl" />
         <span className="relative opacity-70 transition group-hover/orbit:opacity-100">
           <ModelTickerLogo item={active} />
         </span>
       </div>
-      <div className="mt-3 min-h-[22px] max-w-[170px] truncate text-sm font-semibold tracking-normal text-white/58 transition group-hover/orbit:text-white">
+      <div className="mt-3 min-h-[22px] max-w-[170px] truncate text-sm font-semibold tracking-normal text-[var(--mcdl-text-body)] transition group-hover/orbit:text-[var(--mcdl-text-title)]">
         {text}
-        <span className="ml-0.5 inline-block h-[1em] w-px translate-y-0.5 animate-[landingBlink_1s_steps(2,end)_infinite] bg-primary/70" />
+        <span className="ml-0.5 inline-block h-[1em] w-px translate-y-0.5 animate-[landingBlink_1s_steps(2,end)_infinite] bg-[var(--mcdl-color-accent)]" />
       </div>
     </div>
   );
@@ -447,8 +420,8 @@ function ModelOrbit() {
   const items = MODEL_TICKER.slice(0, 24);
   const [activeIndex, setActiveIndex] = useState(0);
   return (
-    <div className="group/orbit relative z-30 isolate hidden h-[620px] w-[620px] shrink-0 items-center justify-center overflow-visible transition duration-500 hover:scale-[1.025] lg:flex">
-      <div className="absolute inset-28 rounded-full bg-primary/[0.025] blur-2xl" />
+    <div className="group/orbit relative z-30 isolate hidden h-[620px] w-[620px] shrink-0 items-center justify-center overflow-visible lg:flex">
+      <div className="absolute inset-28 rounded-full border border-[rgba(245,239,235,.06)] bg-[rgba(255,135,17,.018)]" />
       <OrbitTypewriter items={items} activeIndex={activeIndex} setActiveIndex={setActiveIndex} />
       <div className="absolute left-1/2 top-1/2 z-20 h-0 w-0 animate-[landingOrbitSpin_46s_linear_infinite] overflow-visible motion-reduce:animate-none group-hover/orbit:[animation-play-state:paused]">
         {items.map((item, index) => {
@@ -469,13 +442,13 @@ function ModelOrbit() {
                   <div className="invisible h-[64px] w-[68px]" aria-hidden="true" />
                 ) : (
                   <div
-                    className="group/node flex w-[68px] flex-col items-center gap-1.5 rounded-2xl border border-transparent bg-black/[0.06] px-1.5 py-2 opacity-30 backdrop-blur-sm transition duration-500 hover:scale-115 hover:border-primary/55 hover:bg-white/[0.105] hover:opacity-100 hover:shadow-[0_0_28px_rgba(18,214,163,.18)]"
+                    className="mcdl-hover-control group/node flex w-[68px] flex-col items-center gap-1.5 rounded-2xl border border-transparent bg-[rgba(22,22,22,.5)] px-1.5 py-2 opacity-35 backdrop-blur-sm hover:opacity-100"
                     title={item.name}
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.015] opacity-42 transition group-hover/node:bg-black/25 group-hover/node:opacity-100">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[rgba(245,239,235,.025)] opacity-50 transition group-hover/node:opacity-100">
                       <ModelTickerLogo item={item} />
                     </span>
-                    <span className="w-full truncate text-center text-[10px] font-semibold text-white/12 transition group-hover/node:text-white">
+                    <span className="w-full truncate text-center text-[10px] font-semibold text-[var(--mcdl-text-muted)] transition group-hover/node:text-[var(--mcdl-text-title)]">
                       {item.name}
                     </span>
                   </div>
@@ -563,42 +536,42 @@ function CustomerService({ config }: { config: CustomerServiceConfig }) {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={t("customerService.open")}
-        className="group fixed bottom-5 right-4 z-[80] flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-[#071316]/95 p-1.5 text-primary shadow-[0_12px_36px_rgba(0,0,0,.42),0_0_24px_rgba(18,214,163,.16)] backdrop-blur-xl transition hover:-translate-y-1 hover:border-primary/55 sm:bottom-7 sm:right-7 sm:h-[72px] sm:w-[72px]"
+        className="mcdl-glass mcdl-hover-control mcdl-hover-press group fixed bottom-5 right-4 z-[80] flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl p-1.5 text-[var(--mcdl-color-accent)] sm:bottom-7 sm:right-7 sm:h-[72px] sm:w-[72px]"
       >
         {config.customer_service_floating_image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={config.customer_service_floating_image} alt={name} className="h-full w-full rounded-xl object-contain" />
         ) : (
-          <Headphones size={30} className="transition group-hover:scale-110" />
+          <Headphones size={30} />
         )}
-        <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-[#071316] bg-emerald-400" />
+        <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-[var(--mcdl-color-surface)] bg-[var(--mcdl-color-positive)]" />
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-5" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-5" onClick={() => setOpen(false)}>
           <div
             role="dialog"
             aria-modal="true"
             aria-label={t("customerService.dialog")}
-            className="max-h-[92vh] w-full overflow-y-auto rounded-t-[26px] border border-white/12 bg-[#15191f] text-white shadow-2xl sm:max-w-[390px] sm:rounded-[26px]"
+            className="mcdl-editorial-card max-h-[92vh] w-full overflow-y-auto rounded-t-[1.75rem] text-[var(--mcdl-text-title)] sm:max-w-[390px] sm:rounded-[1.75rem]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+            <div className="flex items-center justify-between px-5 pb-3 pt-5">
               <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300"><Headphones size={21} /></div>
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-[rgba(255,135,17,.1)] text-[var(--mcdl-color-accent)]"><Headphones size={21} /></div>
                 <div>
                   <div className="text-lg font-bold">{title}</div>
-                  <div className="text-xs text-white/45">{subtitle}</div>
+                  <div className="mcdl-body-copy text-xs">{subtitle}</div>
                 </div>
               </div>
-              <button type="button" onClick={() => setOpen(false)} className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 text-white/65 transition hover:bg-white/10 hover:text-white" aria-label={t("common.close")}>
+              <button type="button" onClick={() => setOpen(false)} className="mcdl-icon-button mcdl-hover-control mcdl-hover-press grid h-9 w-9 place-items-center rounded-xl" aria-label={t("common.close")}>
                 <X size={19} />
               </button>
             </div>
 
             <div className="space-y-4 p-5">
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/[0.04] text-white/45">
+              <div className="mcdl-stage flex items-center gap-3 border border-[var(--mcdl-border-ghost)] p-4">
+                <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-[rgba(245,239,235,.04)] text-[var(--mcdl-text-body)]">
                   {config.customer_service_avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={config.customer_service_avatar} alt={name} className="h-full w-full object-cover" />
@@ -608,8 +581,8 @@ function CustomerService({ config }: { config: CustomerServiceConfig }) {
                 </div>
                 <div>
                   <div className="font-semibold">{name}</div>
-                  <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-2 py-1 text-[11px] font-medium text-emerald-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{t("customerService.online")}
+                  <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-[rgba(98,198,147,.1)] px-2 py-1 text-[11px] font-medium text-[var(--mcdl-color-positive)]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--mcdl-color-positive)]" />{t("customerService.online")}
                   </div>
                 </div>
               </div>
@@ -620,35 +593,35 @@ function CustomerService({ config }: { config: CustomerServiceConfig }) {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={config.customer_service_qr_url} alt={t("客服微信二维码")} className="h-44 w-44 object-contain sm:h-48 sm:w-48" />
                   </div>
-                  <div className="mt-2 text-xs text-white/35">{qrTip}</div>
+                  <div className="mcdl-muted-copy mt-2 text-xs">{qrTip}</div>
                 </div>
               )}
 
               <div className="space-y-2">
                 {config.customer_service_phone && (
-                  <button type="button" onClick={() => copyValue("phone", config.customer_service_phone)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-left transition hover:bg-white/[0.07]">
-                    <span className="flex items-center gap-3"><Phone size={18} className="text-sky-400" /><span><span className="block text-[11px] text-white/35">{t("customerService.phone")}</span><span className="text-sm font-semibold">{config.customer_service_phone}</span></span></span>
-                    {copied === "phone" ? <Check size={17} className="text-emerald-400" /> : <Copy size={17} className="text-white/40" />}
+                  <button type="button" onClick={() => copyValue("phone", config.customer_service_phone)} className="mcdl-hover-quiet mcdl-hover-press flex w-full items-center justify-between rounded-xl border border-[var(--mcdl-border-ghost)] bg-[rgba(245,239,235,.035)] px-3.5 py-3 text-left transition">
+                    <span className="flex items-center gap-3"><Phone size={18} className="text-[var(--mcdl-color-accent)]" /><span><span className="mcdl-muted-copy block text-[11px]">{t("customerService.phone")}</span><span className="text-sm font-semibold">{config.customer_service_phone}</span></span></span>
+                    {copied === "phone" ? <Check size={17} className="text-[var(--mcdl-color-positive)]" /> : <Copy size={17} className="mcdl-muted-copy" />}
                   </button>
                 )}
                 {config.customer_service_wechat && (
-                  <button type="button" onClick={() => copyValue("wechat", config.customer_service_wechat)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-left transition hover:bg-white/[0.07]">
-                    <span className="flex items-center gap-3"><MessageCircle size={18} className="text-emerald-400" /><span><span className="block text-[11px] text-white/35">{t("customerService.wechat")}</span><span className="text-sm font-semibold">{config.customer_service_wechat}</span></span></span>
-                    {copied === "wechat" ? <Check size={17} className="text-emerald-400" /> : <Copy size={17} className="text-white/40" />}
+                  <button type="button" onClick={() => copyValue("wechat", config.customer_service_wechat)} className="mcdl-hover-quiet mcdl-hover-press flex w-full items-center justify-between rounded-xl border border-[var(--mcdl-border-ghost)] bg-[rgba(245,239,235,.035)] px-3.5 py-3 text-left transition">
+                    <span className="flex items-center gap-3"><MessageCircle size={18} className="text-[var(--mcdl-color-accent)]" /><span><span className="mcdl-muted-copy block text-[11px]">{t("customerService.wechat")}</span><span className="text-sm font-semibold">{config.customer_service_wechat}</span></span></span>
+                    {copied === "wechat" ? <Check size={17} className="text-[var(--mcdl-color-positive)]" /> : <Copy size={17} className="mcdl-muted-copy" />}
                   </button>
                 )}
                 {config.customer_service_hours && (
-                  <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-3">
-                    <Clock3 size={18} className="text-violet-400" />
-                    <span><span className="block text-[11px] text-white/35">{t("customerService.hours")}</span><span className="text-sm font-semibold">{config.customer_service_hours}</span></span>
+                  <div className="flex items-center gap-3 rounded-xl border border-[var(--mcdl-border-ghost)] bg-[rgba(245,239,235,.035)] px-3.5 py-3">
+                    <Clock3 size={18} className="text-[var(--mcdl-color-accent)]" />
+                    <span><span className="mcdl-muted-copy block text-[11px]">{t("customerService.hours")}</span><span className="text-sm font-semibold">{config.customer_service_hours}</span></span>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-5 pt-3">
-              <button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-white/12 py-3 text-sm font-semibold transition hover:bg-white/5">{t("common.gotIt")}</button>
-              <button type="button" onClick={downloadQR} disabled={!config.customer_service_qr_url} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#12d6a3] py-3 text-sm font-semibold text-[#071316] transition hover:bg-[#2be0b1] disabled:cursor-not-allowed disabled:opacity-40">
+            <div className="grid grid-cols-2 gap-2 p-5 pt-3">
+              <button type="button" onClick={() => setOpen(false)} className="mcdl-button-secondary mcdl-hover-control mcdl-hover-press rounded-xl py-3 text-sm font-semibold">{t("common.gotIt")}</button>
+              <button type="button" onClick={downloadQR} disabled={!config.customer_service_qr_url} className="mcdl-button-primary mcdl-hover-primary-action mcdl-hover-press inline-flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40">
                 <Download size={17} />{t("customerService.downloadQR")}
               </button>
             </div>
@@ -661,6 +634,7 @@ function CustomerService({ config }: { config: CustomerServiceConfig }) {
 
 function GalleryPreview({ item }: { item: ReferenceGalleryItem }) {
   const { locale } = useI18n();
+  const [imageFailed, setImageFailed] = useState(false);
   const tags = referenceTagEntries(item).slice(0, 3);
   return (
     <Link
@@ -669,21 +643,37 @@ function GalleryPreview({ item }: { item: ReferenceGalleryItem }) {
         event.preventDefault();
         window.location.assign(event.currentTarget.href);
       }}
-      className="tech-card group block min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] text-left shadow-xl shadow-black/15 transition duration-300 hover:-translate-y-1 hover:border-primary/50"
+      className="mcdl-editorial-card mcdl-hover-card mcdl-hover-press group block min-w-0 overflow-hidden text-left"
     >
-      <div className="relative aspect-[4/5] overflow-hidden bg-[#0b1221]">
-        <Image src={referenceImageURL(item.image)} alt={item.imageAlt || item.title} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-contain transition duration-500 group-hover:scale-[1.03]" />
+      <div className="mcdl-stage relative aspect-[4/5] overflow-hidden rounded-b-none">
+        {imageFailed ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl border border-[var(--mcdl-border-ghost)] bg-[rgba(245,239,235,.035)] text-[var(--mcdl-color-accent)]">
+              <ImageIcon size={22} />
+            </span>
+            <span className="mcdl-muted-copy text-xs">{referenceTaxonomyLabel(item.category, locale)}</span>
+          </div>
+        ) : (
+          <Image
+            src={referenceImageURL(item.image)}
+            alt={item.imageAlt || item.title}
+            fill
+            sizes="(min-width: 1024px) 25vw, 50vw"
+            className="mcdl-media-hover object-contain"
+            onError={() => setImageFailed(true)}
+          />
+        )}
       </div>
       <div className="p-3.5">
-        <div className="flex items-center gap-2 text-[10px] font-semibold text-primary">
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--mcdl-color-accent)]">
           <span className="truncate">{referenceTaxonomyLabel(item.category, locale)}</span>
-          <span className="ml-auto shrink-0 text-white/32">Case {item.id}</span>
+          <span className="mcdl-numeric mcdl-muted-copy ml-auto shrink-0 normal-case tracking-normal">Case {item.id}</span>
         </div>
-        <h3 className="mt-2 truncate text-sm font-semibold text-white">{item.title}</h3>
-        <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/52">{item.promptPreview || item.prompt}</p>
+        <h3 className="mt-2 truncate text-sm font-semibold text-[var(--mcdl-text-title)]">{item.title}</h3>
+        <p className="mcdl-body-copy mt-2 line-clamp-2 text-xs leading-5">{item.promptPreview || item.prompt}</p>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {tags.map((tag) => (
-            <span key={tag.key} className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/45">
+            <span key={tag.key} className="mcdl-muted-copy rounded-full border border-[var(--mcdl-border-ghost)] px-2 py-0.5 text-[10px]">
               {referenceTaxonomyLabel(tag.label, locale)}
             </span>
           ))}
@@ -735,16 +725,16 @@ export default function LandingPageClient() {
 
   const capabilityCards = useMemo(
     () => [
-      { title: t("landing.capability.chat.title"), desc: t("landing.capability.chat.desc"), icon: Bot, accent: "text-primary" },
-      { title: t("landing.capability.media.title"), desc: t("landing.capability.media.desc"), icon: ImageIcon, accent: "text-sky-300" },
-      { title: t("landing.capability.api.title"), desc: t("landing.capability.api.desc"), icon: Code2, accent: "text-indigo-300" },
-      { title: t("landing.capability.agent.title"), desc: t("landing.capability.agent.desc"), icon: Boxes, accent: "text-amber-200" },
+      { title: t("landing.capability.chat.title"), desc: t("landing.capability.chat.desc"), icon: Bot },
+      { title: t("landing.capability.media.title"), desc: t("landing.capability.media.desc"), icon: ImageIcon },
+      { title: t("landing.capability.api.title"), desc: t("landing.capability.api.desc"), icon: Code2 },
+      { title: t("landing.capability.agent.title"), desc: t("landing.capability.agent.desc"), icon: Boxes },
     ],
     [t],
   );
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[#0f1210] text-white">
+    <div className="mcdl-marketing-page">
       <style jsx global>{`
         @keyframes landingBlink {
           0%,
@@ -762,23 +752,6 @@ export default function LandingPageClient() {
           }
           to {
             transform: translateX(-50%);
-          }
-        }
-        @keyframes landingFloat {
-          0%,
-          100% {
-            transform: translate3d(0, 0, 0);
-          }
-          50% {
-            transform: translate3d(0, -10px, 0);
-          }
-        }
-        @keyframes landingScan {
-          from {
-            transform: translateX(-110%);
-          }
-          to {
-            transform: translateX(110%);
           }
         }
         @keyframes landingOrbitSpin {
@@ -808,51 +781,48 @@ export default function LandingPageClient() {
           }
         }
       `}</style>
-      <section className="relative min-h-screen overflow-hidden bg-[#071316]">
+      <section className="relative min-h-screen overflow-hidden bg-[var(--mcdl-color-surface)]">
         <InteractiveHeroCanvas />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_15%,rgba(18,214,163,.16),transparent_34%),radial-gradient(ellipse_at_82%_28%,rgba(146,107,255,.15),transparent_32%),linear-gradient(180deg,rgba(7,19,22,.05),rgba(15,18,16,.94)_88%)]" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-[linear-gradient(180deg,transparent,rgba(15,18,16,.96))]" />
-        <nav className="relative z-[70] mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-4 sm:px-8 sm:py-6">
+        <nav className="mcdl-glass relative z-[70] mx-3 mt-3 flex max-w-[calc(80rem-2rem)] items-center justify-between gap-2 rounded-[1.4rem] px-3 py-3 sm:mx-auto sm:mt-5 sm:px-5">
           <SiteBrand
             href="/"
             className="min-w-0 flex-1 gap-2 pr-1"
-            nameClassName="text-lg font-bold text-white sm:text-xl"
-            subtitleClassName="max-w-[92px] text-xs text-white/78 min-[390px]:max-w-[130px] sm:max-w-none sm:text-sm"
-            badgeClassName="h-8 w-8 rounded-lg text-sm"
+            nameClassName="text-lg font-bold text-[var(--mcdl-text-title)] sm:text-xl"
+            subtitleClassName="mcdl-body-copy max-w-[92px] text-xs min-[390px]:max-w-[130px] sm:max-w-none sm:text-sm"
+            badgeClassName="h-8 w-8 rounded-lg !bg-[var(--mcdl-color-accent)] text-sm !text-[var(--mcdl-color-on-accent)]"
           />
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-4">
             {apiDocsVisible && (
-              <Link href="/app/api-docs" onClick={(event) => { event.preventDefault(); window.location.assign(event.currentTarget.href); }} className="hidden rounded-full border border-white/15 px-4 py-2 text-sm text-white/75 transition hover:border-primary/60 hover:text-white sm:inline-flex">
+              <Link href="/app/api-docs" onClick={(event) => { event.preventDefault(); window.location.assign(event.currentTarget.href); }} className="mcdl-button-secondary mcdl-hover-quiet mcdl-hover-press hidden px-4 py-2 text-sm sm:inline-flex">
                 {t("landing.apiDocs")}
               </Link>
             )}
-            <button onClick={enterAppOrLogin} className="h-9 max-w-[54px] truncate whitespace-nowrap rounded-full border border-white/20 px-2.5 text-xs leading-none text-white/86 transition hover:border-primary/60 sm:h-10 sm:max-w-none sm:px-5 sm:text-sm">
+            <button onClick={enterAppOrLogin} className="mcdl-button-secondary mcdl-hover-control mcdl-hover-press h-9 max-w-[54px] truncate whitespace-nowrap px-2.5 text-xs leading-none sm:h-10 sm:max-w-none sm:px-5 sm:text-sm">
               {t("landing.login")}
             </button>
-            <button onClick={enterAppOrLogin} className="h-9 max-w-[78px] truncate whitespace-nowrap rounded-full bg-primary px-3 text-xs font-semibold leading-none text-dark transition hover:bg-primary/90 min-[390px]:max-w-[92px] sm:h-10 sm:max-w-none sm:px-5 sm:text-sm">
+            <button onClick={enterAppOrLogin} className="mcdl-button-primary mcdl-hover-primary-action mcdl-hover-press h-9 max-w-[78px] truncate whitespace-nowrap px-3 text-xs font-semibold leading-none min-[390px]:max-w-[92px] sm:h-10 sm:max-w-none sm:px-5 sm:text-sm">
               <span className="block truncate">{t("landing.start")}</span>
             </button>
-            <UILanguageSelector compact tone="dark" />
+            <UILanguageSelector compact tone="dark" className="mcdl-landing-language" />
           </div>
         </nav>
 
-        <main className="relative z-10 mx-auto flex min-h-[calc(100vh-96px)] w-full max-w-7xl min-w-0 flex-col justify-center overflow-hidden px-4 pb-16 pt-6 sm:px-8">
+        <main className="relative z-10 mx-auto flex min-h-[calc(100vh-88px)] w-full max-w-[80rem] min-w-0 flex-col justify-center overflow-hidden px-5 pb-16 pt-10 sm:px-7">
           <div className="grid w-full min-w-0 items-center gap-10 lg:grid-cols-[minmax(0,1fr)_620px] xl:gap-16">
             <div className="w-full max-w-4xl min-w-0">
-              <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-primary backdrop-blur">
-                <Sparkles size={15} />
+              <div className="mcdl-eyebrow mb-8">
                 {t("landing.badge")}
               </div>
               <AnimatedHeadline />
-              <p className="mt-7 max-w-full break-words text-base leading-8 text-white/62 sm:max-w-2xl sm:text-lg">
+              <p className="mcdl-body-copy mt-7 max-w-full break-words text-base leading-8 sm:max-w-2xl sm:text-lg">
                 {t("landing.desc", { site: site_name || "StarAI" })}
               </p>
               <div className="mt-10 flex min-w-0 flex-col gap-3 sm:flex-row">
-                <button onClick={enterAppOrLogin} className="group box-border inline-flex w-full min-w-0 max-w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-primary px-5 py-3.5 text-sm font-semibold text-dark transition hover:bg-primary/90 sm:w-auto sm:px-7 sm:text-base">
+                <button onClick={enterAppOrLogin} className="mcdl-button-primary mcdl-hover-primary-action mcdl-hover-press group box-border w-full min-w-0 max-w-full gap-2 overflow-hidden px-5 py-3.5 text-sm font-semibold sm:w-auto sm:px-7 sm:text-base">
                   <span className="truncate">{t("landing.freeStart")}</span>
-                  <ArrowRight size={18} className="transition group-hover:translate-x-0.5" />
+                  <ArrowRight size={18} className="transition-transform group-hover:translate-x-[var(--mcdl-hover-icon-shift)]" />
                 </button>
-                <Link href="/app/gallery" onClick={(event) => { event.preventDefault(); window.location.assign(event.currentTarget.href); }} className="box-border inline-flex w-full min-w-0 max-w-full items-center justify-center gap-2 overflow-hidden rounded-full border border-white/18 px-5 py-3.5 text-sm font-semibold text-white/88 transition hover:border-primary/55 hover:text-white sm:w-auto sm:px-7 sm:text-base">
+                <Link href="/app/gallery" onClick={(event) => { event.preventDefault(); window.location.assign(event.currentTarget.href); }} className="mcdl-button-secondary mcdl-hover-control mcdl-hover-press box-border w-full min-w-0 max-w-full gap-2 overflow-hidden px-5 py-3.5 text-sm font-semibold sm:w-auto sm:px-7 sm:text-base">
                   <Compass size={18} className="shrink-0" />
                   <span className="truncate">{t("landing.gallery")}</span>
                 </Link>
@@ -872,35 +842,32 @@ export default function LandingPageClient() {
               ["24h", t("landing.stat.api")],
               ["4", t("landing.stat.workflow")],
             ].map(([value, label]) => (
-              <div key={label} className="tech-card rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-4 backdrop-blur transition hover:-translate-y-0.5 hover:border-primary/35">
-                <div className="text-2xl font-bold text-white">{value}</div>
-                <div className="mt-1 text-xs text-white/45">{label}</div>
+              <div key={label} className="mcdl-glass mcdl-hover-card rounded-2xl px-4 py-4">
+                <div className="mcdl-numeric text-2xl font-semibold text-[var(--mcdl-text-title)]">{value}</div>
+                <div className="mcdl-muted-copy mt-1 text-xs">{label}</div>
               </div>
             ))}
           </div>
         </main>
       </section>
 
-      <section className="relative overflow-hidden border-t border-white/10 bg-[#101713] px-4 py-20 sm:px-8">
-        <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(18,214,163,.08),transparent_36%),linear-gradient(250deg,rgba(215,188,112,.1),transparent_45%)]" />
-        <div className="absolute inset-0 opacity-[0.18] [background-image:linear-gradient(rgba(255,255,255,.14)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.14)_1px,transparent_1px)] [background-size:44px_44px]" />
-        <div className="relative mx-auto max-w-7xl">
+      <section className="mcdl-marketing-section mcdl-marketing-section--subtle">
+        <div className="mcdl-marketing-inner">
           <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
-              <div className="mb-3 text-sm font-semibold text-primary">MODEL ROUTER</div>
-              <h2 className="text-3xl font-bold sm:text-5xl">{t("landing.section.capability")}</h2>
+              <div className="mcdl-eyebrow mb-4">MODEL ROUTER</div>
+              <h2 className="mcdl-display text-3xl font-semibold sm:text-5xl">{t("landing.section.capability")}</h2>
             </div>
-            <p className="max-w-xl text-sm leading-7 text-white/50">{t("landing.section.capabilityDesc")}</p>
+            <p className="mcdl-body-copy max-w-xl text-sm leading-7">{t("landing.section.capabilityDesc")}</p>
           </div>
           <div className="grid gap-4 md:grid-cols-4">
             {capabilityCards.map((card) => {
               const Icon = card.icon;
               return (
-                <div key={card.title} className="tech-card relative overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.055] p-6 transition hover:-translate-y-1 hover:border-primary/45">
-                  <div className="absolute inset-x-0 top-0 h-px animate-[landingScan_4.6s_linear_infinite] bg-[linear-gradient(90deg,transparent,rgba(18,214,163,.78),transparent)]" />
-                  <Icon className={card.accent} size={28} />
+                <div key={card.title} className="mcdl-editorial-card mcdl-hover-card relative overflow-hidden p-6">
+                  <Icon className="text-[var(--mcdl-color-accent)]" size={28} />
                   <h3 className="mt-6 text-lg font-semibold">{card.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-white/48">{card.desc}</p>
+                  <p className="mcdl-body-copy mt-3 text-sm leading-6">{card.desc}</p>
                 </div>
               );
             })}
@@ -908,13 +875,12 @@ export default function LandingPageClient() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden bg-[#171321] px-4 py-20 sm:px-8">
-        <div className="absolute inset-0 bg-[linear-gradient(145deg,rgba(146,107,255,.13),transparent_38%),linear-gradient(315deg,rgba(18,214,163,.08),transparent_48%)]" />
-        <div className="relative mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+      <section className="mcdl-marketing-section mcdl-marketing-section--base">
+        <div className="mcdl-marketing-inner grid gap-12 lg:grid-cols-[0.82fr_1.18fr] lg:items-center">
           <div>
-            <div className="mb-3 text-sm font-semibold text-primary">WORKFLOW</div>
-            <h2 className="text-3xl font-bold leading-tight sm:text-5xl">{t("landing.section.flow")}</h2>
-            <p className="mt-5 text-sm leading-7 text-white/52">
+            <div className="mcdl-eyebrow mb-4">WORKFLOW</div>
+            <h2 className="mcdl-display text-3xl font-semibold leading-tight sm:text-5xl">{t("landing.section.flow")}</h2>
+            <p className="mcdl-body-copy mt-5 text-sm leading-7">
               {t("landing.section.flowDesc")}
             </p>
             <div className="mt-8 grid gap-3">
@@ -923,43 +889,43 @@ export default function LandingPageClient() {
                 ["02", t("landing.flow.step2.title"), t("landing.flow.step2.desc")],
                 ["03", t("landing.flow.step3.title"), t("landing.flow.step3.desc")],
               ].map(([no, title, desc]) => (
-                  <div key={no} className="tech-card flex gap-4 rounded-2xl border border-white/10 bg-white/[0.055] p-4 transition hover:-translate-y-0.5 hover:border-primary/35">
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-sm font-bold text-dark">{no}</div>
+                  <div key={no} className="mcdl-editorial-card mcdl-hover-card flex gap-4 rounded-2xl p-4">
+                  <div className="mcdl-numeric grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--mcdl-color-accent)] text-sm font-bold text-[var(--mcdl-color-on-accent)]">{no}</div>
                   <div>
-                    <div className="font-semibold text-white">{title}</div>
-                    <div className="mt-1 text-sm text-white/45">{desc}</div>
+                    <div className="font-semibold text-[var(--mcdl-text-title)]">{title}</div>
+                    <div className="mcdl-body-copy mt-1 text-sm">{desc}</div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
-          <div className="tech-card rounded-[32px] border border-white/10 bg-white/[0.055] p-4 shadow-2xl shadow-black/30 [animation:landingFloat_7s_ease-in-out_infinite]">
-            <div className="rounded-[24px] border border-white/10 bg-[#0a101e] p-4">
-              <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-4">
+          <div className="mcdl-editorial-card p-3 sm:p-4">
+            <div className="mcdl-stage rounded-[1.4rem] border border-[var(--mcdl-border-ghost)] p-4">
+              <div className="mb-4 flex items-center justify-between pb-3">
                 <div className="flex items-center gap-2">
                   <span className="h-3 w-3 rounded-full bg-red-400" />
                   <span className="h-3 w-3 rounded-full bg-amber-300" />
-                  <span className="h-3 w-3 rounded-full bg-primary" />
+                  <span className="h-3 w-3 rounded-full bg-[var(--mcdl-color-accent)]" />
                 </div>
-                <div className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/45">{t("landing.liveWorkspace")}</div>
+                <div className="mcdl-muted-copy rounded-full border border-[var(--mcdl-border-ghost)] px-3 py-1 text-xs">{t("landing.liveWorkspace")}</div>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
-                {[t("landing.workspace.card1"), t("landing.workspace.card2"), t("landing.workspace.card3"), t("landing.workspace.card4")].map((item, idx) => (
-                  <div key={item} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                {[t("landing.workspace.card1"), t("landing.workspace.card2"), t("landing.workspace.card3"), t("landing.workspace.card4")].map((item) => (
+                  <div key={item} className="rounded-2xl border border-[var(--mcdl-border-ghost)] bg-[rgba(245,239,235,.035)] p-4">
                     <div className="mb-4 flex items-center justify-between">
                       <span className="text-sm font-semibold">{item}</span>
-                      <Wand2 size={16} className={idx % 2 ? "text-sky-300" : "text-primary"} />
+                      <Wand2 size={16} className="text-[var(--mcdl-color-accent)]" />
                     </div>
                     <div className="space-y-2">
-                      <div className="h-2 overflow-hidden rounded-full bg-white/10"><span className="block h-full w-2/3 animate-[landingScan_2.8s_ease-in-out_infinite] bg-primary/70" /></div>
-                      <div className="h-2 w-5/6 overflow-hidden rounded-full bg-white/10"><span className="block h-full w-1/2 animate-[landingScan_3.2s_ease-in-out_infinite] bg-sky-300/60" /></div>
-                      <div className="h-2 w-2/3 overflow-hidden rounded-full bg-white/10"><span className="block h-full w-3/5 animate-[landingScan_3.6s_ease-in-out_infinite] bg-amber-200/60" /></div>
+                      <div className="h-2 overflow-hidden rounded-full bg-[rgba(245,239,235,.08)]"><span className="block h-full w-2/3 rounded-full bg-[var(--mcdl-color-accent)] opacity-80" /></div>
+                      <div className="h-2 w-5/6 overflow-hidden rounded-full bg-[rgba(245,239,235,.08)]"><span className="block h-full w-1/2 rounded-full bg-[var(--mcdl-text-body)] opacity-50" /></div>
+                      <div className="h-2 w-2/3 overflow-hidden rounded-full bg-[rgba(245,239,235,.08)]"><span className="block h-full w-3/5 rounded-full bg-[var(--mcdl-text-title)] opacity-35" /></div>
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="mt-4 rounded-2xl border border-primary/30 bg-primary/10 p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+              <div className="mt-4 rounded-2xl border border-[rgba(255,135,17,.28)] bg-[rgba(255,135,17,.08)] p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--mcdl-color-accent)]">
                   <Play size={16} />
                   {t("landing.workspace.done")}
                 </div>
@@ -969,15 +935,14 @@ export default function LandingPageClient() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden border-y border-white/10 bg-[#12170f] px-4 py-20 sm:px-8">
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(215,188,112,.1),transparent_34%),linear-gradient(180deg,rgba(18,214,163,.07),transparent_50%)]" />
-        <div className="relative mx-auto max-w-7xl">
+      <section className="mcdl-marketing-section mcdl-marketing-section--subtle">
+        <div className="mcdl-marketing-inner">
           <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
-              <div className="mb-3 text-sm font-semibold text-primary">INSPIRATION GALLERY</div>
-              <h2 className="text-3xl font-bold sm:text-5xl">{t("landing.section.gallery")}</h2>
+              <div className="mcdl-eyebrow mb-4">INSPIRATION GALLERY</div>
+              <h2 className="mcdl-display text-3xl font-semibold sm:text-5xl">{t("landing.section.gallery")}</h2>
             </div>
-            <Link href="/app/gallery" onClick={(event) => { event.preventDefault(); window.location.assign(event.currentTarget.href); }} className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-sm font-semibold text-white/80 transition hover:border-primary/55 hover:text-white">
+            <Link href="/app/gallery" onClick={(event) => { event.preventDefault(); window.location.assign(event.currentTarget.href); }} className="mcdl-button-secondary mcdl-hover-control mcdl-hover-press gap-2 px-5 py-2.5 text-sm font-semibold">
               {t("landing.viewAll")}
               <ArrowRight size={16} />
             </Link>
@@ -985,58 +950,56 @@ export default function LandingPageClient() {
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             {galleryLoading
               ? Array.from({ length: LANDING_GALLERY_LIMIT }, (_, index) => (
-                <div key={index} aria-hidden="true" className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.05]">
-                  <div className="aspect-[4/5] animate-pulse bg-white/[0.06]" />
+                <div key={index} aria-hidden="true" className="mcdl-editorial-card overflow-hidden rounded-2xl">
+                  <div className="mcdl-stage aspect-[4/5] animate-pulse rounded-b-none" />
                   <div className="space-y-3 p-3.5">
-                    <div className="h-3 w-1/3 animate-pulse rounded-full bg-white/10" />
-                    <div className="h-4 w-3/4 animate-pulse rounded-full bg-white/10" />
-                    <div className="h-3 w-full animate-pulse rounded-full bg-white/[0.07]" />
+                    <div className="h-3 w-1/3 animate-pulse rounded-full bg-[rgba(245,239,235,.1)]" />
+                    <div className="h-4 w-3/4 animate-pulse rounded-full bg-[rgba(245,239,235,.1)]" />
+                    <div className="h-3 w-full animate-pulse rounded-full bg-[rgba(245,239,235,.07)]" />
                   </div>
                 </div>
               ))
               : gallery.length > 0
                 ? gallery.map((item) => <GalleryPreview key={item.id} item={item} />)
-                : <div className="col-span-full rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-12 text-center text-sm text-white/45">{t("gallery.referenceLoadFailed")}</div>}
+                : <div className="mcdl-body-copy col-span-full rounded-2xl border border-dashed border-[var(--mcdl-border-ghost)] bg-[rgba(245,239,235,.025)] px-5 py-12 text-center text-sm">{t("gallery.referenceLoadFailed")}</div>}
           </div>
         </div>
       </section>
 
-      <section className="relative overflow-hidden bg-[#11161d] px-4 py-20 sm:px-8">
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(79,124,255,.1),transparent_38%),linear-gradient(315deg,rgba(215,188,112,.09),transparent_46%)]" />
-        <div className="relative mx-auto grid max-w-7xl gap-6 md:grid-cols-3">
-          <div className="tech-card rounded-[28px] border border-white/10 bg-white/[0.045] p-6 transition hover:-translate-y-1 hover:border-primary/35">
-            <KeyRound className="text-primary" size={28} />
+      <section className="mcdl-marketing-section mcdl-marketing-section--base">
+        <div className="mcdl-marketing-inner grid gap-6 md:grid-cols-3">
+          <div className="mcdl-editorial-card mcdl-hover-card p-6">
+            <KeyRound className="text-[var(--mcdl-color-accent)]" size={28} />
             <h3 className="mt-6 text-xl font-semibold">{t("landing.feature.apiKey.title")}</h3>
-            <p className="mt-3 text-sm leading-6 text-white/48">{t("landing.feature.apiKey.desc")}</p>
+            <p className="mcdl-body-copy mt-3 text-sm leading-6">{t("landing.feature.apiKey.desc")}</p>
           </div>
-          <div className="tech-card rounded-[28px] border border-white/10 bg-white/[0.045] p-6 transition hover:-translate-y-1 hover:border-primary/35">
-            <Copy className="text-sky-300" size={28} />
+          <div className="mcdl-editorial-card mcdl-hover-card p-6">
+            <Copy className="text-[var(--mcdl-color-accent)]" size={28} />
             <h3 className="mt-6 text-xl font-semibold">{t("landing.feature.referral.title")}</h3>
-            <p className="mt-3 text-sm leading-6 text-white/48">{t("landing.feature.referral.desc")}</p>
+            <p className="mcdl-body-copy mt-3 text-sm leading-6">{t("landing.feature.referral.desc")}</p>
           </div>
-          <div className="tech-card rounded-[28px] border border-white/10 bg-white/[0.045] p-6 transition hover:-translate-y-1 hover:border-primary/35">
-            <Compass className="text-amber-200" size={28} />
+          <div className="mcdl-editorial-card mcdl-hover-card p-6">
+            <Compass className="text-[var(--mcdl-color-accent)]" size={28} />
             <h3 className="mt-6 text-xl font-semibold">{t("landing.feature.gallery.title")}</h3>
-            <p className="mt-3 text-sm leading-6 text-white/48">{t("landing.feature.gallery.desc")}</p>
+            <p className="mcdl-body-copy mt-3 text-sm leading-6">{t("landing.feature.gallery.desc")}</p>
           </div>
         </div>
 
-        <div className="relative mx-auto mt-16 max-w-4xl overflow-hidden rounded-[32px] border border-primary/30 bg-primary/10 px-6 py-10 text-center">
-          <div className="absolute inset-x-0 top-0 h-px animate-[landingScan_5s_linear_infinite] bg-[linear-gradient(90deg,transparent,rgba(255,255,255,.8),transparent)]" />
-          <h2 className="text-3xl font-bold sm:text-5xl">{t("landing.cta")}</h2>
-          <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-white/58">{t("landing.ctaDesc")}</p>
-          <button onClick={enterAppOrLogin} className="mt-8 inline-flex items-center gap-2 rounded-full bg-primary px-8 py-3.5 font-semibold text-dark transition hover:bg-primary/90">
+        <div className="mcdl-editorial-card relative mx-auto mt-16 max-w-4xl overflow-hidden px-6 py-12 text-center sm:px-12">
+          <div className="mcdl-eyebrow mb-5">ETHEREAL VAULT</div>
+          <h2 className="mcdl-display text-3xl font-semibold sm:text-5xl">{t("landing.cta")}</h2>
+          <p className="mcdl-body-copy mx-auto mt-5 max-w-2xl text-sm leading-7">{t("landing.ctaDesc")}</p>
+          <button onClick={enterAppOrLogin} className="mcdl-button-primary mcdl-hover-primary-action mcdl-hover-press mt-8 gap-2 px-8 py-3.5 font-semibold">
             {t("landing.tryNow")}
             <ArrowRight size={18} />
           </button>
         </div>
       </section>
 
-      <footer className="relative overflow-hidden border-t border-white/10 bg-[#071316] px-4 py-6 text-center text-xs text-white/45 sm:px-8">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(18,214,163,.1),transparent_38%),radial-gradient(ellipse_at_82%_100%,rgba(146,107,255,.08),transparent_40%)]" />
-        <div className="relative mx-auto flex max-w-7xl flex-col items-center justify-center gap-2 sm:flex-row sm:justify-between">
+      <footer className="mcdl-muted-copy relative overflow-hidden bg-[var(--mcdl-color-surface-subtle)] px-5 py-7 text-center text-xs sm:px-7">
+        <div className="relative mx-auto flex max-w-[80rem] flex-col items-center justify-center gap-2 sm:flex-row sm:justify-between">
           <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--mcdl-color-accent)]" />
             <span>{site_name || "StarAI"}</span>
           </div>
           <div className="max-w-full break-words">{copyrightText}</div>

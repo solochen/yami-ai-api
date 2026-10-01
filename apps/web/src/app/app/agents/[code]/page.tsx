@@ -195,7 +195,7 @@ export default function AgentWorkspacePage() {
   if (isVirtualTryOn) {
     const tryOnBar = <VirtualTryOnInputBar key={`${photoInputKey}:${project?.public_id || "new"}`} defaultModelCode={runtime?.generation_model_code} initialInputs={project?.inputs} error={error} onSubmit={run} />;
     return (
-      <div className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-[#fff1f3] text-gray-900 dark:bg-[#12070a] dark:text-white">
+      <div className="mcdl-workspace-scene relative flex min-h-[100dvh] flex-col overflow-hidden bg-[#fff1f3] text-gray-900 dark:bg-[#12070a] dark:text-white">
         <div className="pointer-events-none absolute inset-0 opacity-70 [background-image:linear-gradient(rgba(190,24,93,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(190,24,93,.05)_1px,transparent_1px)] [background-size:40px_40px]" />
         {project ? (
           <div className="relative z-10 flex min-h-0 flex-1 flex-col"><VirtualTryOnResult workflowCode={workflow.code} workflowName={ts(workflow.name)} project={project as any} onNewTask={() => { setProject(null); setPhotoInputKey((key) => key + 1); }} onLoadHistory={loadHistory} /></div>
@@ -212,7 +212,7 @@ export default function AgentWorkspacePage() {
     const photoBar = <PhotoStudioInputBar key={photoInputKey} defaultModelCode={(workflow.runtime_config as any)?.generation_model_code} error={error} onSubmit={run} />;
     if (!project) {
       return (
-        <div className="relative flex h-screen flex-col overflow-hidden bg-[#fdf0f9] text-gray-900 dark:bg-[#0a0510] dark:text-white">
+        <div className="mcdl-workspace-scene relative flex h-screen flex-col overflow-hidden bg-[#fdf0f9] text-gray-900 dark:bg-[#0a0510] dark:text-white">
           <div className="pointer-events-none absolute inset-0 opacity-80 [background-image:linear-gradient(rgba(15,23,42,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.06)_1px,transparent_1px)] [background-size:40px_40px] dark:opacity-60 dark:[background-image:linear-gradient(rgba(232,121,249,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(232,121,249,.08)_1px,transparent_1px)]" />
           <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto">
             <PhotoStudioLanding
@@ -233,7 +233,7 @@ export default function AgentWorkspacePage() {
     const photoInFlight = project.status === "pending" || project.status === "running";
     const extraPhotoCells = photoInFlight ? Math.max(0, Number(project.inputs?.count || 1) - mediaItems.length) : 0;
     return (
-      <div className="relative flex h-screen flex-col overflow-hidden bg-[#fdf0f9] text-gray-900 dark:bg-[#0a0510] dark:text-white">
+      <div className="mcdl-workspace-scene relative flex h-screen flex-col overflow-hidden bg-[#fdf0f9] text-gray-900 dark:bg-[#0a0510] dark:text-white">
         {/* 网格背景 overlay：与落地页保持一致，避免提交后背景突变 */}
         <div className="pointer-events-none absolute inset-0 opacity-80 [background-image:linear-gradient(rgba(15,23,42,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.06)_1px,transparent_1px)] [background-size:40px_40px] dark:opacity-60 dark:[background-image:linear-gradient(rgba(232,121,249,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(232,121,249,.08)_1px,transparent_1px)]" />
         <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto p-4 sm:p-8">
@@ -296,7 +296,7 @@ export default function AgentWorkspacePage() {
   // 如果是小说工坊且没有项目，显示自定义Landing页面
   if (isNovelWorkshop && !project) {
     return (
-      <div className="h-screen flex flex-col">
+      <div className="mcdl-workspace-scene h-screen flex flex-col">
         <NovelWorkshopLanding
           workflowCode={workflow.code}
           workflowName={ts(workflow.name)}
@@ -313,7 +313,7 @@ export default function AgentWorkspacePage() {
     const outputs = project.outputs || {};
     const chapters = Array.isArray(outputs.chapters) ? outputs.chapters as any[] : [];
     return (
-      <div className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-[#eaf7fb] text-gray-900 dark:bg-[#05080f] dark:text-white">
+      <div className="mcdl-workspace-scene relative flex min-h-[100dvh] flex-col overflow-hidden bg-[#eaf7fb] text-gray-900 dark:bg-[#05080f] dark:text-white">
         <div className="pointer-events-none absolute inset-0 opacity-80 [background-image:linear-gradient(rgba(15,23,42,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.08)_1px,transparent_1px)] [background-size:40px_40px] dark:opacity-60 dark:[background-image:linear-gradient(rgba(34,211,238,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.08)_1px,transparent_1px)]" />
         <div className="relative z-10 flex min-h-0 flex-1 flex-col">
           <div className="shrink-0 px-3 py-1.5 sm:px-5 sm:py-2 lg:px-8"><PhotoStudioTopBar workflowCode={workflow.code} historyFallbackTitle={t("小说任务")} onNewTask={() => setProject(null)} onLoadHistory={loadHistory} /></div>
@@ -333,7 +333,7 @@ export default function AgentWorkspacePage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-8">
+    <div className="mcdl-page flex-1 overflow-y-auto p-8">
       <div className="max-w-3xl mx-auto">
         <button onClick={() => router.push("/app/agents")} className="text-sm text-gray-400 hover:text-gray-600 mb-4">
           ← {t("agentRun.back")}

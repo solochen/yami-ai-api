@@ -291,7 +291,7 @@ function WorkflowRunCard({ task, busy, onRetry, onCancel, onFeedback }: { task: 
         <div className="flex shrink-0 items-center gap-2"><span className="font-mono text-sm font-semibold text-primary">{progress}%</span>{task.status === "failed" ? <button type="button" disabled={busy} onClick={onRetry} className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-2.5 font-medium text-white disabled:opacity-50"><RotateCcw size={13} />{ts("按当前模型续传")}</button> : task.status === "canceling" ? <Loader2 size={17} className="animate-spin text-amber-500" /> : canCancel ? <><button type="button" disabled={busy} onClick={onCancel} className="inline-flex h-8 items-center gap-1 rounded-lg border border-red-200 px-2.5 font-medium text-red-500 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-400/20 dark:hover:bg-red-500/10"><Square size={11} fill="currentColor" />{ts("停止")}</button>{isActive ? <Loader2 size={17} className="animate-spin text-primary" /> : null}</> : null}</div>
       </div>
       <div className="relative mt-3 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-white/10" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
-        <div className={`h-full rounded-full bg-gradient-to-r from-cyan-500 via-primary to-emerald-400 transition-all duration-700 ${isActive ? "animate-pulse" : ""}`} style={{ width: `${progress}%` }} />
+        <div className={`h-full rounded-full bg-primary transition-all duration-700 ${isActive ? "animate-pulse" : ""}`} style={{ width: `${progress}%` }} />
       </div>
       <div className={`mt-3 grid gap-1.5 ${contentImage || !comic ? "grid-cols-2" : "grid-cols-3 sm:grid-cols-6"}`}>
         {stages.map(([id, label], index) => {
@@ -1264,13 +1264,12 @@ export function CreativeAgentWorkspace({
   const visibleMessages = messages.slice(visibleMessageStart);
 
   return (
-    <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden bg-[#eaf7fb] text-gray-900 dark:bg-[#05080f] dark:text-white">
+    <div className="mcdl-workspace mcdl-workspace--creative relative isolate flex min-h-0 flex-1 flex-col overflow-hidden text-gray-900 dark:text-white">
       {openedCanvasIds.length > 0 && <div aria-hidden={!canvasVisible} className={canvasVisible ? "fixed inset-0 z-[80] flex flex-col bg-white dark:bg-gray-950" : "pointer-events-none fixed -left-[200vw] top-0 h-screen w-screen invisible"}>
         <div className="flex justify-between border-b p-3"><span>{ts("Agent · 无限画布工作流")}</span><button type="button" onClick={() => setCanvasVisible(false)}>{ts("返回对话（工作流继续运行）")}</button></div>
         {openedCanvasIds.map(id => <div key={id} aria-hidden={!canvasVisible || id !== activeCanvasId} className={canvasVisible && id === activeCanvasId ? "flex min-h-0 flex-1 flex-col" : "pointer-events-none fixed -left-[200vw] top-0 flex h-screen w-screen flex-col invisible"}><InfiniteCanvasWorkspace authenticated initialCanvasID={id} keyboardEnabled={canvasVisible && id === activeCanvasId} onAgentState={(state, continueRun) => onCanvasState(id, state, continueRun)} /></div>)}
       </div>}
-      <div className="pointer-events-none absolute inset-0 hidden opacity-80 [background-image:linear-gradient(rgba(15,23,42,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.08)_1px,transparent_1px)] [background-size:40px_40px] dark:opacity-60 dark:[background-image:linear-gradient(rgba(34,211,238,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.08)_1px,transparent_1px)] md:block" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_70%_10%,rgba(34,211,238,.22),transparent_28%),radial-gradient(circle_at_12%_84%,rgba(20,184,166,.16),transparent_22%)] dark:bg-[radial-gradient(circle_at_76%_10%,rgba(20,184,166,.2),transparent_28%),radial-gradient(circle_at_14%_82%,rgba(6,182,212,.12),transparent_22%)]" />
+      <div className="mcdl-workspace-atmosphere pointer-events-none absolute inset-0" />
 
       {onOpenModelPicker && (
         <div className="relative z-50 flex shrink-0 items-center gap-2 border-b border-white/60 bg-white/70 px-3 py-2 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] lg:hidden">
@@ -1326,13 +1325,13 @@ export function CreativeAgentWorkspace({
               <div className="mt-3 grid w-full max-w-sm grid-cols-2 gap-1.5">
                 {HOT_PROMPTS.map((item) => <button key={item} type="button" onClick={() => setPrompt(ts(item))} className="min-h-9 rounded-xl border border-gray-200 bg-white/70 px-2 py-1.5 text-xs leading-4 text-gray-600 transition active:scale-[.98] dark:border-white/10 dark:bg-white/5 dark:text-gray-300">{ts(item)}</button>)}
               </div>
-              <button type="button" onClick={() => setPrompt(ts(HOT_PROMPTS[activeFeature] || HOT_PROMPTS[0]))} className="mt-3 flex w-full max-w-sm items-center gap-3 rounded-xl border border-cyan-200/70 bg-white/75 p-3 text-left shadow-sm backdrop-blur transition active:scale-[.98] dark:border-cyan-400/20 dark:bg-white/[0.05]" aria-label={`${ts("快捷创作")}：${ts(activeMobileFeature.title)}`}>
+              <button type="button" onClick={() => setPrompt(ts(HOT_PROMPTS[activeFeature] || HOT_PROMPTS[0]))} className="mt-3 flex w-full max-w-sm items-center gap-3 rounded-xl border border-primary/30 bg-white/75 p-3 text-left shadow-sm backdrop-blur transition active:scale-[.98] dark:border-primary/30 dark:bg-white/[0.05]" aria-label={`${ts("快捷创作")}：${ts(activeMobileFeature.title)}`}>
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary"><ActiveMobileFeatureIcon size={20} /></div>
                   <div className="min-w-0 flex-1">
                     <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">{ts(activeMobileFeature.title)}</h2>
                     <p className="mt-0.5 line-clamp-1 text-xs text-gray-500 dark:text-gray-400">{ts(activeMobileFeature.subtitle)}</p>
                   </div>
-                  <ChevronRight size={16} className="shrink-0 text-cyan-600 dark:text-cyan-300" />
+                  <ChevronRight size={16} className="shrink-0 text-primary dark:text-primary" />
               </button>
             </div>
             <div className="hidden min-h-0 flex-1 md:flex">

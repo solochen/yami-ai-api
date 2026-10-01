@@ -303,7 +303,7 @@ export function GalleryPanel({
   };
 
   return (
-    <div className="gallery-experience flex-1 overflow-y-auto bg-[#f5f7fa] px-4 py-6 dark:bg-gray-950 sm:px-6 sm:py-8 lg:px-8">
+    <div className="gallery-experience mcdl-workspace flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <div className="mx-auto w-full max-w-[1480px]">
         <header className="mb-6 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -330,7 +330,7 @@ export function GalleryPanel({
                     value={referenceQuery}
                     onChange={(event) => setReferenceQuery(event.target.value)}
                     placeholder={t("gallery.referenceSearch")}
-                    className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500"
+                    className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm text-gray-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500"
                   />
                 </label>
               </div>
@@ -345,7 +345,7 @@ export function GalleryPanel({
             <div className="mb-4 flex items-center justify-between gap-4 text-sm text-gray-500 dark:text-gray-400">
               <span>{t("gallery.resultCount", { count: referenceItems.length })}</span>
               {(category !== "all" || style !== "all" || scene !== "all" || referenceLanguage !== "all" || referenceQuery) && (
-                <button type="button" onClick={() => { setReferenceQuery(""); selectReferenceCategory("all"); selectReferenceStyle("all"); selectReferenceScene("all"); selectReferenceLanguage("all"); }} className="inline-flex items-center gap-1.5 font-medium text-gray-600 hover:text-emerald-700 dark:text-gray-300 dark:hover:text-emerald-300">
+                <button type="button" onClick={() => { setReferenceQuery(""); selectReferenceCategory("all"); selectReferenceStyle("all"); selectReferenceScene("all"); selectReferenceLanguage("all"); }} className="inline-flex items-center gap-1.5 font-medium text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-primary">
                   <RotateCcw size={14} />{t("gallery.resetFilters")}
                 </button>
               )}
@@ -364,7 +364,7 @@ export function GalleryPanel({
                 </div>
                 {referenceItems.length > referenceVisibleCount && (
                   <div className="mt-7 text-center">
-                    <button type="button" onClick={() => setReferenceVisibleCount((count) => count + REFERENCE_BATCH_SIZE)} className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:border-emerald-300/50 dark:hover:text-emerald-200">
+                    <button type="button" onClick={() => setReferenceVisibleCount((count) => count + REFERENCE_BATCH_SIZE)} className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:border-primary/50 hover:text-primary dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:border-primary/50 dark:hover:text-primary">
                       {t("common.more")}
                     </button>
                   </div>
@@ -382,7 +382,7 @@ export function GalleryPanel({
                 </div>
                 <label className="relative block w-full lg:max-w-md">
                   <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={17} />
-                  <input value={communityQuery} onChange={(event) => setCommunityQuery(event.target.value)} placeholder={t("gallery.searchPlaceholder")} className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500" />
+                  <input value={communityQuery} onChange={(event) => setCommunityQuery(event.target.value)} placeholder={t("gallery.searchPlaceholder")} className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm text-gray-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500" />
                 </label>
               </div>
               <div className="mt-5 space-y-4 border-t border-gray-100 pt-4 dark:border-white/10">
@@ -390,7 +390,7 @@ export function GalleryPanel({
                   <div className="pt-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400">{t("gallery.category")}</div>
                   <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap">
                     {communityNavTags.map((tag) => (
-                      <button key={tag.slug} type="button" onClick={() => selectCommunityTag(tag.slug)} className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition active:scale-[0.98] ${communityTag === tag.slug ? "border border-emerald-500/50 bg-emerald-50 text-emerald-800 dark:border-emerald-300/50 dark:bg-emerald-300/10 dark:text-emerald-200" : "border border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300 dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10"}`}>
+                      <button key={tag.slug} type="button" onClick={() => selectCommunityTag(tag.slug)} className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition active:scale-[0.98] ${communityTag === tag.slug ? "border border-primary/50 bg-primary/10 text-primary" : "border border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300 dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10"}`}>
                         {tag.slug === "all" ? tag.name : tagLabel(tag.name, tag.slug)}
                       </button>
                     ))}
@@ -432,7 +432,7 @@ export function GalleryPanel({
 }
 
 function ModeButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
-  return <button type="button" onClick={onClick} className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] sm:flex-none ${active ? "bg-gray-950 text-white shadow-sm dark:bg-emerald-300 dark:text-gray-950" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"}`}>{icon}{label}</button>;
+  return <button type="button" onClick={onClick} className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] sm:flex-none ${active ? "bg-primary text-dark shadow-sm" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"}`}>{icon}{label}</button>;
 }
 
 function FilterRow({ label, values, value, onChange, allLabel, getLabel = (item) => item }: { label: string; values: readonly string[]; value: string; onChange: (value: string) => void; allLabel: string; getLabel?: (value: string) => string }) {
@@ -441,7 +441,7 @@ function FilterRow({ label, values, value, onChange, allLabel, getLabel = (item)
       <div className="pt-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400">{label}</div>
       <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap">
         {["all", ...values].map((item) => (
-          <button key={item} type="button" onClick={() => onChange(item)} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition active:scale-[0.98] ${value === item ? "border border-emerald-500/50 bg-emerald-50 text-emerald-800 dark:border-emerald-300/50 dark:bg-emerald-300/10 dark:text-emerald-200" : "border border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300 dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10"}`}>
+          <button key={item} type="button" onClick={() => onChange(item)} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition active:scale-[0.98] ${value === item ? "border border-primary/50 bg-primary/10 text-primary" : "border border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300 dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10"}`}>
             {item === "all" ? allLabel : getLabel(item)}
           </button>
         ))}
@@ -452,14 +452,14 @@ function FilterRow({ label, values, value, onChange, allLabel, getLabel = (item)
 
 function ReferenceCard({ item, onOpen, onCopy, copied, taxonomyLabel, t }: { item: ReferenceGalleryItem; onOpen: () => void; onCopy: () => void; copied: boolean; taxonomyLabel: (value: string) => string; t: (key: string, vars?: Record<string, string | number>) => string }) {
   return (
-    <article className="group overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.045)] transition duration-300 hover:-translate-y-1 hover:border-emerald-400/60 hover:shadow-[0_18px_44px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-gray-900 dark:hover:border-emerald-300/40">
+    <article className="group overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.045)] transition duration-300 hover:-translate-y-1 hover:border-primary/60 hover:shadow-[0_18px_44px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-gray-900 dark:hover:border-primary/40">
       <button type="button" onClick={onOpen} className="relative block aspect-[4/5] w-full overflow-hidden bg-gray-100 text-left dark:bg-white/5">
         <Image src={referenceImageURL(item.image)} alt={item.imageAlt || item.title} fill sizes="(min-width: 1536px) 25vw, (min-width: 1280px) 33vw, (min-width: 640px) 50vw, 100vw" className="object-contain transition duration-500 group-hover:scale-[1.025]" />
         <span className="absolute left-3 top-3 rounded-lg bg-gray-950/80 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur-sm">Case {item.id}</span>
         <span className="absolute inset-x-3 bottom-3 flex translate-y-2 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-gray-950/70 px-3 py-2 text-xs font-semibold text-white opacity-0 backdrop-blur-md transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100"><Search size={14} />{t("gallery.viewDetails")}</span>
       </button>
       <div className="p-4">
-        <div className="flex items-center gap-2 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+        <div className="flex items-center gap-2 text-[11px] font-semibold text-primary">
           <span className="truncate">{taxonomyLabel(item.category)}</span>
           {item.sourceLabel && <span className="ml-auto shrink-0 truncate text-gray-400">{item.sourceLabel}</span>}
         </div>
@@ -472,7 +472,7 @@ function ReferenceCard({ item, onOpen, onCopy, copied, taxonomyLabel, t }: { ite
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button type="button" onClick={onCopy} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:text-gray-200 dark:hover:bg-white/10">{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? t("gallery.copied") : t("gallery.copyPrompt")}</button>
-          <button type="button" onClick={onOpen} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gray-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 active:scale-[0.98] dark:bg-emerald-300 dark:text-gray-950 dark:hover:bg-emerald-200"><Sparkles size={14} />{t("gallery.usePrompt")}</button>
+          <button type="button" onClick={onOpen} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-dark transition hover:brightness-105 active:scale-[0.98]"><Sparkles size={14} />{t("gallery.usePrompt")}</button>
         </div>
       </div>
     </article>
@@ -481,7 +481,7 @@ function ReferenceCard({ item, onOpen, onCopy, copied, taxonomyLabel, t }: { ite
 
 function CommunityCard({ item, onOpen, featuredLabel, paidLabel, videoLabel }: { item: GalleryItem; onOpen: () => void; featuredLabel: string; paidLabel: string; videoLabel: string }) {
   return (
-    <button type="button" onClick={onOpen} className="group mb-4 block w-full break-inside-avoid overflow-hidden rounded-2xl border border-gray-200 bg-white text-left shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-1 hover:border-emerald-400/50 hover:shadow-[0_16px_38px_rgba(15,23,42,0.09)] dark:border-white/10 dark:bg-gray-900">
+    <button type="button" onClick={onOpen} className="group mb-4 block w-full break-inside-avoid overflow-hidden rounded-2xl border border-gray-200 bg-white text-left shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-1 hover:border-primary/50 hover:shadow-[0_16px_38px_rgba(15,23,42,0.09)] dark:border-white/10 dark:bg-gray-900">
       <GalleryPreview item={item} videoLabel={videoLabel} />
       <div className="p-3.5">
         <div className="flex items-center gap-1.5">
@@ -530,7 +530,7 @@ function GalleryDetailModal({ detail, cloning, copied, onClose, onCopy, onUse, t
             </div>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
               <button type="button" onClick={onCopy} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:text-gray-100 dark:hover:bg-white/10">{copied ? <Check size={17} /> : <Copy size={17} />}{copied ? t("gallery.copied") : t("gallery.copyPrompt")}</button>
-              <button type="button" onClick={onUse} disabled={cloning} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 dark:bg-emerald-300 dark:text-gray-950 dark:hover:bg-emerald-200"><Sparkles size={17} />{cloning ? t("common.loading") : referenceItem ? t("gallery.usePrompt") : t("landing.tryNow")}</button>
+              <button type="button" onClick={onUse} disabled={cloning} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-dark transition hover:brightness-105 active:scale-[0.98] disabled:opacity-50"><Sparkles size={17} />{cloning ? t("common.loading") : referenceItem ? t("gallery.usePrompt") : t("landing.tryNow")}</button>
             </div>
             {referenceItem?.githubUrl && <a href={referenceItem.githubUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/10">{t("gallery.openSource")}<ExternalLink size={15} /></a>}
             {communityItem?.is_paid && <p className="mt-3 text-center text-xs text-gray-500 dark:text-gray-400">{t("gallery.paidHint", { price: communityItem.price || 0 })}</p>}

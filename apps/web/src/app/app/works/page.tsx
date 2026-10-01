@@ -317,7 +317,7 @@ export default function WorksPage() {
   }, [works]);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#f6f7fb] page-padding py-6 sm:py-8 dark:bg-gray-950">
+    <div className="mcdl-page mcdl-page-wide flex-1 overflow-y-auto bg-[#f6f7fb] page-padding py-6 sm:py-8 dark:bg-gray-950">
       <div className="mx-auto w-full max-w-7xl">
         <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/80 bg-white/90 p-5 shadow-sm sm:flex-row sm:items-end sm:justify-between dark:border-white/10 dark:bg-gray-900/90">
           <div>
@@ -398,7 +398,7 @@ export default function WorksPage() {
 
       {preview && currentMedia && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-3 sm:p-4" onClick={() => setPreview(null)}>
-          <div className="max-h-[92vh] w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:border dark:border-white/10 dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+          <div className="mcdl-dialog-surface max-h-[92vh] w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:border dark:border-white/10 dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between gap-3 border-b px-4 py-3 dark:border-white/10">
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-gray-950 dark:text-gray-100">{preview.work.prompt || ts("未命名作品")}</div>
@@ -467,7 +467,7 @@ export default function WorksPage() {
       )}
       {publishDraft && (
         <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/60 p-4" onClick={() => setPublishDraft(null)}>
-          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+          <div className="mcdl-dialog-surface w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <div className="text-base font-semibold text-gray-950 dark:text-gray-100">发布到灵感广场</div>

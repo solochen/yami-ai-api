@@ -159,7 +159,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto page-padding py-6 sm:py-8 page-container max-w-2xl dark:bg-gray-950">
+    <div className="mcdl-page flex-1 overflow-y-auto page-padding py-6 sm:py-8 page-container max-w-2xl dark:bg-gray-950">
       <h1 className="text-2xl font-bold mb-6">{t("settings.title")}</h1>
 
       <section className="soft-card p-6 mb-6">

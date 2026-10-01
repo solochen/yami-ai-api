@@ -6,12 +6,12 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: "#12D6A3",
-        secondary: "#4F7CFF",
-        accent: "#FFB020",
+        primary: "#FF8711",
+        secondary: "#C9B7AC",
+        accent: "#F2C18D",
         danger: "#FF4D4F",
-        dark: "#080D16",
-        surface: "#F6F8FC",
+        dark: "#160B03",
+        surface: "#F3EEE9",
       },
     },
   },

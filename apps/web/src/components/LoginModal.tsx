@@ -18,10 +18,10 @@ type Tab = "email" | "account";
 type LegalDoc = "terms" | "privacy";
 
 const LOGIN_MODAL_CLASS =
-  "modal-shell fixed left-1/2 top-1/2 z-50 mx-0 max-h-[90vh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-white shadow-2xl";
+  "mcdl-dialog-surface modal-shell fixed left-1/2 top-1/2 z-50 mx-0 max-h-[90vh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-white shadow-2xl";
 
 const LEGAL_MODAL_CLASS =
-  "fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#11151b] text-white shadow-2xl shadow-black/40";
+  "mcdl-dialog-surface fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#11151b] text-white shadow-2xl shadow-black/40";
 
 function GoogleIcon() {
   return (

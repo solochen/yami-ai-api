@@ -39,8 +39,8 @@ export default function OAuthCallbackPage() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 w-full max-w-sm text-center">
+    <div className="mcdl-standalone-page min-h-screen flex items-center justify-center bg-gray-50 p-6">
+      <div className="mcdl-standalone-card bg-white rounded-3xl border border-gray-100 shadow-sm p-10 w-full max-w-sm text-center">
         {error ? (
           <>
             <div className="text-4xl mb-4">⚠️</div>

@@ -531,7 +531,7 @@ export function DigitalHumanWorkspace() {
   const estimatedCost = Math.round((elapsedSec / 60) * prices.video * 100) / 100;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#F6F7FB] text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+    <div className="mcdl-workspace mcdl-workspace--digital-human flex h-full min-h-0 flex-col text-gray-900 dark:text-gray-100">
       <header className="flex h-[73px] shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-4 dark:border-white/10 dark:bg-gray-900">
         <div className="flex items-center gap-2">
           <h1 className="text-base font-semibold">{ts("实时数字人对话")}</h1>
@@ -544,7 +544,7 @@ export function DigitalHumanWorkspace() {
             <span className="text-sm font-medium">{ts("角色列表")}</span>
             <button
               type="button"
-              className="rounded-md bg-cyan-600 px-2 py-1 text-xs text-white"
+              className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-dark"
               onClick={() => {
                 setCreating(true);
                 setRoleId("");
@@ -577,7 +577,7 @@ export function DigitalHumanWorkspace() {
                   setCreating(false);
                   setRoleId(role.public_id);
                 }}
-                className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${role.public_id === roleId && !creating ? "bg-cyan-50 text-cyan-800 dark:bg-cyan-950/40" : "hover:bg-gray-50 dark:hover:bg-white/5"}`}
+                className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${role.public_id === roleId && !creating ? "bg-primary/10 text-primary dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-white/5"}`}
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-xs dark:bg-white/10">
                   {role.avatar_url ? <img src={role.avatar_url} alt="" className="h-full w-full object-cover" /> : role.name.slice(0, 1) || ts("人")}
@@ -599,7 +599,7 @@ export function DigitalHumanWorkspace() {
           <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {messages.map((message, index) => (
               <div key={`${message.id || index}-${message.created_at || index}`} className={`flex ${message.speaker === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-6 ${message.speaker === "user" ? "bg-cyan-600 text-white" : "bg-white text-gray-800 dark:bg-gray-900 dark:text-gray-100"}`}>
+                <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-6 ${message.speaker === "user" ? "bg-primary text-white" : "bg-white text-gray-800 dark:bg-gray-900 dark:text-gray-100"}`}>
                   {message.content}
                 </div>
               </div>
@@ -628,7 +628,7 @@ export function DigitalHumanWorkspace() {
               <button type="button" disabled={!!busy || videoStage !== "idle"} onClick={() => void startVideo()} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs disabled:opacity-50 dark:border-white/10">
                 {videoStage === "connecting" ? ts("接通中") : ts("视频通话")}
               </button>
-              <button type="submit" disabled={!!busy || !text.trim()} className="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs text-white disabled:opacity-50">{ts("发送")}</button>
+              <button type="submit" disabled={!!busy || !text.trim()} className="rounded-lg bg-primary px-3 py-1.5 text-xs text-white disabled:opacity-50">{ts("发送")}</button>
             </div>
           </form>
           {videoStage !== "idle" && (
@@ -680,7 +680,7 @@ export function DigitalHumanWorkspace() {
           <div className="mb-2 text-xs text-gray-500">{ts("关系")}</div>
           <div className="mb-3 flex flex-wrap gap-1">
             {RELATIONS.map((item) => (
-              <button key={item} type="button" onClick={() => patch("relation", item)} className={`rounded-full px-2 py-1 text-[11px] ${draft.relation === item ? "bg-cyan-600 text-white" : "bg-gray-100 text-gray-600 dark:bg-white/10"}`}>{ts(item)}</button>
+              <button key={item} type="button" onClick={() => patch("relation", item)} className={`rounded-full px-2 py-1 text-[11px] ${draft.relation === item ? "bg-primary text-dark" : "bg-gray-100 text-gray-600 dark:bg-white/10"}`}>{ts(item)}</button>
             ))}
           </div>
           <label className="mb-2 block text-xs text-gray-500">{ts("你对用户的称呼")}
@@ -727,7 +727,7 @@ export function DigitalHumanWorkspace() {
           </div>
           </div>
           <div className="flex shrink-0 gap-2 border-t border-gray-200 p-3 dark:border-white/10">
-            <button type="button" disabled={!!busy} onClick={() => void saveRole()} className="min-w-0 flex-1 rounded-lg bg-cyan-600 px-3 py-2 text-sm text-white disabled:opacity-50">{busy === "保存中" ? ts("保存中") : ts("保存角色")}</button>
+            <button type="button" disabled={!!busy} onClick={() => void saveRole()} className="min-w-0 flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-dark disabled:opacity-50">{busy === "保存中" ? ts("保存中") : ts("保存角色")}</button>
             {!creating && roleId && <button type="button" onClick={() => void removeRole()} className="rounded-lg border border-red-200 px-3 py-2 text-xs text-red-600">{ts("删除")}</button>}
             {session && <button type="button" onClick={() => void hangup()} className="rounded-lg border border-gray-200 px-3 py-2 text-xs">{ts("结束通话")}</button>}
           </div>

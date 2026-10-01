@@ -50,8 +50,8 @@ export function NovelWorkshopLanding({ workflowCode, workflowName, workflowDescr
   );
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#eaf7fb] text-gray-900 dark:bg-[#05080f] dark:text-white">
-      <div className="pointer-events-none absolute inset-0 opacity-80 [background-image:linear-gradient(rgba(15,23,42,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.08)_1px,transparent_1px)] [background-size:40px_40px] dark:opacity-60 dark:[background-image:linear-gradient(rgba(34,211,238,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.08)_1px,transparent_1px)]" />
+    <div className="mcdl-workspace relative flex min-h-0 flex-1 flex-col overflow-hidden text-gray-900 dark:text-white">
+      <div className="mcdl-workspace-atmosphere pointer-events-none absolute inset-0" />
       <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-1.5 sm:py-2 sm:px-5 lg:px-8">
         <div className="relative flex shrink-0 items-center gap-2">
           <button type="button" onClick={reset} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-semibold text-dark"><Plus size={15} />{ts("新任务")}</button>
@@ -164,7 +164,7 @@ function NovelHeader({ name, description, roles }: { name: string; description: 
   return (
     <div className="mx-auto flex w-full max-w-[1040px] flex-1 flex-col justify-center py-2 lg:py-4">
       <div className="text-center">
-        <div className="inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200"><span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />{ts("文学智能体")}</div>
+        <div className="inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200"><span className="h-1.5 w-1.5 rounded-full bg-primary" />{ts("文学智能体")}</div>
         <div className="mt-2 flex items-center justify-center gap-2.5 sm:gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-100 text-xl dark:bg-indigo-500/15 sm:h-12 sm:w-12 sm:text-2xl">📖</div>
           <h1 className="text-2xl font-black tracking-tight text-gray-900 dark:text-white sm:text-4xl">{ts(name || "AI小说工坊")}</h1>

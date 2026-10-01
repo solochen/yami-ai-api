@@ -1045,24 +1045,24 @@ function NodeFrame({
           position={Position.Left}
           aria-label={t("canvas.node.connectInput")}
           title={t("canvas.node.connectInput")}
-          className={`!z-10 !flex !h-6 !w-6 !items-center !justify-center !border-2 !border-white !bg-cyan-500 !text-white !shadow-[0_0_9px_rgba(6,182,212,0.34)] !transition-opacity dark:!border-gray-900 ${selected ? "!opacity-100" : "!opacity-0"}`}
+          className={`!z-10 !flex !h-6 !w-6 !items-center !justify-center !border-2 !border-white !bg-primary/100 !text-white !shadow-[0_0_9px_rgba(6,182,212,0.34)] !transition-opacity dark:!border-gray-900 ${selected ? "!opacity-100" : "!opacity-0"}`}
         >
           <Plus size={12} />
         </Handle>
       )}
       <div className={`overflow-hidden rounded-xl border bg-white/95 backdrop-blur transition-[border-color,box-shadow] dark:bg-gray-900/95 ${
         selected
-          ? "border-cyan-400 shadow-[0_0_0_1px_rgba(34,211,238,0.22),0_12px_34px_rgba(15,23,42,0.15)] dark:border-cyan-400/80 dark:shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_16px_40px_rgba(0,0,0,0.36)]"
+          ? "border-primary/30 shadow-[0_0_0_1px_rgba(34,211,238,0.22),0_12px_34px_rgba(15,23,42,0.15)] dark:border-primary/30 dark:shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_16px_40px_rgba(0,0,0,0.36)]"
           : "border-gray-200 shadow-[0_10px_30px_rgba(15,23,42,0.11)] dark:border-white/10 dark:shadow-[0_16px_40px_rgba(0,0,0,0.32)]"
       }`}>
         <div className="flex items-center gap-2 border-b border-gray-100 px-2.5 py-2 dark:border-white/10">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-300">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary dark:bg-primary/10 dark:text-primary">
             {icon}
           </span>
           <span className="min-w-0 flex-1 truncate text-xs font-semibold text-gray-900 dark:text-gray-100">{ts(title)}</span>
           {headerActions}
           {status && status !== "idle" && (
-            <span className={`text-[10px] ${status === "failed" || status === "blocked" ? "text-red-500" : status === "succeeded" ? "text-emerald-500" : status === "stale" ? "text-amber-500" : "text-cyan-500"}`}>
+            <span className={`text-[10px] ${status === "failed" || status === "blocked" ? "text-red-500" : status === "succeeded" ? "text-emerald-500" : status === "stale" ? "text-amber-500" : "text-primary"}`}>
               {status === "failed"
                 ? t("canvas.status.failed")
                 : status === "blocked"
@@ -1085,7 +1085,7 @@ function NodeFrame({
                   event.stopPropagation();
                   setActionMenuOpen((value) => !value);
                 }}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-cyan-300 hover:text-cyan-500 dark:border-white/10"
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-primary/30 hover:text-primary dark:border-white/10"
               >
                 <MoreHorizontal size={14} />
               </button>
@@ -1120,23 +1120,23 @@ function NodeFrame({
           </button>
         </div>
         {running && (
-          <div className="border-b border-gray-100 bg-cyan-50/60 px-2.5 py-2 dark:border-white/10 dark:bg-cyan-500/[0.045]">
+          <div className="border-b border-gray-100 bg-primary/10 px-2.5 py-2 dark:border-white/10 dark:bg-primary/[0.045]">
             <div className="mb-1.5 flex items-center justify-between gap-2 text-[9px]">
-              <span className="flex min-w-0 items-center gap-1.5 font-medium text-cyan-700 dark:text-cyan-300">
+              <span className="flex min-w-0 items-center gap-1.5 font-medium text-primary dark:text-primary">
                 {!actions?.executionPaused && <LoaderCircle size={11} className="shrink-0 animate-spin" />}
                 <span className="truncate">{actions?.executionPaused ? t("后续已暂停 · 等待原任务结果") : progressLabel ? ts(progressLabel) : t("canvas.progress.generating")}</span>
               </span>
-              <span className="shrink-0 tabular-nums text-cyan-600 dark:text-cyan-300">{safeProgress > 0 ? `${safeProgress}%` : t("等待上游结果")}</span>
+              <span className="shrink-0 tabular-nums text-primary dark:text-primary">{safeProgress > 0 ? `${safeProgress}%` : t("等待上游结果")}</span>
             </div>
             <div
               role="progressbar"
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={safeProgress}
-              className="h-1.5 overflow-hidden rounded-full bg-cyan-100 dark:bg-white/10"
+              className="h-1.5 overflow-hidden rounded-full bg-primary/10 dark:bg-white/10"
             >
               <div
-                className="h-full rounded-full bg-gradient-to-r from-cyan-500 via-sky-500 to-violet-500 shadow-[0_0_8px_rgba(6,182,212,0.35)] transition-[width] duration-500 ease-out"
+                className="h-full rounded-full bg-primary shadow-primary/20 transition-[width] duration-500 ease-out"
                 style={{ width: `${safeProgress}%` }}
               />
             </div>
@@ -1158,8 +1158,8 @@ function NodeFrame({
               <p className="text-[10px] leading-5 text-gray-400">{node.data.roleEnabled === false ? t("角色已关闭 · 执行时不附加角色提示词") : node.data.rolePrompt === undefined ? (["textInput", "framePairInput", "imageInput"].includes(String(node.type)) ? t("默认职责仅供说明；自定义内容作为下游全局约束") : t("默认专业角色 · 使用预设职责与边界")) : t("自定义角色 · 已覆盖默认职责")}</p>
               {node.data.mediaKind === "audio" && node.data.roleEnabled !== false && (() => { const model = actions?.audioModels.find(m => m.code === node.data.modelCode); return model && !Object.keys(canvasAudioRoleParams(node, model)).length ? <p className="text-amber-600">{ts("当前模型未声明独立声音指导字段，角色不会加入朗读正文或歌词。")}</p> : null; })()}
               {Boolean(node.data.previousRole) && <details className="text-amber-600"><summary>{ts("已修正不匹配的旧角色，查看原说明")}</summary><p className="whitespace-pre-wrap">{ts(String((node.data.previousRole as { rolePrompt?: unknown }).rolePrompt || "旧角色类型不适用于当前节点，已使用匹配的默认角色。"))}</p></details>}
-              <CanvasTextArea aria-label={t("角色职责与边界")} className="nowheel h-52 w-full resize-y rounded-lg border border-gray-200 bg-gray-50 p-2 text-[11px] leading-6 text-gray-700 outline-none focus:border-cyan-500 dark:border-white/10 dark:bg-black/20 dark:text-gray-200" value={typeof node.data.rolePrompt === "string" ? node.data.rolePrompt : canvasRoleText(node)} onChange={e => actions?.update(id, { rolePrompt: e.target.value })} />
-              {node.data.rolePrompt !== undefined && <button type="button" className="text-cyan-600 hover:underline dark:text-cyan-300" onClick={() => actions?.update(id, { rolePrompt: undefined })}>{ts("恢复此角色默认提示词")}</button>}
+              <CanvasTextArea aria-label={t("角色职责与边界")} className="nowheel h-52 w-full resize-y rounded-lg border border-gray-200 bg-gray-50 p-2 text-[11px] leading-6 text-gray-700 outline-none focus:border-primary/30 dark:border-white/10 dark:bg-black/20 dark:text-gray-200" value={typeof node.data.rolePrompt === "string" ? node.data.rolePrompt : canvasRoleText(node)} onChange={e => actions?.update(id, { rolePrompt: e.target.value })} />
+              {node.data.rolePrompt !== undefined && <button type="button" className="text-primary hover:underline dark:text-primary" onClick={() => actions?.update(id, { rolePrompt: undefined })}>{ts("恢复此角色默认提示词")}</button>}
             </div>;
           })()}
         </details>
@@ -1174,7 +1174,7 @@ function NodeFrame({
             event.stopPropagation();
             actions?.openOutputMenu(id, { x: event.clientX, y: event.clientY });
           }}
-          className={`nodrag !z-10 !flex !h-6 !w-6 !items-center !justify-center !border-2 !border-white !bg-cyan-500 !text-white !shadow-[0_0_10px_rgba(6,182,212,0.42)] !transition-opacity hover:!bg-cyan-600 dark:!border-gray-900 ${selected ? "!opacity-100" : "!opacity-0"}`}
+          className={`nodrag !z-10 !flex !h-6 !w-6 !items-center !justify-center !border-2 !border-white !bg-primary/100 !text-white !shadow-[0_0_10px_rgba(6,182,212,0.42)] !transition-opacity hover:!bg-primary dark:!border-gray-900 ${selected ? "!opacity-100" : "!opacity-0"}`}
         >
           <Plus size={12} />
         </Handle>
@@ -1234,7 +1234,7 @@ function CanvasImagePreview({ url, title, className = "h-full w-full" }: { url: 
   const { t } = useI18n();
   return <button type="button" title={t("common.preview")} aria-label={`${t("common.preview")} · ${title}`}
     onClick={(event) => { event.stopPropagation(); actions?.openResultPreview({ url, kind: "image", title }); }}
-    className={`nodrag nopan cursor-zoom-in overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${className}`}>
+    className={`nodrag nopan cursor-zoom-in overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${className}`}>
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img loading="lazy" decoding="async" src={url} alt={title} className="h-full w-full object-cover" />
   </button>;
@@ -1244,7 +1244,7 @@ function WorkflowAudioSwitch({ checked, onChange }: { checked: boolean; onChange
   const { t } = useI18n();
   return <label className="col-span-2 flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white/70 px-2.5 py-2 text-[10px] text-gray-600 dark:border-white/10 dark:bg-gray-950/25 dark:text-gray-200">
     <span><span className="block font-semibold">{t("canvas.videoAudio.useModel")}</span><span className="mt-0.5 block text-[9px] leading-4 text-gray-500 dark:text-gray-400">{t(checked ? "canvas.videoAudio.modelHint" : "canvas.videoAudio.nativeHint")}</span></span>
-    <input type="checkbox" role="switch" checked={checked} onChange={event => onChange(event.target.checked)} className="h-4 w-4 shrink-0 accent-cyan-500" />
+    <input type="checkbox" role="switch" checked={checked} onChange={event => onChange(event.target.checked)} className="h-4 w-4 shrink-0 accent-primary" />
   </label>;
 }
 
@@ -1293,7 +1293,7 @@ function FramePairInputNode({ id, data, selected }: NodeProps<CanvasNode>) {
       && (!selectedSize || Object.entries(selectedSize.params).every(([key, value]) => String(node.data.params?.[key] || "") === value)));
   return <NodeFrame id={id} selected={selected} title={data.label || "长视频规划"} icon={<FileImage size={16} />} className="w-[360px]">
     <div className="nodrag nowheel space-y-2.5 p-2.5">
-      <div className="rounded-lg border border-cyan-300/30 bg-cyan-500/5 px-2.5 py-2 text-[10px] leading-5 text-cyan-700 dark:text-cyan-300">
+      <div className="rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-2 text-[10px] leading-5 text-primary dark:text-primary">
         这里仅规划整条视频。生成结构后，每个镜头会成为独立节点，分别维护首帧、尾帧、提示词和生成状态。
       </div>
       <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-200">{t("整条视频文案 / 提示词")}</label>
@@ -1303,11 +1303,11 @@ function FramePairInputNode({ id, data, selected }: NodeProps<CanvasNode>) {
           const promptDuration = storyPromptTargetDuration(prompt);
           actions?.update(id, { prompt, storyDurationPromptSeconds: promptDuration });
           if (promptDuration > 0 && promptDuration !== data.storyDurationPromptSeconds) setTargetDurationDraft(String(promptDuration));
-        }} placeholder={t("输入整条视频的剧情、动作、运镜与画面要求；分段提示词留空时会沿用这里的内容")} className="nowheel min-h-24 w-full resize-y rounded-lg border border-gray-200 bg-white p-2.5 pb-9 pr-10 text-[10px] font-normal outline-none focus:border-cyan-400 dark:border-white/10 dark:bg-gray-950/30" />
+        }} placeholder={t("输入整条视频的剧情、动作、运镜与画面要求；分段提示词留空时会沿用这里的内容")} className="nowheel min-h-24 w-full resize-y rounded-lg border border-gray-200 bg-white p-2.5 pb-9 pr-10 text-[10px] font-normal outline-none focus:border-primary/30 dark:border-white/10 dark:bg-gray-950/30" />
         <button type="button" aria-label={t("按目标成片时长增强提示词")} title={`按当前目标 ${targetDuration} 秒增强提示词`} disabled={!String(data.prompt || "").trim() || Boolean(data.enhancing)} onClick={() => {
           actions?.update(id, { modelCode: modelCodeDraft, framePairTargetDuration: targetDuration, framePairVideoSize: videoSizeDraft, storyDurationPromptSeconds: storyPromptTargetDuration(String(data.prompt || "")) });
           void actions?.enhance(id);
-        }} className="nodrag absolute bottom-2 right-2 rounded-lg border border-cyan-200 bg-white p-1.5 text-cyan-600 shadow-sm hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-35 dark:border-cyan-400/20 dark:bg-gray-900 dark:text-cyan-300 dark:hover:bg-cyan-500/10">
+        }} className="nodrag absolute bottom-2 right-2 rounded-lg border border-primary/30 bg-white p-1.5 text-primary shadow-sm hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-35 dark:border-primary/30 dark:bg-gray-900 dark:text-primary dark:hover:bg-primary/10">
           {data.enhancing ? <LoaderCircle size={15} className="animate-spin" /> : <Sparkles size={15} />}
         </button>
       </div>
@@ -1319,10 +1319,10 @@ function FramePairInputNode({ id, data, selected }: NodeProps<CanvasNode>) {
           </select>
         </label>
         <label className="min-w-0 text-[10px] font-semibold text-gray-600 dark:text-gray-200">成片时长
-          <input type="number" min={1} max={600} value={targetDurationDraft} onChange={event => setTargetDurationDraft(event.target.value)} onBlur={commitTargetDuration} onKeyDown={event => { if (event.key === "Enter") event.currentTarget.blur(); }} className="mt-1 h-9 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-normal outline-none focus:border-cyan-400 dark:border-white/10 dark:bg-gray-950/30" />
+          <input type="number" min={1} max={600} value={targetDurationDraft} onChange={event => setTargetDurationDraft(event.target.value)} onBlur={commitTargetDuration} onKeyDown={event => { if (event.key === "Enter") event.currentTarget.blur(); }} className="mt-1 h-9 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-normal outline-none focus:border-primary/30 dark:border-white/10 dark:bg-gray-950/30" />
         </label>
         <label className="min-w-0 text-[10px] font-semibold text-gray-600 dark:text-gray-200">视频尺寸
-          <select disabled={!sizeControl.options.length} value={videoSizeDraft} onChange={event => setVideoSizeDraft(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-normal outline-none focus:border-cyan-400 disabled:opacity-50 dark:border-white/10 dark:bg-gray-950/30">
+          <select disabled={!sizeControl.options.length} value={videoSizeDraft} onChange={event => setVideoSizeDraft(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-normal outline-none focus:border-primary/30 disabled:opacity-50 dark:border-white/10 dark:bg-gray-950/30">
             {!sizeControl.options.length && <option value="">{t("跟随模型默认")}</option>}
             {sizeControl.options.map(option => <option key={option.value} value={option.value}>{t(option.label)}</option>)}
           </select>
@@ -1396,7 +1396,7 @@ function TextInputNode({ id, data, selected }: NodeProps<CanvasNode>) {
       className="w-[320px]"
       headerActions={(
         <div className="nodrag flex items-center gap-1">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-cyan-300 bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-300"><Type size={14} /></span>
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary dark:bg-primary/10 dark:text-primary"><Type size={14} /></span>
           <button type="button" title={t("canvas.node.referenceImages")} onClick={() => actions?.openAssetLibrary(id, "image")} className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-violet-300 hover:text-violet-500 dark:border-white/10"><ImageIcon size={14} /></button>
           <button type="button" title={t("canvas.node.referenceVideos")} onClick={() => actions?.openAssetLibrary(id, "video")} className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-pink-300 hover:text-pink-500 dark:border-white/10"><Film size={14} /></button>
           {!isOneClickViral && <button type="button" title={t("canvas.node.referenceAudio")} onClick={() => actions?.openAssetLibrary(id, "audio")} className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-amber-300 hover:text-amber-500 dark:border-white/10"><Mic size={14} /></button>}
@@ -1420,7 +1420,7 @@ function TextInputNode({ id, data, selected }: NodeProps<CanvasNode>) {
         {isContentSource && <span className="text-[9px] font-medium text-gray-500 dark:text-gray-300">{t("canvas.content.requirements")}</span>}
         <div className="relative">
         <CanvasTextArea
-          className="nodrag nowheel h-24 w-full resize-none rounded-lg border border-gray-100 bg-gray-50 p-2.5 pb-9 text-[11px] leading-relaxed outline-none transition focus:border-cyan-300 dark:border-white/10 dark:bg-white/5 dark:text-gray-100"
+          className="nodrag nowheel h-24 w-full resize-none rounded-lg border border-gray-100 bg-gray-50 p-2.5 pb-9 text-[11px] leading-relaxed outline-none transition focus:border-primary/30 dark:border-white/10 dark:bg-white/5 dark:text-gray-100"
           placeholder={t(isOneClickViral ? "canvas.oneClick.rewritePlaceholder" : "canvas.node.textPlaceholder")}
           value={data.prompt || ""}
           onChange={(event) => {
@@ -1435,7 +1435,7 @@ function TextInputNode({ id, data, selected }: NodeProps<CanvasNode>) {
             if (data.storyRole === "input" || data.viralRole === "brief") actions?.syncStoryDuration(id);
           }}
         />
-          <button type="button" aria-label={t("增强提示词")} title={t("增强提示词")} disabled={!String(data.prompt || "").trim() || Boolean(data.enhancing)} onClick={() => void actions?.enhance(id)} className="nodrag absolute bottom-2 right-2 rounded-md border border-cyan-500/25 bg-cyan-500/15 p-1.5 text-cyan-700 transition-colors hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-cyan-400/20 dark:bg-cyan-400/10 dark:text-cyan-300 dark:hover:bg-cyan-400/20">
+          <button type="button" aria-label={t("增强提示词")} title={t("增强提示词")} disabled={!String(data.prompt || "").trim() || Boolean(data.enhancing)} onClick={() => void actions?.enhance(id)} className="nodrag absolute bottom-2 right-2 rounded-md border border-primary/30 bg-primary/15 p-1.5 text-primary transition-colors hover:bg-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-40 dark:border-primary/30 dark:bg-primary/10 dark:text-primary dark:hover:bg-primary/20">
             {data.enhancing ? <LoaderCircle size={15} className="animate-spin" /> : <Sparkles size={15} />}
           </button>
         </div>
@@ -1892,9 +1892,9 @@ function TextInputNode({ id, data, selected }: NodeProps<CanvasNode>) {
               />
               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white shadow-sm dark:bg-white/5 ${row.tone}`}>{row.icon}</span>
               <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-gray-600 dark:text-gray-300">
-                {row.label}{row.urls.length > 0 ? <span className="ml-1 text-cyan-500">{row.urls.length}</span> : null}
+                {row.label}{row.urls.length > 0 ? <span className="ml-1 text-primary">{row.urls.length}</span> : null}
               </span>
-              <button type="button" onClick={() => row.inputRef.current?.click()} className="h-7 shrink-0 rounded-md border border-gray-200 bg-white px-2 text-[9px] font-medium text-gray-500 hover:border-cyan-300 hover:text-cyan-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
+              <button type="button" onClick={() => row.inputRef.current?.click()} className="h-7 shrink-0 rounded-md border border-gray-200 bg-white px-2 text-[9px] font-medium text-gray-500 hover:border-primary/30 hover:text-primary dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
                 <Upload size={11} className="mr-1 inline" />{t("common.upload")}
               </button>
               <button type="button" onClick={() => actions?.openAssetLibrary(id, row.kind)} className="h-7 shrink-0 rounded-md border border-gray-200 bg-white px-2 text-[9px] font-medium text-gray-500 hover:border-violet-300 hover:text-violet-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
@@ -2005,7 +2005,7 @@ function ImageInputNode({ id, data, selected }: NodeProps<CanvasNode>) {
             <option value="video">{t("canvas.kind.video")}</option>
             <option value="audio">{t("canvas.kind.audio")}</option>
           </select>
-          <button type="button" onClick={() => inputRef.current?.click()} className="nodrag h-8 rounded-lg border border-cyan-200 bg-cyan-50 px-2 text-[10px] font-medium text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-300">
+          <button type="button" onClick={() => inputRef.current?.click()} className="nodrag h-8 rounded-lg border border-primary/30 bg-primary/10 px-2 text-[10px] font-medium text-primary dark:bg-primary/10 dark:text-primary">
             <Upload size={12} className="mr-1 inline" />{t("canvas.node.addMedia")}
           </button>
           <button type="button" onClick={() => actions?.openAssetLibrary(id, mediaKind)} className="nodrag h-8 rounded-lg border border-violet-200 bg-violet-50 px-2 text-[10px] font-medium text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">
@@ -2058,7 +2058,7 @@ function ImageInputNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="nodrag flex h-20 w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-200 bg-gray-50 text-[10px] text-gray-400 hover:border-cyan-300 hover:text-cyan-600 dark:border-white/10 dark:bg-white/5"
+            className="nodrag flex h-20 w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-200 bg-gray-50 text-[10px] text-gray-400 hover:border-primary/30 hover:text-primary dark:border-white/10 dark:bg-white/5"
           >
             {data.status === "running" ? <LoaderCircle size={22} className="animate-spin" /> : <Upload size={22} />}
             {data.status === "running"
@@ -2108,7 +2108,7 @@ function FramePairBatchGeneratorNode({ id, data, selected }: { id: string; data:
           return <div key={shot.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-2 py-1.5 text-[10px] dark:border-white/10">
             <span className="w-5 font-semibold text-gray-500">{index + 1}</span>
             <span className="min-w-0 flex-1 truncate text-gray-600 dark:text-gray-200">{shot.prompt || "未填写文案"}</span>
-            <span className={state.status === "succeeded" ? "text-emerald-500" : state.status === "failed" ? "text-red-500" : state.status === "running" ? "text-cyan-500" : "text-gray-400"}>{state.status === "succeeded" ? t("已完成") : state.status === "failed" ? t("失败") : state.status === "running" ? `${Math.round(state.progress || 0)}%` : t("待生成")}</span>
+            <span className={state.status === "succeeded" ? "text-emerald-500" : state.status === "failed" ? "text-red-500" : state.status === "running" ? "text-primary" : "text-gray-400"}>{state.status === "succeeded" ? t("已完成") : state.status === "failed" ? t("失败") : state.status === "running" ? `${Math.round(state.progress || 0)}%` : t("待生成")}</span>
             {(state.status === "succeeded" || state.status === "failed") && <button type="button" onClick={() => {
               actions?.update(id, { framePairRerunShotID: shot.id, status: "idle", dirty: true, error: "" });
               window.setTimeout(() => void actions?.run(id), 0);
@@ -2194,10 +2194,10 @@ function GeneratorNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const tone =
     kind === "text"
       ? {
-          border: "border-cyan-400/60",
-          select: "border-cyan-400/40 bg-cyan-500/10 focus:border-cyan-400",
-          result: "border-cyan-400/25 bg-cyan-500/5 text-cyan-600 dark:text-cyan-300",
-          button: "bg-cyan-500 hover:bg-cyan-600",
+          border: "border-primary/30",
+          select: "border-primary/30 bg-primary/10 focus:border-primary/30",
+          result: "border-primary/30 bg-primary/5 text-primary dark:text-primary",
+          button: "bg-primary/100 hover:bg-primary",
         }
       : kind === "video"
       ? {
@@ -2389,7 +2389,7 @@ function GeneratorNode({ id, data, selected }: NodeProps<CanvasNode>) {
               <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-pink-500 dark:text-pink-300">
                 {t(`video.option.generation_mode.${seedanceMaterialMode}`)}
               </span>
-              <span className="shrink-0 rounded-full bg-cyan-500/10 px-2 py-0.5 text-[9px] font-semibold text-cyan-600 dark:text-cyan-300">
+              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-semibold text-primary dark:text-primary">
                 {t("canvas.node.autoMaterialMode")}
               </span>
             </div>
@@ -2449,7 +2449,7 @@ function GeneratorNode({ id, data, selected }: NodeProps<CanvasNode>) {
                     return;
                   }
                   if (actions?.saveTextOutput(id, outputDraft) !== false) setEditingOutput(false);
-                }} className="flex h-7 items-center rounded-lg border border-cyan-300/30 bg-white/85 px-2 text-[9px] font-semibold text-cyan-600 shadow-sm backdrop-blur hover:bg-white dark:bg-gray-900/85 dark:text-cyan-300">
+                }} className="flex h-7 items-center rounded-lg border border-primary/30 bg-white/85 px-2 text-[9px] font-semibold text-primary shadow-sm backdrop-blur hover:bg-white dark:bg-gray-900/85 dark:text-primary">
                   {editingOutput ? t("common.save") : t("common.edit")}
                 </button>
               ) : null}
@@ -2462,7 +2462,7 @@ function GeneratorNode({ id, data, selected }: NodeProps<CanvasNode>) {
                   setCopied(true);
                   window.setTimeout(() => setCopied(false), 1600);
                 }}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-cyan-300/30 bg-white/85 text-cyan-600 shadow-sm backdrop-blur hover:bg-white dark:bg-gray-900/85 dark:text-cyan-300"
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-primary/30 bg-white/85 text-primary shadow-sm backdrop-blur hover:bg-white dark:bg-gray-900/85 dark:text-primary"
               >
                 {copied ? <Check size={13} /> : <Copy size={13} />}
               </button>
@@ -2471,7 +2471,7 @@ function GeneratorNode({ id, data, selected }: NodeProps<CanvasNode>) {
               <CanvasTextArea
                 value={outputDraft}
                 onChange={(event) => setOutputDraft(event.target.value)}
-                className="nodrag min-h-40 w-full resize-y rounded-lg border border-cyan-300/30 bg-white/80 p-2 font-mono text-[10px] text-gray-700 outline-none focus:border-cyan-400 dark:bg-gray-950/40 dark:text-gray-100"
+                className="nodrag min-h-40 w-full resize-y rounded-lg border border-primary/30 bg-white/80 p-2 font-mono text-[10px] text-gray-700 outline-none focus:border-primary/30 dark:bg-gray-950/40 dark:text-gray-100"
               />
             ) : storyboardSegments.length > 0 ? (
               <div className="space-y-2 whitespace-normal">
@@ -2486,11 +2486,11 @@ function GeneratorNode({ id, data, selected }: NodeProps<CanvasNode>) {
                   </div>
                 ) : null}
                 {storyboardSegments.map((segment, index) => (
-                  <div key={index} className="rounded-lg border border-cyan-400/20 bg-white/70 p-2 dark:bg-gray-950/25">
+                  <div key={index} className="rounded-lg border border-primary/30 bg-white/70 p-2 dark:bg-gray-950/25">
                     <div className="mb-1 flex items-center justify-between gap-2 font-semibold">
                       <span>{t("canvas.story.storyboardSegment", { index: index + 1 })}</span>
                       {(actions?.executionMode !== "step" || data.storyReviewRequired === false || data.storyStoryboardApproved) ? (
-                        <button type="button" onClick={() => void actions?.runStorySegment(id, index + 1)} className="nodrag shrink-0 rounded-md border border-cyan-400/30 px-1.5 py-0.5 text-[9px] text-cyan-600 hover:bg-cyan-500/10 dark:text-cyan-300">
+                        <button type="button" onClick={() => void actions?.runStorySegment(id, index + 1)} className="nodrag shrink-0 rounded-md border border-primary/30 px-1.5 py-0.5 text-[9px] text-primary hover:bg-primary/10 dark:text-primary">
                           {t("canvas.story.rerunSegment")}
                         </button>
                       ) : null}
@@ -2566,12 +2566,12 @@ function GeneratorNode({ id, data, selected }: NodeProps<CanvasNode>) {
         <div className="relative">
           <CanvasTextArea
             rows={1}
-            className="nodrag nowheel h-9 min-h-9 max-h-32 w-full resize-y rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 pr-10 text-[11px] leading-[18px] outline-none focus:border-cyan-300 dark:border-white/10 dark:bg-black/15 dark:text-gray-100"
+            className="nodrag nowheel h-9 min-h-9 max-h-32 w-full resize-y rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 pr-10 text-[11px] leading-[18px] outline-none focus:border-primary/30 dark:border-white/10 dark:bg-black/15 dark:text-gray-100"
             placeholder={isSeedanceFullReference ? t("canvas.node.seedancePromptPlaceholder") : t("canvas.node.promptPlaceholder")}
             value={data.prompt || ""}
             onChange={(event) => actions?.update(id, { prompt: event.target.value })}
           />
-          <button type="button" aria-label={t("AI优化当前阶段提示词")} title={t("AI优化当前阶段提示词")} disabled={!String(data.prompt || "").trim() || Boolean(data.enhancing)} onClick={() => void actions?.enhance(id)} className="nodrag absolute right-1.5 top-1.5 rounded-md p-1 text-cyan-600 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-35 dark:text-cyan-300">
+          <button type="button" aria-label={t("AI优化当前阶段提示词")} title={t("AI优化当前阶段提示词")} disabled={!String(data.prompt || "").trim() || Boolean(data.enhancing)} onClick={() => void actions?.enhance(id)} className="nodrag absolute right-1.5 top-1.5 rounded-md p-1 text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-35 dark:text-primary">
             {data.enhancing ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}
           </button>
         </div>
@@ -2602,9 +2602,9 @@ function GeneratorNode({ id, data, selected }: NodeProps<CanvasNode>) {
               />
               <span className="min-w-0 flex-1 truncate text-[10px] text-gray-500 dark:text-gray-300">
                 {row.label}
-                {row.urls.length > 0 && <span className="ml-1 text-cyan-500">{row.urls.length}</span>}
+                {row.urls.length > 0 && <span className="ml-1 text-primary">{row.urls.length}</span>}
               </span>
-              <button type="button" onClick={() => row.inputRef.current?.click()} title={t("canvas.node.addMedia")} className="nodrag flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-cyan-300 hover:text-cyan-500 dark:border-white/10"><Plus size={13} /></button>
+              <button type="button" onClick={() => row.inputRef.current?.click()} title={t("canvas.node.addMedia")} className="nodrag flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-primary/30 hover:text-primary dark:border-white/10"><Plus size={13} /></button>
               <button type="button" onClick={() => actions?.openAssetLibrary(id, row.kind)} title={t("canvas.assetLibrary")} className="nodrag flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-violet-300 hover:text-violet-500 dark:border-white/10"><FolderOpen size={13} /></button>
               {row.urls.length > 0 && (
                 <button
@@ -2621,7 +2621,7 @@ function GeneratorNode({ id, data, selected }: NodeProps<CanvasNode>) {
         </div>
         {["copy", "asset"].includes(String(data.storyRole)) && data.status === "succeeded" && !data.dirty && (
           <div className="nodrag space-y-2 rounded-lg border border-emerald-300/30 p-2 text-[10px]">
-            {data.storyRole === "asset" && <label className="block cursor-pointer text-cyan-600">{t("canvas.story.replaceAsset")}
+            {data.storyRole === "asset" && <label className="block cursor-pointer text-primary">{t("canvas.story.replaceAsset")}
               <input type="file" accept="image/*" className="hidden" onChange={event => { const file = event.target.files?.[0]; if (file) void actions?.upload(id, file); event.target.value = ""; }} />
             </label>}
             {actions?.executionMode === "step" && data.storyReviewRequired !== false && <button type="button" disabled={data.storyApproved === true} onClick={() => void actions?.approveStory(id)} className="rounded bg-emerald-600 px-2 py-1 text-white disabled:opacity-50">
@@ -2652,7 +2652,7 @@ function GeneratorNode({ id, data, selected }: NodeProps<CanvasNode>) {
               {data.mode || (kind === "text" ? t("canvas.node.textMode") : kind === "video" ? t("canvas.node.videoMode") : kind === "audio" ? t("canvas.node.audioMode") : t("canvas.node.imageMode"))}
             </div>
             {(Number(data.actualCost || 0) > 0 || Number(data.estimatedCost || 0) > 0) && (
-              <div className="mt-0.5 text-[10px] font-medium text-cyan-600 dark:text-cyan-300">
+              <div className="mt-0.5 text-[10px] font-medium text-primary dark:text-primary">
                 {Number(data.actualCost || 0) > 0 ? t("实际") : t("预估")} {Number(data.actualCost || data.estimatedCost || 0).toFixed(2)} 算力
               </div>
             )}
@@ -7681,7 +7681,7 @@ function CanvasEditor({
 
   return (
     <CanvasNodeActions.Provider value={actions}>
-      <div ref={editorRef} className="relative min-h-0 w-full flex-1 overflow-hidden overscroll-none bg-[#eef3f8] dark:bg-[#080d14]">
+      <div ref={editorRef} className="mcdl-infinite-canvas relative min-h-0 w-full flex-1 overflow-hidden overscroll-none">
         <input
           ref={importRef}
           type="file"
@@ -7735,12 +7735,12 @@ function CanvasEditor({
               zoomable
               ariaLabel={t("canvas.navigator")}
               className="!bottom-16 !right-4 !hidden !h-24 !w-36 !rounded-xl !border !border-gray-200 !bg-white/85 sm:!block dark:!border-white/10 dark:!bg-gray-900/85"
-              nodeColor={(node) => node.type === "generator" ? "#22d3ee" : node.type === "imageInput" ? "#34d399" : "#60a5fa"}
+              nodeColor={(node) => node.type === "generator" ? "#ff8711" : node.type === "imageInput" ? "#b4855f" : "#74665d"}
             />
           )}
 
           <Panel position="top-left" className="!m-3 flex flex-col gap-2 sm:!m-4">
-            <button type="button" onClick={newCanvas} disabled={runningAll || saving} className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-5 text-sm font-semibold text-cyan-600 backdrop-blur hover:bg-cyan-500/15 dark:text-cyan-300">
+            <button type="button" onClick={newCanvas} disabled={runningAll || saving} className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/10 px-5 text-sm font-semibold text-primary backdrop-blur hover:bg-primary/15">
               <Plus size={16} /> {t("canvas.new")}
             </button>
             <div className="relative">
@@ -7761,7 +7761,7 @@ function CanvasEditor({
                     </button>
                   )) : <div className="px-3 py-5 text-center text-xs text-gray-400">{historyLoading ? t("正在加载历史…") : t("canvas.noHistory")}</div>}
                   {historyError && <button type="button" onClick={() => void refreshHistory(historyPage, true)} className="w-full p-2 text-xs text-red-500">{historyError} · 点击重试</button>}
-                  {historyHasMore && <button type="button" disabled={historyLoading} onClick={() => void refreshHistory(historyPage + 1)} className="w-full p-2 text-xs text-cyan-600 disabled:opacity-50">{historyLoading ? t("加载中…") : t("加载更多")}</button>}
+                  {historyHasMore && <button type="button" disabled={historyLoading} onClick={() => void refreshHistory(historyPage + 1)} className="w-full p-2 text-xs text-primary disabled:opacity-50">{historyLoading ? t("加载中…") : t("加载更多")}</button>}
                 </div>
               )}
             </div>
@@ -7777,11 +7777,11 @@ function CanvasEditor({
               }}
               maxLength={64}
               title={title}
-              className="nodrag w-44 truncate rounded-xl border border-transparent bg-transparent px-3 py-2 text-center text-xs font-medium text-gray-500 outline-none hover:border-gray-200 focus:border-cyan-300 focus:bg-white/80 dark:text-gray-300 dark:focus:bg-gray-900/80"
+              className="nodrag w-44 truncate rounded-xl border border-transparent bg-transparent px-3 py-2 text-center text-xs font-medium text-gray-500 outline-none hover:border-gray-200 focus:border-primary focus:bg-white/80 dark:text-gray-300 dark:focus:bg-gray-900/80"
               aria-label={t("canvas.title")}
             />
             <div className="flex h-9 w-56 items-center gap-2 rounded-xl border border-gray-200 bg-white/80 px-3 backdrop-blur dark:border-white/10 dark:bg-gray-900/80">
-              <Search size={14} className="text-cyan-500" />
+              <Search size={14} className="text-primary" />
               <input value={nodeSearch} onChange={(event) => setNodeSearch(event.target.value)} placeholder={t("canvas.searchNodes")} className="nodrag min-w-0 flex-1 bg-transparent text-xs outline-none dark:text-gray-100" />
             </div>
           </Panel>
@@ -7789,17 +7789,17 @@ function CanvasEditor({
           {nodes.length === 0 && showEmptyWelcome && (
             <Panel position="top-left" className="pointer-events-none !inset-0 !m-0 flex !w-full items-center justify-center">
               <div className="pointer-events-auto flex w-[min(760px,calc(100vw-2rem))] flex-col items-center">
-                <button type="button" onClick={() => setImportOpen(true)} className="mb-4 flex flex-col items-center text-gray-400 hover:text-cyan-600">
+                <button type="button" onClick={() => setImportOpen(true)} className="mb-4 flex flex-col items-center text-gray-400 hover:text-primary">
                   <span className="mb-2 flex h-11 w-11 items-center justify-center rounded-full border border-gray-300 dark:border-white/15"><Plus size={20} /></span>
                   <span className="text-sm font-semibold">{t("canvas.empty")}</span>
                   <span className="mt-1 text-[11px]">{t("canvas.emptyDesc")}</span>
-                  <span className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-cyan-300 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-600 dark:text-cyan-300"><Upload size={14} /> {t("canvas.importCanvas")}</span>
+                  <span className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-2 text-xs font-semibold text-primary dark:text-primary"><Upload size={14} /> {t("canvas.importCanvas")}</span>
                 </button>
                 <div className="grid w-full grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
                   {filteredTemplates.map((item) => {
                     const Icon = item.icon;
                     return (
-                      <button key={item.id} type="button" onClick={() => appendTemplate(item.id, t(item.titleKey))} className="flex min-w-0 items-center gap-2 rounded-xl border border-gray-200/80 bg-white/85 p-2 text-left shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-cyan-300 hover:shadow-md sm:gap-3 sm:rounded-2xl sm:p-3 dark:border-white/10 dark:bg-gray-900/85">
+                      <button key={item.id} type="button" onClick={() => appendTemplate(item.id, t(item.titleKey))} className="flex min-w-0 items-center gap-2 rounded-xl border border-gray-200/80 bg-white/85 p-2 text-left shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:gap-3 sm:rounded-2xl sm:p-3 dark:border-white/10 dark:bg-gray-900/85">
                         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-9 sm:w-9 sm:rounded-xl ${TEMPLATE_TONES[item.tone]}`}><Icon size={16} /></span>
                         <span className="min-w-0">
                           <span className="block line-clamp-2 text-[10px] font-semibold leading-tight text-gray-800 sm:truncate sm:text-xs dark:text-gray-100">{t(item.titleKey)}</span>
@@ -7820,7 +7820,7 @@ function CanvasEditor({
                   {NEW_NODE_OPTIONS.map((item) => {
                     const Icon = item.icon;
                     return (
-                      <button key={item.kind} type="button" onClick={() => appendSingleNode(item.kind)} className="flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50 px-2 py-2 text-center text-[10px] font-medium text-gray-600 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-cyan-500/10 dark:hover:text-cyan-300">
+                      <button key={item.kind} type="button" onClick={() => appendSingleNode(item.kind)} className="flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50 px-2 py-2 text-center text-[10px] font-medium text-gray-600 transition hover:border-primary/30 hover:bg-primary/10 hover:text-primary dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-primary/10 dark:hover:text-primary">
                         <Icon size={17} />
                         <span>{t(item.key)}</span>
                       </button>
@@ -7834,7 +7834,7 @@ function CanvasEditor({
               <button type="button" title={t("canvas.toolbar.export")} aria-label={t("canvas.toolbar.export")} onClick={exportCanvas} className="flex h-8 items-center gap-1.5 whitespace-nowrap rounded-xl px-2 text-xs text-gray-500 hover:bg-gray-100 sm:px-2.5 dark:text-gray-300 dark:hover:bg-white/10"><Download size={14} /><span className="hidden sm:inline">{t("canvas.toolbar.export")}</span></button>
               <button type="button" title={t("canvas.toolbar.import")} aria-label={t("canvas.toolbar.import")} onClick={() => setImportOpen(true)} className="flex h-8 items-center gap-1.5 whitespace-nowrap rounded-xl px-2 text-xs text-gray-500 hover:bg-gray-100 sm:px-2.5 dark:text-gray-300 dark:hover:bg-white/10"><Upload size={14} /><span className="hidden sm:inline">{t("canvas.toolbar.import")}</span></button>
               <button type="button" title={t("canvas.toolbar.clear")} aria-label={t("canvas.toolbar.clear")} onClick={newCanvas} disabled={runningAll || saving} className="flex h-8 items-center gap-1.5 whitespace-nowrap rounded-xl px-2 text-xs text-gray-500 hover:bg-red-50 hover:text-red-500 sm:px-2.5 dark:text-gray-300 dark:hover:bg-red-500/10"><Trash2 size={14} /><span className="hidden sm:inline">{t("canvas.toolbar.clear")}</span></button>
-              <button type="button" title={t("canvas.toolbar.addNode")} aria-label={t("canvas.toolbar.addNode")} aria-expanded={nodePaletteOpen} onClick={() => setNodePaletteOpen((value) => !value)} className={`flex h-8 items-center gap-1.5 whitespace-nowrap rounded-xl px-2 text-xs sm:px-2.5 ${nodePaletteOpen ? "bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-300" : "text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/10"}`}><Plus size={14} /><span className="hidden sm:inline">{t("canvas.toolbar.addNode")}</span></button>
+              <button type="button" title={t("canvas.toolbar.addNode")} aria-label={t("canvas.toolbar.addNode")} aria-expanded={nodePaletteOpen} onClick={() => setNodePaletteOpen((value) => !value)} className={`flex h-8 items-center gap-1.5 whitespace-nowrap rounded-xl px-2 text-xs sm:px-2.5 ${nodePaletteOpen ? "bg-primary/10 text-primary dark:bg-primary/10 dark:text-primary" : "text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/10"}`}><Plus size={14} /><span className="hidden sm:inline">{t("canvas.toolbar.addNode")}</span></button>
               {nodes.length > 2 && <select aria-label={t("工作流执行模式")} disabled={runningAll} value={executionMode} onChange={e => changeExecutionMode(e.target.value as "auto" | "step")} className="h-8 rounded-lg bg-transparent px-2 text-xs dark:text-gray-200"><option value="auto">{t("智能托管")}</option><option value="step">{t("逐步确认")}</option></select>}
               <button
                 type="button"
@@ -7857,7 +7857,7 @@ function CanvasEditor({
           </Panel>
 
           <Panel position="bottom-left" className="!bottom-12 !m-3 sm:!bottom-3 sm:!m-4">
-            <button type="button" onClick={() => setHelpOpen((value) => !value)} className="flex h-9 items-center gap-2 rounded-xl border border-cyan-300 bg-white/85 px-3 text-xs font-medium text-cyan-600 shadow-sm backdrop-blur dark:bg-gray-900/85 dark:text-cyan-300">
+            <button type="button" onClick={() => setHelpOpen((value) => !value)} className="flex h-9 items-center gap-2 rounded-xl border border-primary/30 bg-white/85 px-3 text-xs font-medium text-primary shadow-sm backdrop-blur dark:bg-gray-900/85 dark:text-primary">
               <CircleHelp size={15} /> {t("canvas.help")}
             </button>
             {helpOpen && (
@@ -7881,7 +7881,7 @@ function CanvasEditor({
               aria-label={t("canvas.navigator")}
               aria-pressed={showMiniMap}
               onClick={() => setShowMiniMap((value) => !value)}
-              className={`flex h-9 w-9 items-center justify-center rounded-xl border shadow-sm backdrop-blur ${showMiniMap && nodes.length > 0 ? "border-cyan-300 bg-cyan-50 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-300" : "border-gray-200 bg-white/85 text-gray-500 dark:border-white/10 dark:bg-gray-900/85 dark:text-gray-300"}`}
+              className={`flex h-9 w-9 items-center justify-center rounded-xl border shadow-sm backdrop-blur ${showMiniMap && nodes.length > 0 ? "border-primary/30 bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary" : "border-gray-200 bg-white/85 text-gray-500 dark:border-white/10 dark:bg-gray-900/85 dark:text-gray-300"}`}
             >
               <MapIcon size={15} />
             </button>
@@ -7953,12 +7953,12 @@ function CanvasEditor({
 
         {outputMenu && (
           <div
-            className="absolute z-50 w-[216px] rounded-2xl border border-cyan-300/50 bg-white/95 p-2.5 shadow-2xl backdrop-blur dark:border-cyan-400/25 dark:bg-[#171d27]/95"
+            className="absolute z-50 w-[216px] rounded-2xl border border-primary/30 bg-white/95 p-2.5 shadow-2xl backdrop-blur dark:border-primary/30 dark:bg-[#171d27]/95"
             style={{ left: outputMenu.left, top: outputMenu.top }}
             onPointerDown={(event) => event.stopPropagation()}
           >
             <div className="mb-2 flex items-center gap-2 px-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-              <span className="h-2 w-2 rounded-full bg-cyan-500" />
+              <span className="h-2 w-2 rounded-full bg-primary/100" />
               {t("canvas.node.chooseNext")}
             </div>
             <div className="grid grid-cols-2 gap-1.5">
@@ -7969,7 +7969,7 @@ function CanvasEditor({
                     key={item.kind}
                     type="button"
                     onClick={() => appendSingleNode(item.kind, { sourceID: outputMenu.sourceID, position: outputMenu.nodePosition })}
-                    className="flex min-h-16 flex-col items-start justify-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-left text-[10px] font-medium text-gray-600 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-cyan-500/10 dark:hover:text-cyan-300"
+                    className="flex min-h-16 flex-col items-start justify-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-left text-[10px] font-medium text-gray-600 transition hover:border-primary/30 hover:bg-primary/10 hover:text-primary dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-primary/10 dark:hover:text-primary"
                   >
                     <Icon size={16} />
                     <span>{t(item.key)}</span>
@@ -7989,7 +7989,7 @@ function CanvasEditor({
               </div>
               <div className="flex gap-1 border-b border-gray-100 px-4 dark:border-white/10">
                 {(["templates", "history", "code"] as const).map((tab) => (
-                  <button key={tab} type="button" onClick={() => { setImportTab(tab); if (tab === "history") void refreshHistory(); }} className={`border-b-2 px-3 py-2 text-xs ${importTab === tab ? "border-cyan-500 font-semibold text-cyan-600" : "border-transparent text-gray-400"}`}>
+                  <button key={tab} type="button" onClick={() => { setImportTab(tab); if (tab === "history") void refreshHistory(); }} className={`border-b-2 px-3 py-2 text-xs ${importTab === tab ? "border-primary/30 font-semibold text-primary" : "border-transparent text-gray-400"}`}>
                     {t(`canvas.importDialog.${tab}`)}
                   </button>
                 ))}
@@ -7997,16 +7997,16 @@ function CanvasEditor({
               <div className="max-h-[52vh] min-h-72 overflow-y-auto overscroll-contain p-4">
                 {importTab === "templates" && (
                   <div className="space-y-2">
-                    <button type="button" onClick={() => { newBlankCanvas(); setImportOpen(false); }} className="flex w-full items-center gap-3 rounded-xl border border-cyan-200 bg-cyan-50/50 p-3 text-left transition hover:border-cyan-400 dark:border-cyan-500/20 dark:bg-cyan-500/10">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-cyan-600 shadow-sm dark:bg-white/10 dark:text-cyan-300"><Plus size={16} /></span>
+                    <button type="button" onClick={() => { newBlankCanvas(); setImportOpen(false); }} className="flex w-full items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 p-3 text-left transition hover:border-primary/30 dark:border-primary/30 dark:bg-primary/10">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-primary shadow-sm dark:bg-white/10 dark:text-primary"><Plus size={16} /></span>
                       <span className="min-w-0">
                         <span className="block text-xs font-semibold text-gray-800 dark:text-gray-100">{t("canvas.startBlank")}</span>
                         <span className="mt-1 block text-[10px] text-gray-400">{t("canvas.startBlankDesc")}</span>
                       </span>
                     </button>
                     {availableTemplates.map((template) => (
-                      <button key={template.id} type="button" onClick={() => importCanvasDocument(template)} className="flex w-full items-center gap-3 rounded-xl border border-gray-100 p-3 text-left transition hover:border-cyan-300 hover:bg-cyan-50/50 dark:border-white/10 dark:hover:bg-cyan-500/10">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-300"><FileJson size={16} /></span>
+                      <button key={template.id} type="button" onClick={() => importCanvasDocument(template)} className="flex w-full items-center gap-3 rounded-xl border border-gray-100 p-3 text-left transition hover:border-primary/30 hover:bg-primary/10 dark:border-white/10 dark:hover:bg-primary/10">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-primary/10 dark:text-primary"><FileJson size={16} /></span>
                         <span className="min-w-0">
                           <span className="block truncate text-xs font-semibold text-gray-800 dark:text-gray-100">{ts(template.name)}</span>
                           <span className="mt-1 block line-clamp-2 text-[10px] leading-relaxed text-gray-400">{template.description ? ts(template.description) : t("canvas.importDialog.templateDesc")}</span>
@@ -8018,21 +8018,21 @@ function CanvasEditor({
                 {importTab === "history" && (
                   <div className="space-y-2">
                     {history.length ? history.map((item) => (
-                      <button key={item.public_id} type="button" onClick={() => { void loadCanvas(item.public_id); setImportOpen(false); }} className="flex w-full items-center gap-3 rounded-xl border border-gray-100 p-3 text-left hover:border-cyan-300 dark:border-white/10">
-                        <RotateCcw size={15} className="shrink-0 text-cyan-500" />
+                      <button key={item.public_id} type="button" onClick={() => { void loadCanvas(item.public_id); setImportOpen(false); }} className="flex w-full items-center gap-3 rounded-xl border border-gray-100 p-3 text-left hover:border-primary/30 dark:border-white/10">
+                        <RotateCcw size={15} className="shrink-0 text-primary" />
                         <span className="min-w-0 flex-1"><span title={item.title} className="block truncate text-xs font-medium dark:text-gray-100">{item.title}</span><span className="mt-0.5 block text-[10px] text-gray-400">{formatDate(item.updated_at)}</span></span>
                       </button>
                     )) : <div className="py-20 text-center text-xs text-gray-400">{historyLoading ? t("正在加载历史…") : t("canvas.noHistory")}</div>}
                   {historyError && <button type="button" onClick={() => void refreshHistory(historyPage, true)} className="w-full p-2 text-xs text-red-500">{historyError} · 点击重试</button>}
-                  {historyHasMore && <button type="button" disabled={historyLoading} onClick={() => void refreshHistory(historyPage + 1)} className="w-full p-2 text-xs text-cyan-600 disabled:opacity-50">{historyLoading ? t("加载中…") : t("加载更多")}</button>}
+                  {historyHasMore && <button type="button" disabled={historyLoading} onClick={() => void refreshHistory(historyPage + 1)} className="w-full p-2 text-xs text-primary disabled:opacity-50">{historyLoading ? t("加载中…") : t("加载更多")}</button>}
                   </div>
                 )}
                 {importTab === "code" && (
                   <div className="space-y-3">
-                    <CanvasTextArea value={importCode} onChange={(event) => setImportCode(event.target.value)} placeholder={t("canvas.importDialog.codePlaceholder")} className="h-40 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-3 font-mono text-[10px] leading-relaxed outline-none focus:border-cyan-300 dark:border-white/10 dark:bg-white/5 dark:text-gray-100" />
+                    <CanvasTextArea value={importCode} onChange={(event) => setImportCode(event.target.value)} placeholder={t("canvas.importDialog.codePlaceholder")} className="h-40 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-3 font-mono text-[10px] leading-relaxed outline-none focus:border-primary/30 dark:border-white/10 dark:bg-white/5 dark:text-gray-100" />
                     <div className="flex items-center justify-between gap-3">
                       <button type="button" onClick={() => importRef.current?.click()} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-200 px-3 text-xs text-gray-500 hover:bg-gray-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"><Upload size={13} />{t("canvas.importDialog.selectFile")}</button>
-                      <button type="button" onClick={importFromCode} disabled={!importCode.trim()} className="h-9 rounded-xl bg-cyan-500 px-4 text-xs font-semibold text-white disabled:opacity-40">{t("canvas.importDialog.import")}</button>
+                      <button type="button" onClick={importFromCode} disabled={!importCode.trim()} className="h-9 rounded-xl bg-primary/100 px-4 text-xs font-semibold text-white disabled:opacity-40">{t("canvas.importDialog.import")}</button>
                     </div>
                   </div>
                 )}
@@ -8062,7 +8062,7 @@ function CanvasEditor({
                   <Search size={14} className="text-gray-400" />
                   <input value={assetQuery} onChange={(event) => setAssetQuery(event.target.value)} placeholder={t("canvas.assetLibrarySearch")} className="min-w-0 flex-1 bg-transparent text-xs outline-none dark:text-gray-100" />
                 </div>
-                <button type="submit" className="h-9 rounded-xl bg-cyan-500 px-4 text-xs font-semibold text-white hover:bg-cyan-600">{t("common.search")}</button>
+                <button type="submit" className="h-9 rounded-xl bg-primary/100 px-4 text-xs font-semibold text-white hover:bg-primary">{t("common.search")}</button>
               </form>
               <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
                 {assetLoading ? (
@@ -8070,7 +8070,7 @@ function CanvasEditor({
                 ) : assetItems.length ? (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                     {assetItems.map((asset) => (
-                      <button key={asset.public_id} type="button" onClick={() => selectAsset(asset)} className="group overflow-hidden rounded-xl border border-gray-200 bg-gray-50 text-left transition hover:border-cyan-400 hover:shadow-md dark:border-white/10 dark:bg-white/5">
+                      <button key={asset.public_id} type="button" onClick={() => selectAsset(asset)} className="group overflow-hidden rounded-xl border border-gray-200 bg-gray-50 text-left transition hover:border-primary/30 hover:shadow-md dark:border-white/10 dark:bg-white/5">
                         <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-gray-950/40">
                           {assetTargetKind === "video"
                             ? <video src={asset.url} muted preload="metadata" className="h-full w-full object-cover" />

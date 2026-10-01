@@ -70,7 +70,7 @@ export default function PricingPage() {
   const billingLabel = (type?: string) => (type ? t(`billing.${type}`) : "-");
 
   return (
-    <div className="page-container page-padding max-w-5xl flex-1 overflow-y-auto py-6 sm:py-8">
+    <div className="mcdl-page page-container page-padding max-w-5xl flex-1 overflow-y-auto py-6 sm:py-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-950 dark:text-gray-100">{t("pricing.title")}</h1>

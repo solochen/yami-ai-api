@@ -272,7 +272,7 @@ export function ViralBreakdownWorkspace({ workflow }: { workflow: WorkflowLike }
   const message = busy ? outputs.progress_message || ts("正在解析视频来源...") : project?.status === "failed" ? project.error_message || outputs.progress_message || "" : complete ? ts("完整拆解与可生成镜头包已生成") : degraded ? ts("拆解未完整，可从检查点继续重试") : "";
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#07110e] text-emerald-50">
+    <div className="mcdl-workspace mcdl-workspace--viral relative flex min-h-0 flex-1 flex-col overflow-hidden text-gray-100">
       <header className="border-b border-white/10 px-4 py-3 lg:pr-72">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -291,7 +291,7 @@ export function ViralBreakdownWorkspace({ workflow }: { workflow: WorkflowLike }
         <div className="mt-3">
           <div className="mb-1 truncate text-xs text-emerald-200/80">{message || ts("等待分析")}</div>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${project ? percent : 0}%` }} />
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${project ? percent : 0}%` }} />
           </div>
         </div>
       </header>
@@ -300,14 +300,14 @@ export function ViralBreakdownWorkspace({ workflow }: { workflow: WorkflowLike }
         <aside className="flex min-h-0 flex-col gap-3 border-white/10 p-4 lg:border-r">
           <div className="text-xs text-emerald-100/60">{rate > 0 ? `${rate} ${ts("算力/秒")}` : ts("按视频秒数计费")}</div>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setMode("link")} className={`rounded-xl px-3 py-2 text-xs ${mode === "link" ? "bg-emerald-400 text-emerald-950" : "bg-white/5"}`}>{ts("抖音链接")}</button>
-            <button type="button" onClick={() => setMode("upload")} className={`rounded-xl px-3 py-2 text-xs ${mode === "upload" ? "bg-emerald-400 text-emerald-950" : "bg-white/5"}`}>{ts("本地上传")}</button>
+            <button type="button" onClick={() => setMode("link")} className={`rounded-xl px-3 py-2 text-xs ${mode === "link" ? "bg-primary font-semibold text-dark" : "bg-white/5"}`}>{ts("抖音链接")}</button>
+            <button type="button" onClick={() => setMode("upload")} className={`rounded-xl px-3 py-2 text-xs ${mode === "upload" ? "bg-primary font-semibold text-dark" : "bg-white/5"}`}>{ts("本地上传")}</button>
           </div>
           {mode === "link" ? (
             <>
               <textarea value={shareText} onChange={(event) => setShareText(event.target.value)} placeholder={ts("粘贴抖音分享文本或视频链接")} className="min-h-28 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm outline-none" />
               <div className="flex gap-2">
-                <button type="button" disabled={busy} onClick={() => void submit()} className="flex-1 rounded-xl bg-emerald-400 px-3 py-2 text-sm font-semibold text-emerald-950 disabled:opacity-50">{busy ? ts("处理中...") : ts("开始分析")}</button>
+                <button type="button" disabled={busy} onClick={() => void submit()} className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-dark disabled:opacity-50">{busy ? ts("处理中...") : ts("开始分析")}</button>
                 <button type="button" onClick={reset} className="rounded-xl border border-white/10 px-3 py-2 text-sm">{ts("清空")}</button>
               </div>
             </>
@@ -330,7 +330,7 @@ export function ViralBreakdownWorkspace({ workflow }: { workflow: WorkflowLike }
           <div className="mt-auto grid grid-cols-5 gap-1">
             {STEPS.map((step, index) => {
               const state = outputs.stages?.[step.id] || "pending";
-              return <div key={step.id} className={`rounded-lg px-1 py-2 text-center text-[10px] ${state === "done" ? "bg-emerald-400/20 text-emerald-200" : state === "running" ? "bg-emerald-400 text-emerald-950" : "bg-white/5 text-emerald-100/40"}`}>{index + 1} {step.label}</div>;
+              return <div key={step.id} className={`rounded-lg px-1 py-2 text-center text-[10px] ${state === "done" ? "bg-emerald-400/20 text-emerald-200" : state === "running" ? "bg-primary font-semibold text-dark" : "bg-white/5 text-gray-500"}`}>{index + 1} {step.label}</div>;
             })}
           </div>
         </aside>
@@ -338,8 +338,8 @@ export function ViralBreakdownWorkspace({ workflow }: { workflow: WorkflowLike }
         <section className="flex min-h-0 flex-col border-white/10 p-4 lg:border-r">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setResultView("source")} className={`rounded-lg px-2.5 py-1 text-xs ${resultView === "source" ? "bg-emerald-400 text-emerald-950" : "bg-white/5 text-emerald-100/70"}`}>{ts("原片剧本")}</button>
-              <button type="button" disabled={!outputs.production_markdown} onClick={() => setResultView("production")} className={`rounded-lg px-2.5 py-1 text-xs disabled:opacity-30 ${resultView === "production" ? "bg-emerald-400 text-emerald-950" : "bg-white/5 text-emerald-100/70"}`}>{ts("视频生成包")}</button>
+              <button type="button" onClick={() => setResultView("source")} className={`rounded-lg px-2.5 py-1 text-xs ${resultView === "source" ? "bg-primary font-semibold text-dark" : "bg-white/5 text-gray-300"}`}>{ts("原片剧本")}</button>
+              <button type="button" disabled={!outputs.production_markdown} onClick={() => setResultView("production")} className={`rounded-lg px-2.5 py-1 text-xs disabled:opacity-30 ${resultView === "production" ? "bg-primary font-semibold text-dark" : "bg-white/5 text-gray-300"}`}>{ts("视频生成包")}</button>
             </div>
             <button type="button" onClick={() => void copyMarkdown()} disabled={!markdown} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-xs disabled:opacity-40"><Copy size={12} />{copied ? ts("已复制") : ts("复制 Markdown")}</button>
           </div>
