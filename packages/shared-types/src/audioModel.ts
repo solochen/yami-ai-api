@@ -26,6 +26,10 @@ export interface AudioRuntimeConfig {
   show_web_search?: boolean;
   /** Show reference-audio upload button (e.g. Suno) */
   show_upload?: boolean;
+  /** Show reference-image upload button (e.g. Lyria image-to-music) */
+  show_image_upload?: boolean;
+  /** Maximum number of reference images for audio models. */
+  max_reference_images?: number;
   /** Top-right billing label style */
   billing_hint?: AudioBillingHint;
   count_options?: number[];
@@ -58,6 +62,8 @@ export function parseAudioRuntime(runtimeRule?: Record<string, unknown>): AudioR
     show_channel: audio.show_channel !== false,
     show_web_search: audio.show_web_search === true,
     show_upload: audio.show_upload === true,
+    show_image_upload: audio.show_image_upload === true,
+    max_reference_images: numOr(audio.max_reference_images, 1),
     billing_hint: audio.billing_hint === "estimated" ? "estimated" : "per_token",
     count_options: parseCountOptions(audio.count_options),
     count_allow_custom: audio.count_allow_custom !== false,

@@ -259,6 +259,21 @@ func TestWorkerPerTokenPricingUsesCachePrices(t *testing.T) {
 	}
 }
 
+func TestWorkerPerTokenPricingUsesAudioPrices(t *testing.T) {
+	rule := map[string]interface{}{
+		"billing_type":             "per_token",
+		"input_price_per_m":        float64(10),
+		"output_price_per_m":       float64(20),
+		"audio_input_price_per_m":  float64(100),
+		"audio_output_price_per_m": float64(200),
+	}
+	got := estimatePriceRuleCostWorker(rule, map[string]interface{}{"_actual_audio_input_tokens": float64(300), "_actual_audio_output_tokens": float64(400)}, 1000, 2000, 0, 0)
+	want := float64(700)*10/1_000_000 + float64(1600)*20/1_000_000 + float64(300)*100/1_000_000 + float64(400)*200/1_000_000
+	if math.Abs(got-want) > 0.000000001 {
+		t.Fatalf("cost = %.9f, want %.9f", got, want)
+	}
+}
+
 func TestUpstreamUsageTokensSupportsNestedUsage(t *testing.T) {
 	prompt, output := upstreamUsageTokens([]byte(`{"data":{"result":{"usage":{"input_tokens":120,"output_tokens":45}}}}`))
 	if prompt != 120 || output != 45 {

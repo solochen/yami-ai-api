@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -95,6 +97,72 @@ func TestWorkerRouteProviderCostPerTokenWithCache(t *testing.T) {
 	want := (float64(500)*10 + float64(400)*1 + float64(100)*12 + float64(500)*40) / 1_000_000
 	if diff := got - want; diff > 0.000000001 || diff < -0.000000001 {
 		t.Fatalf("provider cost = %.9f, want %.9f", got, want)
+	}
+}
+
+func TestWorkerRouteProviderCostPerTokenWithAudio(t *testing.T) {
+	route := workerModelRoute{CostRule: map[string]interface{}{
+		"billing_type":            "per_token",
+		"input_cost_per_m":        float64(10),
+		"output_cost_per_m":       float64(20),
+		"audio_input_cost_per_m":  float64(100),
+		"audio_output_cost_per_m": float64(200),
+	}}
+	got := workerRouteProviderCost(route, map[string]interface{}{"_actual_audio_input_tokens": float64(300), "_actual_audio_output_tokens": float64(400)}, 1000, 2000, 0, 0)
+	want := (float64(700)*10 + float64(1600)*20 + float64(300)*100 + float64(400)*200) / 1_000_000
+	if diff := got - want; diff > 0.000000001 || diff < -0.000000001 {
+		t.Fatalf("provider cost = %.9f, want %.9f", got, want)
+	}
+}
+
+func TestCollectOpenRouterAudioSSE(t *testing.T) {
+	raw := "data: {\"model\":\"openai/gpt-audio\",\"choices\":[{\"delta\":{\"content\":\"ok\",\"audio\":{\"data\":\"QUJD\",\"transcript\":\"hi\"}}}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":3,\"completion_tokens_details\":{\"audio_tokens\":2}}}\n\n" +
+		"data: [DONE]\n\n"
+	body, status, err := collectOpenRouterAudioSSE(strings.NewReader(raw), "mp3")
+	if err != nil || status != 200 {
+		t.Fatalf("status=%d err=%v", status, err)
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	items, _ := parseUpstreamMedia(body)
+	if len(items) != 1 || items[0].B64JSON != "QUJD" || items[0].MimeType != "mp3" {
+		t.Fatalf("items = %#v decoded=%#v", items, decoded)
+	}
+	text, transcript, format := parseUpstreamAudioDetails(body)
+	if text != "ok" || transcript != "hi" || format != "mp3" {
+		t.Fatalf("audio details = %q/%q/%q", text, transcript, format)
+	}
+}
+
+func TestBuildOpenRouterAudioPayloadSupportsReferences(t *testing.T) {
+	payload, err := buildOpenRouterAudioPayload(context.Background(), "openai/gpt-audio", "fallback", "say hello", map[string]interface{}{
+		"voice":            "nova",
+		"format":           "mp3",
+		"reference_images": []interface{}{"data:image/png;base64,QUJD"},
+		"reference_audio":  "data:audio/wav;base64,UklGRgAAAAAA",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payload["model"] != "openai/gpt-audio" || payload["stream"] != true {
+		t.Fatalf("payload = %#v", payload)
+	}
+	audio := payload["audio"].(map[string]interface{})
+	if audio["voice"] != "nova" || audio["format"] != "mp3" {
+		t.Fatalf("audio options = %#v", audio)
+	}
+	messages := payload["messages"].([]interface{})
+	content := messages[0].(map[string]interface{})["content"].([]interface{})
+	foundImage, foundAudio := false, false
+	for _, raw := range content {
+		item := raw.(map[string]interface{})
+		foundImage = foundImage || item["type"] == "image_url"
+		foundAudio = foundAudio || item["type"] == "input_audio"
+	}
+	if !foundImage || !foundAudio {
+		t.Fatalf("content = %#v", content)
 	}
 }
 

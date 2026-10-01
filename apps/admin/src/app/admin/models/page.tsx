@@ -621,6 +621,7 @@ export default function ModelsPage() {
   const [languageSaving, setLanguageSaving] = useState(false);
   const [audioTemplateKey, setAudioTemplateKey] = useState("");
   const [videoTemplateKey, setVideoTemplateKey] = useState("");
+  const [paymentComputeRate, setPaymentComputeRate] = useState(7.2);
   const [testingModelId, setTestingModelId] = useState<number | null>(null);
   const [connectionTests, setConnectionTests] = useState<Record<number, ModelConnectionTest>>({});
   const [upstreamModels, setUpstreamModels] = useState<UpstreamModel[]>([]);
@@ -697,6 +698,12 @@ export default function ModelsPage() {
   useEffect(() => {
     load();
     loadChannelPresets();
+    adminApi<Record<string, unknown>>("/system-configs")
+      .then((cfg) => {
+        const rate = Number(cfg.payment_compute_rate);
+        if (Number.isFinite(rate) && rate > 0) setPaymentComputeRate(rate);
+      })
+      .catch(() => {});
   }, []);
 
   const openCreate = () => {
@@ -1421,6 +1428,8 @@ export default function ModelsPage() {
       show_channel: audio.show_channel !== false,
       show_web_search: audio.show_web_search === true,
       show_upload: audio.show_upload === true,
+      show_image_upload: audio.show_image_upload === true,
+      max_reference_images: Number(audio.max_reference_images ?? 1) || 1,
       prompt_required: audio.prompt_required !== false,
       count_options: Array.isArray(audio.count_options)
         ? audio.count_options.map((x: unknown) => Number(x)).filter((n: number) => Number.isFinite(n) && n >= 1)
@@ -1463,6 +1472,8 @@ export default function ModelsPage() {
           show_channel: next.show_channel,
           show_web_search: next.show_web_search,
           show_upload: next.show_upload,
+          show_image_upload: next.show_image_upload,
+          max_reference_images: Math.max(1, next.max_reference_images || 1),
           count_options: next.count_options?.length ? next.count_options : [1, 3, 5, 10, 30, 50],
           count_allow_custom: next.count_allow_custom,
           count_max: Math.max(1, next.count_max || 50),
@@ -2148,6 +2159,97 @@ export default function ModelsPage() {
     }, null, 2),
     default_params: JSON.stringify({ gender: "female", is_instrumental: false, format: "mp3", enable_aigc_watermark: false }, null, 2),
     price_rule: JSON.stringify({ billing_type: "per_request", currency: "¥", unit_price: 1 }, null, 2),
+  });
+
+  const openRouterAudioConnection = (extra: string) => setConnection(extra, {
+    provider: "openrouter",
+    protocol: "openai_compatible",
+    base_url: "https://openrouter.ai/api/v1",
+    api_key: "",
+    auth_type: "none",
+    api_key_header: "Authorization",
+    models_endpoint: "/models",
+  });
+
+  const applyOpenRouterLyria = (prev: FormState, variant: "pro" | "clip"): FormState => {
+    const pro = variant === "pro";
+    return {
+      ...prev,
+      code: prev.code || (pro ? "audio_openrouter_lyria_3_pro" : "audio_openrouter_lyria_3_clip"),
+      display_name: prev.display_name || (pro ? "OpenRouter · Lyria 3 Pro" : "OpenRouter · Lyria 3 Clip"),
+      category: "audio",
+      request_mode: "audio",
+      new_api_model: pro ? "google/lyria-3-pro-preview" : "google/lyria-3-clip-preview",
+      new_api_endpoint: "/chat/completions",
+      new_api_extra_params: openRouterAudioConnection(prev.new_api_extra_params),
+      runtime_rule: withAudioUpstreamPatch(
+        setAudioRule(clearModelCaps(prev.runtime_rule), {
+          input_layout: "single",
+          billing_hint: "estimated",
+          prompt_hint: pro
+            ? "描述歌曲主题、曲风、情绪、乐器、节奏和歌词方向；可上传一张图片作为音乐灵感参考。"
+            : "描述 30 秒音乐片段的风格、氛围、速度、乐器和使用场景；可上传一张图片作为灵感参考。",
+          show_channel: false,
+          show_web_search: false,
+          show_upload: false,
+          show_image_upload: true,
+          max_reference_images: 1,
+          count_options: [1],
+          count_allow_custom: false,
+          count_max: 1,
+          upstream_include: ["format", "temperature", "top_p", "seed", "reference_images"],
+          upstream_map: JSON.stringify({}, null, 2),
+        }),
+        { adapter: "openrouter_audio", request_timeout_sec: 900 }
+      ),
+      input_schema: JSON.stringify({
+        type: "object",
+        properties: {
+          format: { type: "string", title: "输出格式", enum: ["mp3", "wav"], enumLabels: { mp3: "MP3", wav: "WAV" }, default: "mp3", "x-order": 1, "x-widget": "option_menu", "x-icon": "format", "x-placement": "top", "x-highlight": true },
+          temperature: { type: "number", title: "创造性", enum: [0.7, 0.9, 1, 1.2], enumLabels: { "0.7": "稳妥", "0.9": "均衡", "1": "标准", "1.2": "更发散" }, default: 1, "x-order": 2, "x-widget": "option_menu", "x-icon": "sparkles" },
+          top_p: { type: "number", title: "Top P", enum: [0.8, 0.9, 1], default: 1, "x-order": 3, "x-widget": "option_menu", "x-icon": "compass" },
+          seed: { type: "integer", title: "Seed", description: "可选，固定后更便于复现风格", "x-order": 4 },
+        },
+      }, null, 2),
+      default_params: JSON.stringify({ format: "mp3", temperature: 1, top_p: 1 }, null, 2),
+      price_rule: JSON.stringify({ billing_type: "per_request", unit_price: (pro ? 0.08 : 0.04) * paymentComputeRate, usd_to_compute: paymentComputeRate, source_currency: "USD", source_unit_usd: pro ? 0.08 : 0.04 }, null, 2),
+    };
+  };
+
+  const applyOpenRouterGptAudio = (prev: FormState, mini = false): FormState => ({
+    ...prev,
+    code: prev.code || (mini ? "audio_openrouter_gpt_audio_mini" : "audio_openrouter_gpt_audio"),
+    display_name: prev.display_name || (mini ? "OpenRouter · GPT Audio Mini" : "OpenRouter · GPT Audio"),
+    category: "audio",
+    request_mode: "audio",
+    new_api_model: mini ? "openai/gpt-audio-mini" : "openai/gpt-audio",
+    new_api_endpoint: "/chat/completions",
+    new_api_extra_params: openRouterAudioConnection(prev.new_api_extra_params),
+    runtime_rule: withAudioUpstreamPatch(
+      setAudioRule(clearModelCaps(prev.runtime_rule), {
+        input_layout: "single", billing_hint: "per_token",
+        prompt_hint: "输入要生成或处理的语音内容；可上传参考音频，让模型结合音频内容和文本指令输出语音。",
+        show_channel: false, show_web_search: false, show_upload: true, show_image_upload: false,
+        count_options: [1], count_allow_custom: false, count_max: 1,
+        upstream_include: ["voice", "format", "temperature", "top_p", "max_tokens", "reference_audio"],
+        upstream_map: JSON.stringify({}, null, 2),
+      }),
+      { adapter: "openrouter_audio", request_timeout_sec: 600 }
+    ),
+    input_schema: JSON.stringify({
+      type: "object",
+      properties: {
+        voice: { type: "string", title: "音色", enum: ["alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse"], default: "alloy", "x-order": 1, "x-widget": "option_menu", "x-icon": "voice", "x-placement": "top", "x-highlight": true },
+        format: { type: "string", title: "输出格式", enum: ["mp3", "wav", "flac", "opus", "pcm16"], enumLabels: { mp3: "MP3", wav: "WAV", flac: "FLAC", opus: "Opus", pcm16: "PCM16" }, default: "mp3", "x-order": 2, "x-widget": "option_menu", "x-icon": "format", "x-placement": "top", "x-highlight": true },
+        temperature: { type: "number", title: "创造性", enum: [0.2, 0.5, 0.8, 1], default: 0.8, "x-order": 3, "x-widget": "option_menu", "x-icon": "sparkles" },
+        top_p: { type: "number", title: "Top P", enum: [0.8, 0.9, 1], default: 1, "x-order": 4, "x-widget": "option_menu", "x-icon": "compass" },
+        max_tokens: { type: "integer", title: "最大文本 Token", enum: [256, 512, 1024, 2048], default: 1024, "x-order": 5, "x-widget": "option_menu", "x-icon": "text" },
+      },
+    }, null, 2),
+    default_params: JSON.stringify({ voice: "alloy", format: "mp3", temperature: 0.8, top_p: 1, max_tokens: 1024 }, null, 2),
+    price_rule: JSON.stringify(mini
+      ? { billing_type: "per_token", input_price_per_m: 0.6 * paymentComputeRate, output_price_per_m: 2.4 * paymentComputeRate, audio_input_price_per_m: 0.6 * paymentComputeRate, audio_output_price_per_m: 2.4 * paymentComputeRate, estimated_input_tokens: 300, estimated_output_tokens: 1500, estimated_audio_output_tokens: 1500, usd_to_compute: paymentComputeRate, source_currency: "USD", source_input_price_per_m: 0.6, source_output_price_per_m: 2.4, source_audio_input_price_per_m: 0.6, source_audio_output_price_per_m: 2.4 }
+      : { billing_type: "per_token", input_price_per_m: 2.5 * paymentComputeRate, output_price_per_m: 10 * paymentComputeRate, audio_input_price_per_m: 32 * paymentComputeRate, audio_output_price_per_m: 64 * paymentComputeRate, estimated_input_tokens: 300, estimated_output_tokens: 1500, estimated_audio_output_tokens: 1500, usd_to_compute: paymentComputeRate, source_currency: "USD", source_input_price_per_m: 2.5, source_output_price_per_m: 10, source_audio_input_price_per_m: 32, source_audio_output_price_per_m: 64 }, null, 2),
   });
 
   const applyVideoStandard = (prev: FormState): FormState => ({
@@ -5178,6 +5280,14 @@ export default function ModelsPage() {
                             return applyAliyunTTS(prev, "cosyvoice");
                           case "aliyun_fun_music":
                             return applyAliyunFunMusic(prev);
+                          case "openrouter_lyria_pro":
+                            return applyOpenRouterLyria(prev, "pro");
+                          case "openrouter_lyria_clip":
+                            return applyOpenRouterLyria(prev, "clip");
+                          case "openrouter_gpt_audio":
+                            return applyOpenRouterGptAudio(prev, false);
+                          case "openrouter_gpt_audio_mini":
+                            return applyOpenRouterGptAudio(prev, true);
                           default:
                             return prev;
                         }
@@ -5196,6 +5306,11 @@ export default function ModelsPage() {
                     <option value="minimax_official_music">MiniMax 官方 Music-3.0 / 2.6（api.minimax.cn/v1/music_generation）</option>
                     <option value="openai_audio_music">第三方 OpenAI 兼容 Music（/v1/audio/speech，metadata.lyrics）</option>
                     <option value="aliyun_fun_music">阿里云百炼 · Fun-Music</option>
+                    <option disabled>OpenRouter 官方音频</option>
+                    <option value="openrouter_lyria_pro">OpenRouter · Google Lyria 3 Pro（完整歌曲）</option>
+                    <option value="openrouter_lyria_clip">OpenRouter · Google Lyria 3 Clip（30 秒片段）</option>
+                    <option value="openrouter_gpt_audio">OpenRouter · OpenAI GPT Audio</option>
+                    <option value="openrouter_gpt_audio_mini">OpenRouter · OpenAI GPT Audio Mini</option>
                   </select>
                   <div className="text-[11px] text-gray-400 mt-1">
                     模板会覆盖 endpoint、input_schema、default_params、runtime_rule；连接密钥仍在 new_api_extra_params.connection 中单独配置。
@@ -5334,6 +5449,37 @@ export default function ModelsPage() {
                     />
                     前台显示「上传参考音频」
                   </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={getAudioRule(form.runtime_rule).show_image_upload}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          runtime_rule: setAudioRule(prev.runtime_rule, { show_image_upload: e.target.checked }),
+                        }))
+                      }
+                    />
+                    前台显示「上传参考图片」
+                  </label>
+                  {getAudioRule(form.runtime_rule).show_image_upload && (
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      参考图片上限
+                      <input
+                        type="number"
+                        min={1}
+                        max={8}
+                        className="w-20 rounded-lg border px-2 py-1 text-sm"
+                        value={getAudioRule(form.runtime_rule).max_reference_images}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            runtime_rule: setAudioRule(prev.runtime_rule, { max_reference_images: Math.max(1, Number(e.target.value) || 1) }),
+                          }))
+                        }
+                      />
+                    </label>
+                  )}
                 </div>
                 <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
                   音频模型固定为单结果生成，不向前台提供批量数量选项。

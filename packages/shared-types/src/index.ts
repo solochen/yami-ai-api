@@ -92,11 +92,15 @@ export interface PriceRule {
   output_price?: number;
   cache_read_price?: number;
   cache_write_price?: number;
+  audio_input_price?: number;
+  audio_output_price?: number;
   /** Admin-friendly prices per 1M tokens (e.g. 12.75 = 楼12.75 / 1M tokens). */
   input_price_per_m?: number;
   output_price_per_m?: number;
   cache_read_price_per_m?: number;
   cache_write_price_per_m?: number;
+  audio_input_price_per_m?: number;
+  audio_output_price_per_m?: number;
   /** Platform surcharge per 1M tokens, added on top of real token cost. */
   surcharge_per_m?: number;
   /** Display currency symbol, e.g. "楼". Defaults to compute-credit display. */

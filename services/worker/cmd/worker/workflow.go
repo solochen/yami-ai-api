@@ -3143,6 +3143,7 @@ func estimatePriceRuleCostWorker(rule map[string]interface{}, params map[string]
 		return workerImageTierValue(rule, params, "unit_price_by_size", "unit_price") * n
 	case "per_token":
 		promptTokens, outputTokens = workerEstimatedTokenCounts(rule, params, promptTokens, outputTokens)
+		audioInputTokens, audioOutputTokens := workerAudioTokenCounts(rule, params)
 		// 以管理后台设定的输入/输出/缓存单价为准：缓存 token 按缓存单价计，其余输入按输入单价计。
 		if cacheReadTokens < 0 {
 			cacheReadTokens = 0
@@ -3150,15 +3151,23 @@ func estimatePriceRuleCostWorker(rule map[string]interface{}, params map[string]
 		if cacheWriteTokens < 0 {
 			cacheWriteTokens = 0
 		}
-		if cacheReadTokens+cacheWriteTokens > promptTokens {
-			overflow := cacheReadTokens + cacheWriteTokens - promptTokens
+		if audioInputTokens > promptTokens {
+			audioInputTokens = promptTokens
+		}
+		if audioOutputTokens > outputTokens {
+			audioOutputTokens = outputTokens
+		}
+		textPromptTokens := promptTokens - audioInputTokens
+		textOutputTokens := outputTokens - audioOutputTokens
+		if cacheReadTokens+cacheWriteTokens > textPromptTokens {
+			overflow := cacheReadTokens + cacheWriteTokens - textPromptTokens
 			if cacheWriteTokens >= overflow {
 				cacheWriteTokens -= overflow
 			} else {
-				cacheReadTokens = promptTokens - cacheWriteTokens
+				cacheReadTokens = textPromptTokens - cacheWriteTokens
 			}
 		}
-		uncachedInput := promptTokens - cacheReadTokens - cacheWriteTokens
+		uncachedInput := textPromptTokens - cacheReadTokens - cacheWriteTokens
 		inputPrice := tokenPriceWorker(rule, "input_price")
 		cacheReadPrice := tokenPriceWorker(rule, "cache_read_price")
 		if cacheReadPrice <= 0 {
@@ -3168,7 +3177,7 @@ func estimatePriceRuleCostWorker(rule map[string]interface{}, params map[string]
 		if cacheWritePrice <= 0 {
 			cacheWritePrice = inputPrice
 		}
-		cost := float64(uncachedInput)*inputPrice + float64(cacheReadTokens)*cacheReadPrice + float64(cacheWriteTokens)*cacheWritePrice + float64(outputTokens)*tokenPriceWorker(rule, "output_price")
+		cost := float64(uncachedInput)*inputPrice + float64(cacheReadTokens)*cacheReadPrice + float64(cacheWriteTokens)*cacheWritePrice + float64(textOutputTokens)*tokenPriceWorker(rule, "output_price") + workerAudioTokenCost(rule, audioInputTokens, audioOutputTokens)
 		if surcharge := floatAny(rule["surcharge_per_m"]); surcharge > 0 {
 			cost += float64(promptTokens+outputTokens) / 1_000_000 * surcharge
 		}
@@ -3197,6 +3206,28 @@ func estimatePriceRuleCostWorker(rule map[string]interface{}, params map[string]
 	default:
 		return 0
 	}
+}
+
+func workerAudioTokenCounts(rule, params map[string]interface{}) (int, int) {
+	input := int(math.Ceil(floatAny(firstNonNil(params["_actual_audio_input_tokens"], params["audio_input_tokens"], params["estimated_audio_input_tokens"]))))
+	if input <= 0 {
+		input = int(math.Ceil(floatAny(rule["estimated_audio_input_tokens"])))
+	}
+	output := int(math.Ceil(floatAny(firstNonNil(params["_actual_audio_output_tokens"], params["audio_output_tokens"], params["estimated_audio_output_tokens"]))))
+	if output <= 0 {
+		output = int(math.Ceil(floatAny(rule["estimated_audio_output_tokens"])))
+	}
+	if input < 0 {
+		input = 0
+	}
+	if output < 0 {
+		output = 0
+	}
+	return input, output
+}
+
+func workerAudioTokenCost(rule map[string]interface{}, inputTokens, outputTokens int) float64 {
+	return float64(inputTokens)*tokenPriceWorker(rule, "audio_input_price") + float64(outputTokens)*tokenPriceWorker(rule, "audio_output_price")
 }
 
 func workerEstimatedTokenCounts(rule, params map[string]interface{}, promptTokens, outputTokens int) (int, int) {

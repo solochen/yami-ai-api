@@ -853,6 +853,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
       : { ...schemaDefaults(model.input_schema), ...(model.default_params || {}) }),
   }));
   const [refImages, setRefImages] = useState<RefImage[]>([]);
+  const [audioImageRefs, setAudioImageRefs] = useState<RefImage[]>([]);
   const [videoMedia, setVideoMedia] = useState<VideoMediaState>(EMPTY_VIDEO_MEDIA);
   const [audioSecondaryPrompt, setAudioSecondaryPrompt] = useState("");
   const [audioRef, setAudioRef] = useState<{ url: string; name: string } | null>(null);
@@ -997,6 +998,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
   const imageAllowsAutoRatio = imageRuntime.allow_auto_ratio === true;
   const videoConfig = parseVideoRuntime(model.runtime_rule);
   const audioConfig = parseAudioRuntime(model.runtime_rule);
+  const maxAudioImageRefs = Math.max(1, Math.min(8, Number(audioConfig.max_reference_images || 1)));
   const isSeedance2 = isVideo && videoConfig.upload_profile === "seedance_2";
   const isMiniMaxH3 = isVideo && videoConfig.upload_profile === "minimax_h3";
   const isAliyunMultimodal = isVideo && videoConfig.upload_profile === "aliyun_multimodal";
@@ -1081,6 +1083,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
         videoMedia.first_frame?.public_id,
         videoMedia.last_frame?.public_id,
         ...(!isVeoFramePair ? videoMedia.reference_images.map((x) => x.public_id) : []),
+        ...audioImageRefs.map((x) => x.public_id),
         ...videoMedia.reference_videos.map((x) => x.public_id),
         ...videoMedia.reference_audios.map((x) => x.public_id),
       ].filter((x): x is string => !!x),
@@ -1090,6 +1093,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
       videoMedia.first_frame,
       videoMedia.last_frame,
       videoMedia.reference_images,
+      audioImageRefs,
       videoMedia.reference_videos,
       videoMedia.reference_audios,
     ]
@@ -1105,6 +1109,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
       ...(isAudio ? { count: undefined, n: undefined } : {}),
     });
     setRefImages([]);
+    setAudioImageRefs([]);
     setVideoMedia(EMPTY_VIDEO_MEDIA);
     setAudioSecondaryPrompt(String(defaults[secondaryKey] ?? ""));
     setAudioRef(null);
@@ -1131,7 +1136,9 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
         ? {
             ...buildAudioTaskParams(singleResultAudioParams(params), prompt, audioSecondaryPrompt, model.runtime_rule),
             ...(audioRef?.url ? { reference_audio: audioRef.url } : {}),
+            ...(audioConfig.show_image_upload && audioImageRefs.length ? { reference_images: audioImageRefs.map((x) => x.url) } : {}),
             ...selectedAssets,
+            ...selectedReferenceAssets,
           }
         : isImage
         ? {
@@ -1187,6 +1194,8 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
     prompt,
     audioSecondaryPrompt,
     audioRef,
+    audioImageRefs,
+    audioConfig.show_image_upload,
     bottom.asset_ids,
     bottom.channel_key,
     bottom.fallback_enabled,
@@ -1852,7 +1861,9 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
           ? {
               ...buildAudioTaskParams(singleResultAudioParams(params), prompt, audioSecondaryPrompt, model.runtime_rule),
               ...(audioRef?.url ? { reference_audio: audioRef.url } : {}),
+              ...(audioConfig.show_image_upload && audioImageRefs.length ? { reference_images: audioImageRefs.map((x) => x.url) } : {}),
               ...selectedAssets,
+              ...selectedReferenceAssets,
             }
           : {
             ...params,
@@ -2699,6 +2710,19 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                           url={audioRef?.url}
                           name={audioRef?.name}
                           onChange={setAudioRef}
+                        />
+                      )}
+                      {audioConfig.show_image_upload && (
+                        <ChatTopTools
+                          value={bottom}
+                          onChange={setBottom}
+                          showUpload={false}
+                          showRole={false}
+                          referencePickMode
+                          referenceImages={audioImageRefs}
+                          onReferenceImagesChange={setAudioImageRefs}
+                          maxReferenceImages={maxAudioImageRefs}
+                          assetLibraryLabel={`${t("common.reference")} · ${t("asset.image")}`}
                         />
                       )}
                     </div>

@@ -149,6 +149,57 @@ func TestTestModelConnectionSendsValidChatProbeWhenModelListUnavailable(t *testi
 	}
 }
 
+func TestTestOpenRouterAudioConnectionUsesModelListOnly(t *testing.T) {
+	var posted bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/models" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"id":"openai/gpt-audio"}]}`))
+			return
+		}
+		posted = true
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "token", 5, 5)
+	result := client.TestModelConnection(context.Background(), "/chat/completions", "audio", "openai/gpt-audio", map[string]interface{}{
+		"connection":   map[string]interface{}{"protocol": "openai", "base_url": server.URL, "api_key": "token", "models_endpoint": "/models"},
+		"runtime_rule": map[string]interface{}{"upstream": map[string]interface{}{"adapter": "openrouter_audio"}},
+	})
+	if !result.OK || posted {
+		t.Fatalf("result=%#v posted=%v", result, posted)
+	}
+}
+
+func TestTestOpenRouterAudioConnectionFallsBackToChatAudioProbe(t *testing.T) {
+	var body map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Path != "/chat/completions" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"validation ok"}}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "token", 5, 5)
+	result := client.TestModelConnection(context.Background(), "/chat/completions", "audio", "openai/gpt-audio", map[string]interface{}{
+		"connection":   map[string]interface{}{"protocol": "openai", "base_url": server.URL, "api_key": "token", "models_endpoint": "/models"},
+		"runtime_rule": map[string]interface{}{"upstream": map[string]interface{}{"adapter": "openrouter_audio"}},
+	})
+	if !result.OK || body["modalities"] == nil || body["audio"] == nil || body["stream"] != true {
+		t.Fatalf("result=%#v body=%#v", result, body)
+	}
+}
+
 func TestTestModelConnectionPreservesCustomMediaEndpoint(t *testing.T) {
 	var path string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

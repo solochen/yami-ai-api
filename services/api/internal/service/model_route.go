@@ -169,7 +169,7 @@ func validateRouteCostRule(rule map[string]interface{}) error {
 	if billingType == "" {
 		// Compatibility for default routes created before route costs had an
 		// explicit billing type. Token cost fields imply per-token accounting.
-		for _, key := range []string{"input_cost_per_m", "output_cost_per_m", "cache_read_cost_per_m", "cache_write_cost_per_m"} {
+		for _, key := range []string{"input_cost_per_m", "output_cost_per_m", "cache_read_cost_per_m", "cache_write_cost_per_m", "audio_input_cost_per_m", "audio_output_cost_per_m"} {
 			if _, exists := rule[key]; exists {
 				rule["billing_type"] = "per_token"
 				billingType = "per_token"
@@ -181,7 +181,7 @@ func validateRouteCostRule(rule map[string]interface{}) error {
 	if !allowed[billingType] {
 		return errors.New("线路成本计费方式无效")
 	}
-	for _, key := range []string{"input_cost_per_m", "output_cost_per_m", "cache_read_cost_per_m", "cache_write_cost_per_m", "unit_cost"} {
+	for _, key := range []string{"input_cost_per_m", "output_cost_per_m", "cache_read_cost_per_m", "cache_write_cost_per_m", "audio_input_cost_per_m", "audio_output_cost_per_m", "unit_cost"} {
 		if floatValue(rule[key]) < 0 {
 			return errors.New("线路成本不能为负数")
 		}
@@ -446,13 +446,31 @@ func (r ModelRoute) RequestExtraForRequest(model *ModelFull, requestID string) m
 		"api_key_header": r.APIKeyHeader, "headers": headers, "protocol": r.Protocol,
 	}
 	out["connection"] = connection
-	if strings.HasSuffix(strings.TrimRight(r.Endpoint, "/"), "/responses") || (r.Endpoint == "" && model.RequestMode == "responses") {
+	if model != nil {
+		out["runtime_rule"] = mergeModelRouteMaps(modelFullRuntimeRule(model), r.RuntimeRule)
+	} else {
+		out["runtime_rule"] = copyMap(r.RuntimeRule)
+	}
+	if strings.HasSuffix(strings.TrimRight(r.Endpoint, "/"), "/responses") || (r.Endpoint == "" && model != nil && model.RequestMode == "responses") {
 		out["request_mode"] = "responses"
 	}
 	if r.TimeoutSeconds > 0 {
 		out["timeout_seconds"] = r.TimeoutSeconds
 	}
 	return out
+}
+
+func modelFullRuntimeRule(model *ModelFull) map[string]interface{} {
+	if model == nil {
+		return nil
+	}
+	if len(model.ModelDTO.RuntimeRule) == 0 {
+		return model.RuntimeRule
+	}
+	if len(model.RuntimeRule) == 0 {
+		return model.ModelDTO.RuntimeRule
+	}
+	return mergeModelRouteMaps(model.ModelDTO.RuntimeRule, model.RuntimeRule)
 }
 
 func mergeModelRouteMaps(base, override map[string]interface{}) map[string]interface{} {
@@ -513,13 +531,45 @@ func (s *ModelService) EnsureDefaultModelRoute(ctx context.Context, modelID int6
 	if routeName == "" {
 		routeName = "默认"
 	}
+	routeAuthType := defaultModelRouteAuthType(modelInput, connection)
+	routeEnabled := defaultModelRouteEnabled(modelInput, connection)
 	_, err := s.CreateModelRoute(ctx, modelID, ModelRouteInput{
 		RouteName: routeName + " · 主线路", Provider: stringValue(connection["provider"]), Protocol: stringValue(connection["protocol"]),
 		UpstreamModel: modelInput.NewAPIModel, Endpoint: modelInput.NewAPIEndpoint, BaseURL: baseURL,
-		APIKey: stringValue(connection["api_key"]), AuthType: stringValue(connection["auth_type"]), APIKeyHeader: stringValue(connection["api_key_header"]),
-		Headers: headers, ExtraParams: map[string]interface{}{}, RuntimeRule: map[string]interface{}{}, CostRule: defaultRouteCostRule(modelInput.PriceRule), Priority: 100, Weight: 100, TimeoutSeconds: defaultModelRouteTimeout(modelInput.RequestMode), IsEnabled: modelInput.IsEnabled,
+		APIKey: stringValue(connection["api_key"]), AuthType: routeAuthType, APIKeyHeader: stringValue(connection["api_key_header"]),
+		Headers: headers, ExtraParams: map[string]interface{}{}, RuntimeRule: defaultModelRouteRuntimeRule(modelInput), CostRule: defaultRouteCostRule(modelInput.PriceRule), Priority: 100, Weight: 100, TimeoutSeconds: defaultModelRouteTimeout(modelInput.RequestMode), IsEnabled: routeEnabled,
 	})
 	return err
+}
+
+func defaultModelRouteAuthType(modelInput CreateModelInput, connection map[string]interface{}) string {
+	if isOpenRouterAudioModelInput(modelInput) {
+		return "bearer"
+	}
+	return stringValue(connection["auth_type"])
+}
+
+func defaultModelRouteEnabled(modelInput CreateModelInput, connection map[string]interface{}) bool {
+	if isOpenRouterAudioModelInput(modelInput) && strings.TrimSpace(stringValue(connection["api_key"])) == "" {
+		return false
+	}
+	return modelInput.IsEnabled
+}
+
+func defaultModelRouteRuntimeRule(modelInput CreateModelInput) map[string]interface{} {
+	if !isOpenRouterAudioModelInput(modelInput) {
+		return map[string]interface{}{}
+	}
+	return map[string]interface{}{"upstream": map[string]interface{}{"adapter": "openrouter_audio"}}
+}
+
+func isOpenRouterAudioModelInput(modelInput CreateModelInput) bool {
+	return isOpenRouterAudioRuntimeRule(modelInput.RuntimeRule)
+}
+
+func isOpenRouterAudioRuntimeRule(runtimeRule map[string]interface{}) bool {
+	upstream, _ := runtimeRule["upstream"].(map[string]interface{})
+	return strings.EqualFold(strings.TrimSpace(stringValue(upstream["adapter"])), "openrouter_audio")
 }
 
 func defaultRouteCostRule(priceRule map[string]interface{}) map[string]interface{} {
@@ -563,13 +613,17 @@ func (s *ModelService) SyncPrimaryModelRoute(ctx context.Context, modelID int64,
 	}
 	provider := strings.TrimSpace(stringValue(connection["provider"]))
 	headers, _ := json.Marshal(mapValue(connection["headers"]))
+	disableUntilKey := isOpenRouterAudioModelInput(modelInput) && strings.TrimSpace(apiKey) == ""
+	runtimePatch, _ := json.Marshal(defaultModelRouteRuntimeRule(modelInput))
 	_, err = s.db.Exec(ctx, `UPDATE model_routes SET
 		provider=CASE WHEN $1='' THEN provider ELSE $1 END,protocol=$2,upstream_model=$3,endpoint=$4,
-		base_url=$5,api_key=$6,auth_type=$7,api_key_header=$8,headers=$9,updated_at=now() WHERE id=$10`,
+		base_url=$5,api_key=$6,auth_type=$7,api_key_header=$8,headers=$9,
+		runtime_rule=CASE WHEN $10::jsonb = '{}'::jsonb THEN runtime_rule ELSE COALESCE(runtime_rule,'{}'::jsonb)||$10::jsonb END,
+		is_enabled=CASE WHEN $11 THEN false ELSE is_enabled END,updated_at=now() WHERE id=$12`,
 		provider, protocol, strings.TrimSpace(modelInput.NewAPIModel), normalizeModelEndpoint(modelInput.NewAPIEndpoint),
 		strings.TrimRight(strings.TrimSpace(stringValue(connection["base_url"])), "/"), storedAPIKey,
-		firstNonEmptyService(strings.ToLower(strings.TrimSpace(stringValue(connection["auth_type"]))), "bearer"),
-		firstNonEmptyService(strings.TrimSpace(stringValue(connection["api_key_header"])), "Authorization"), headers, routeID)
+		firstNonEmptyService(defaultModelRouteAuthType(modelInput, connection), "bearer"),
+		firstNonEmptyService(strings.TrimSpace(stringValue(connection["api_key_header"])), "Authorization"), headers, runtimePatch, disableUntilKey, routeID)
 	return err
 }
 
@@ -642,12 +696,22 @@ func (s *ModelService) syncModelFromPrimaryRoute(ctx context.Context, modelID in
 	}
 	connectionPatch, _ := json.Marshal(map[string]interface{}{
 		"provider": primary.Provider, "protocol": protocol, "base_url": primary.BaseURL,
-		"api_key": storedAPIKey, "auth_type": primary.AuthType, "api_key_header": primary.APIKeyHeader,
+		"api_key": storedAPIKey, "auth_type": modelConnectionAuthTypeForRoute(primary), "api_key_header": primary.APIKeyHeader,
 	})
 	_, err := s.db.Exec(ctx, `UPDATE models SET new_api_model=$1,new_api_endpoint=$2,
 		new_api_extra_params=jsonb_set(COALESCE(new_api_extra_params,'{}'::jsonb),'{connection}',COALESCE(new_api_extra_params->'connection','{}'::jsonb)||$3::jsonb,true),updated_at=now()
 		WHERE id=$4`, primary.UpstreamModel, primary.Endpoint, connectionPatch, modelID)
 	return err
+}
+
+func modelConnectionAuthTypeForRoute(route *ModelRoute) string {
+	if route != nil && isOpenRouterAudioRuntimeRule(route.RuntimeRule) && strings.TrimSpace(route.APIKey) == "" {
+		return "none"
+	}
+	if route == nil {
+		return "bearer"
+	}
+	return route.AuthType
 }
 
 func firstNonEmptyService(values ...string) string {
@@ -789,6 +853,21 @@ func EstimateRouteProviderCost(route *ModelRoute, params map[string]interface{},
 	return EstimateRouteProviderCostWithTokenDetails(route, params, promptTokens, completionTokens, 0, 0)
 }
 
+func routeAudioTokenCounts(params map[string]interface{}) (int, int) {
+	if params == nil {
+		return 0, 0
+	}
+	input := firstPositiveIntValue(params, "_actual_audio_input_tokens", "audio_input_tokens", "estimated_audio_input_tokens")
+	output := firstPositiveIntValue(params, "_actual_audio_output_tokens", "audio_output_tokens", "estimated_audio_output_tokens")
+	if input < 0 {
+		input = 0
+	}
+	if output < 0 {
+		output = 0
+	}
+	return input, output
+}
+
 func EstimateRouteProviderCostWithTokenDetails(route *ModelRoute, params map[string]interface{}, promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens int) float64 {
 	if route == nil {
 		return 0
@@ -799,6 +878,8 @@ func EstimateRouteProviderCostWithTokenDetails(route *ModelRoute, params map[str
 	case "per_token":
 		input := floatValue(rule["input_cost_per_m"])
 		output := floatValue(rule["output_cost_per_m"])
+		audioInputCost := floatValue(rule["audio_input_cost_per_m"])
+		audioOutputCost := floatValue(rule["audio_output_cost_per_m"])
 		cacheRead := floatValue(rule["cache_read_cost_per_m"])
 		cacheWrite := floatValue(rule["cache_write_cost_per_m"])
 		if cacheRead <= 0 {
@@ -813,11 +894,26 @@ func EstimateRouteProviderCostWithTokenDetails(route *ModelRoute, params map[str
 		if cacheWriteTokens < 0 {
 			cacheWriteTokens = 0
 		}
-		if cacheReadTokens+cacheWriteTokens > promptTokens {
+		audioInputTokens, audioOutputTokens := routeAudioTokenCounts(params)
+		if promptTokens <= 0 && audioInputTokens > 0 {
+			promptTokens = audioInputTokens
+		}
+		if completionTokens <= 0 && audioOutputTokens > 0 {
+			completionTokens = audioOutputTokens
+		}
+		if audioInputTokens > promptTokens {
+			audioInputTokens = promptTokens
+		}
+		if audioOutputTokens > completionTokens {
+			audioOutputTokens = completionTokens
+		}
+		textPromptTokens := promptTokens - audioInputTokens
+		textCompletionTokens := completionTokens - audioOutputTokens
+		if cacheReadTokens+cacheWriteTokens > textPromptTokens {
 			cacheReadTokens, cacheWriteTokens = 0, 0
 		}
-		uncached := promptTokens - cacheReadTokens - cacheWriteTokens
-		return (float64(uncached)*input + float64(cacheReadTokens)*cacheRead + float64(cacheWriteTokens)*cacheWrite + float64(completionTokens)*output) / 1_000_000
+		uncached := textPromptTokens - cacheReadTokens - cacheWriteTokens
+		return (float64(uncached)*input + float64(cacheReadTokens)*cacheRead + float64(cacheWriteTokens)*cacheWrite + float64(textCompletionTokens)*output + float64(audioInputTokens)*audioInputCost + float64(audioOutputTokens)*audioOutputCost) / 1_000_000
 	case "per_image", "per_request":
 		count := intFromAny(params["n"], 1)
 		if count <= 0 {

@@ -24,6 +24,31 @@ func TestEstimateRouteProviderCostForMedia(t *testing.T) {
 	}
 }
 
+func TestEstimateRouteProviderCostSeparatesAudioTokens(t *testing.T) {
+	route := &ModelRoute{CostRule: map[string]interface{}{
+		"billing_type":            "per_token",
+		"input_cost_per_m":        float64(10),
+		"output_cost_per_m":       float64(20),
+		"audio_input_cost_per_m":  float64(100),
+		"audio_output_cost_per_m": float64(200),
+	}}
+	got := EstimateRouteProviderCostWithTokenDetails(route, map[string]interface{}{
+		"_actual_audio_input_tokens":  float64(300),
+		"_actual_audio_output_tokens": float64(400),
+	}, 1000, 2000, 0, 0)
+	want := (float64(700)*10 + float64(1600)*20 + float64(300)*100 + float64(400)*200) / 1_000_000
+	if got != want {
+		t.Fatalf("provider cost = %.9f, want %.9f", got, want)
+	}
+}
+
+func TestValidateRouteCostRuleAllowsAudioTokenCosts(t *testing.T) {
+	rule := map[string]interface{}{"billing_type": "per_token", "audio_input_cost_per_m": 32.0, "audio_output_cost_per_m": 64.0}
+	if err := validateRouteCostRule(rule); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestNormalizeModelRouteDefaults(t *testing.T) {
 	input := ModelRouteInput{RouteName: " Primary ", UpstreamModel: " model-a ", BaseURL: "https://example.com/", IsEnabled: true}
 	if err := normalizeModelRouteInput(&input); err != nil {
@@ -155,5 +180,43 @@ func TestRouteRequestAddsIdempotencyKey(t *testing.T) {
 	headers := connection["headers"].(map[string]interface{})
 	if headers["Idempotency-Key"] != "req_123" || headers["X-Custom"] != "yes" {
 		t.Fatalf("headers = %#v", headers)
+	}
+}
+
+func TestRouteRequestCarriesMergedRuntimeRule(t *testing.T) {
+	model := &ModelFull{ModelDTO: ModelDTO{RuntimeRule: map[string]interface{}{"audio": map[string]interface{}{"show_upload": true}, "upstream": map[string]interface{}{"adapter": "legacy"}}}, NewAPIExtraParams: map[string]interface{}{}}
+	route := ModelRoute{RuntimeRule: map[string]interface{}{"upstream": map[string]interface{}{"adapter": "openrouter_audio"}}}
+	extra := route.RequestExtraForRequest(model, "")
+	runtimeRule := extra["runtime_rule"].(map[string]interface{})
+	upstream := runtimeRule["upstream"].(map[string]interface{})
+	if upstream["adapter"] != "openrouter_audio" || runtimeRule["audio"] == nil {
+		t.Fatalf("runtime_rule = %#v", runtimeRule)
+	}
+}
+
+func TestOpenRouterAudioDefaultRouteRequiresKeyBeforeEnable(t *testing.T) {
+	input := CreateModelInput{
+		Category:    "audio",
+		RequestMode: "audio",
+		IsEnabled:   true,
+		RuntimeRule: map[string]interface{}{"upstream": map[string]interface{}{"adapter": "openrouter_audio"}},
+	}
+	connection := map[string]interface{}{"auth_type": "none", "api_key": ""}
+	if defaultModelRouteEnabled(input, connection) {
+		t.Fatal("openrouter audio default route with empty key should start disabled")
+	}
+	if got := defaultModelRouteAuthType(input, connection); got != "bearer" {
+		t.Fatalf("auth type = %q, want bearer", got)
+	}
+	runtimeRule := defaultModelRouteRuntimeRule(input)
+	upstream := runtimeRule["upstream"].(map[string]interface{})
+	if upstream["adapter"] != "openrouter_audio" {
+		t.Fatalf("runtime rule = %#v", runtimeRule)
+	}
+	if got := modelConnectionAuthTypeForRoute(&ModelRoute{AuthType: "bearer", RuntimeRule: runtimeRule}); got != "none" {
+		t.Fatalf("empty-key model auth = %q, want none", got)
+	}
+	if got := modelConnectionAuthTypeForRoute(&ModelRoute{APIKey: "sk-test", AuthType: "bearer", RuntimeRule: runtimeRule}); got != "bearer" {
+		t.Fatalf("keyed model auth = %q, want bearer", got)
 	}
 }

@@ -76,6 +76,24 @@ func TestPerTokenCostMultipliesGeneratedCount(t *testing.T) {
 	}
 }
 
+func TestEstimateCostSeparatesAudioTokenPrices(t *testing.T) {
+	service := &ModelService{}
+	model := &ModelFull{ModelDTO: ModelDTO{Category: "audio", PriceRule: map[string]interface{}{
+		"billing_type":                  "per_token",
+		"input_price_per_m":             float64(10),
+		"output_price_per_m":            float64(20),
+		"audio_input_price_per_m":       float64(100),
+		"audio_output_price_per_m":      float64(200),
+		"estimated_audio_input_tokens":  float64(300),
+		"estimated_audio_output_tokens": float64(400),
+	}}}
+	got := service.EstimateCost(model, map[string]interface{}{"prompt": "hello"}, 1000, 2000)
+	want := float64(700)*10/1_000_000 + float64(1600)*20/1_000_000 + float64(300)*100/1_000_000 + float64(400)*200/1_000_000
+	if math.Abs(got-want) > 0.000000001 {
+		t.Fatalf("cost = %.9f, want %.9f", got, want)
+	}
+}
+
 func TestChatTokenCostIgnoresUnforwardedCountParam(t *testing.T) {
 	service := &ModelService{}
 	model := &ModelFull{ModelDTO: ModelDTO{Category: "chat", PriceRule: map[string]interface{}{

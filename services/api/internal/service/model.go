@@ -337,7 +337,16 @@ func (s *ModelService) EstimateCost(model *ModelFull, params map[string]interfac
 		return unitPrice * n
 	case "per_token":
 		promptTokens, outputTokens = estimatedTokenCounts(model.PriceRule, params, promptTokens, outputTokens)
-		return tokenCostFromRule(model.PriceRule, promptTokens, outputTokens, 0, 0) * modelTokenItemCount(model, params)
+		audioInput, audioOutput := audioTokenCounts(model.PriceRule, params)
+		textPromptTokens := promptTokens - audioInput
+		if textPromptTokens < 0 {
+			textPromptTokens = 0
+		}
+		textOutputTokens := outputTokens - audioOutput
+		if textOutputTokens < 0 {
+			textOutputTokens = 0
+		}
+		return (tokenCostFromRule(model.PriceRule, textPromptTokens, textOutputTokens, 0, 0) + audioTokenCostFromRule(model.PriceRule, audioInput, audioOutput)) * modelTokenItemCount(model, params)
 	case "per_request":
 		return floatValue(model.PriceRule["unit_price"])
 	case "per_second":
@@ -363,7 +372,36 @@ func (s *ModelService) EstimateCostWithTokenDetails(model *ModelFull, params map
 	} else if promptTokens <= 0 {
 		promptTokens, _ = estimatedTokenCounts(model.PriceRule, params, promptTokens, 1)
 	}
-	return tokenCostFromRule(model.PriceRule, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens) * modelTokenItemCount(model, params)
+	audioInput, audioOutput := audioTokenCounts(model.PriceRule, params)
+	if audioInput > promptTokens {
+		audioInput = promptTokens
+	}
+	if audioOutput > outputTokens {
+		audioOutput = outputTokens
+	}
+	return (tokenCostFromRule(model.PriceRule, promptTokens-audioInput, outputTokens-audioOutput, cacheReadTokens, cacheWriteTokens) + audioTokenCostFromRule(model.PriceRule, audioInput, audioOutput)) * modelTokenItemCount(model, params)
+}
+
+func audioTokenCounts(rule, params map[string]interface{}) (int, int) {
+	input := firstPositiveIntValue(params, "_actual_audio_input_tokens", "audio_input_tokens", "estimated_audio_input_tokens")
+	if input <= 0 {
+		input = firstPositiveIntValue(rule, "estimated_audio_input_tokens")
+	}
+	output := firstPositiveIntValue(params, "_actual_audio_output_tokens", "audio_output_tokens", "estimated_audio_output_tokens")
+	if output <= 0 {
+		output = firstPositiveIntValue(rule, "estimated_audio_output_tokens")
+	}
+	return input, output
+}
+
+func audioTokenCostFromRule(rule map[string]interface{}, inputTokens, outputTokens int) float64 {
+	if inputTokens < 0 {
+		inputTokens = 0
+	}
+	if outputTokens < 0 {
+		outputTokens = 0
+	}
+	return float64(inputTokens)*perTokenPrice(rule, "audio_input_price") + float64(outputTokens)*perTokenPrice(rule, "audio_output_price")
 }
 
 func modelTokenItemCount(model *ModelFull, params map[string]interface{}) float64 {
@@ -1680,7 +1718,7 @@ func validateModelPriceRule(rule map[string]interface{}) error {
 	if !allowed[billingType] {
 		return fmt.Errorf("不支持的计费类型：%s", billingType)
 	}
-	for _, key := range []string{"unit_price", "input_price", "output_price", "cache_read_price", "cache_write_price", "input_price_per_m", "output_price_per_m", "cache_read_price_per_m", "cache_write_price_per_m", "surcharge_per_m", "fallback_cost"} {
+	for _, key := range []string{"unit_price", "input_price", "output_price", "cache_read_price", "cache_write_price", "audio_input_price", "audio_output_price", "input_price_per_m", "output_price_per_m", "cache_read_price_per_m", "cache_write_price_per_m", "audio_input_price_per_m", "audio_output_price_per_m", "surcharge_per_m", "fallback_cost"} {
 		if floatValue(rule[key]) < 0 {
 			return fmt.Errorf("计费字段 %s 不能为负数", key)
 		}

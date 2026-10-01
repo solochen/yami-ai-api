@@ -31,6 +31,8 @@ function formatPerM(perM: number) {
 const TOKEN_PRICE_ROWS: { key: string; label: string; required?: boolean }[] = [
   { key: "input_price", label: "输入价格（Prompt）", required: true },
   { key: "output_price", label: "输出价格（Completion）", required: true },
+  { key: "audio_input_price", label: "音频输入价格" },
+  { key: "audio_output_price", label: "音频输出价格" },
   { key: "cache_read_price", label: "缓存读取价格（命中）" },
   { key: "cache_write_price", label: "缓存写入价格" },
 ];

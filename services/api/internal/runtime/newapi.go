@@ -530,7 +530,8 @@ func (c *Client) TestModelConnection(ctx context.Context, endpoint, requestMode,
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	if requestMode == "chat_completions" || requestMode == "images" {
+	openRouterAudio := requestMode == "audio" && isOpenRouterAudioAdapter(extra)
+	if requestMode == "chat_completions" || requestMode == "images" || openRouterAudio {
 		listCtx, listCancel := context.WithTimeout(probeCtx, 5*time.Second)
 		models, listErr := c.ListModels(listCtx, extra)
 		listCancel()
@@ -538,7 +539,9 @@ func (c *Client) TestModelConnection(ctx context.Context, endpoint, requestMode,
 			for _, item := range models {
 				if item.ID == model {
 					result.OK = true
-					if requestMode == "images" {
+					if openRouterAudio {
+						result.Message = "OpenRouter 音频服务连接、鉴权及模型列表正常（未提交生成请求）"
+					} else if requestMode == "images" {
 						result.Message = "图片服务连接、鉴权及模型列表正常（未提交生图；参考图编辑接口未实际生成验证）"
 					} else {
 						result.Message = "连接、鉴权及模型列表正常"
@@ -547,7 +550,7 @@ func (c *Client) TestModelConnection(ctx context.Context, endpoint, requestMode,
 					return result
 				}
 			}
-			if requestMode == "chat_completions" {
+			if requestMode == "chat_completions" || openRouterAudio {
 				result.StatusCode = http.StatusOK
 				result.Message = fmt.Sprintf("连接与鉴权正常，但上游模型列表中没有 %q", model)
 				return result
@@ -565,7 +568,11 @@ func (c *Client) TestModelConnection(ctx context.Context, endpoint, requestMode,
 		case "video":
 			endpoint = "/v1/video/generations"
 		case "audio":
-			endpoint = "/v1/audio/speech"
+			if openRouterAudio {
+				endpoint = "/chat/completions"
+			} else {
+				endpoint = "/v1/audio/speech"
+			}
 		default:
 			endpoint = "/v1/chat/completions"
 		}
@@ -600,6 +607,16 @@ func (c *Client) TestModelConnection(ctx context.Context, endpoint, requestMode,
 			result.Message = "测试请求创建失败：" + err.Error()
 			return result
 		}
+	} else if requestMode == "audio" && openRouterAudio {
+		protocol = chatProtocol(extra)
+		body, _ = json.Marshal(map[string]interface{}{
+			"model":      model,
+			"messages":   []map[string]interface{}{{"role": "user", "content": []map[string]interface{}{{"type": "text", "text": "ping"}}}},
+			"modalities": []string{"text", "audio"},
+			"audio":      map[string]interface{}{"voice": "alloy", "format": "mp3"},
+			"stream":     true,
+			"max_tokens": 1,
+		})
 	} else if requestMode == "audio" {
 		protocol = mediaProtocol(extra)
 		body, err = prepareAudioRequest(AudioRequest{
@@ -625,13 +642,17 @@ func (c *Client) TestModelConnection(ctx context.Context, endpoint, requestMode,
 		return result
 	}
 	applyAuthHeaders(req, cfg)
-	if requestMode == "chat_completions" {
+	if requestMode == "chat_completions" || openRouterAudio {
 		applyChatProtocolHeaders(req, protocol, extra)
 	} else if requestMode == "images" || requestMode == "video" || requestMode == "audio" {
 		applyMediaProtocolHeaders(req, protocol, extra)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	if openRouterAudio {
+		req.Header.Set("Accept", "text/event-stream")
+	} else {
+		req.Header.Set("Accept", "application/json")
+	}
 
 	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Do(req)
@@ -672,6 +693,12 @@ func (c *Client) TestModelConnection(ctx context.Context, endpoint, requestMode,
 		result.Message += "：" + upstreamMessage
 	}
 	return result
+}
+
+func isOpenRouterAudioAdapter(extra map[string]interface{}) bool {
+	runtimeRule, _ := extra["runtime_rule"].(map[string]interface{})
+	upstream, _ := runtimeRule["upstream"].(map[string]interface{})
+	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(upstream["adapter"])), "openrouter_audio")
 }
 
 func connectionTestMessage(raw []byte) string {

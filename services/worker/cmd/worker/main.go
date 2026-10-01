@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/aes"
@@ -430,9 +431,12 @@ routeLoop:
 	}
 	if usd > 0 {
 		if rate := modelUSDToComputeRate(ctx, pool, p.ModelID); rate > 0 {
-			actualCost = math.Round(usd*rate*1e6) / 1e6
+			converted := math.Round(usd*rate*1e6) / 1e6
+			actualCost = converted
+			providerCost = converted
+		} else {
+			providerCost = usd
 		}
-		providerCost = usd
 	}
 	updateWorkerRouteAttemptProviderCost(ctx, pool, p.TaskNo, selected.Route.ID, providerCost)
 
@@ -511,6 +515,34 @@ routeLoop:
 		}
 		thumbnail = audioURL
 		audioOutput := map[string]interface{}{"audio_url": audioURL, "upstream_task_id": upstreamID}
+		text, transcript, audioFormat := parseUpstreamAudioDetails(respBody)
+		if text != "" {
+			audioOutput["text"] = text
+			if transcript != "" {
+				audioOutput["transcript"] = transcript
+			}
+		} else if transcript != "" {
+			audioOutput["transcript"] = transcript
+		}
+		if audioFormat == "" {
+			audioFormat = strings.TrimSpace(stringAny(p.Input["format"]))
+		}
+		if audioFormat != "" {
+			audioOutput["format"] = audioFormat
+		}
+		if voice := strings.TrimSpace(stringAny(firstNonNil(p.Input["voice"], p.Input["voice_id"]))); voice != "" {
+			audioOutput["voice"] = voice
+		}
+		if usage.hasAny() || usage.CostUSD > 0 {
+			audioOutput["usage"] = map[string]interface{}{
+				"prompt_tokens": usage.PromptTokens, "completion_tokens": usage.OutputTokens,
+				"audio_input_tokens": usage.AudioInputTokens, "audio_output_tokens": usage.AudioOutputTokens,
+				"cost_usd": usage.CostUSD,
+			}
+		}
+		if newAPIModel != "" {
+			audioOutput["upstream_model"] = newAPIModel
+		}
 		if timing, ok := p.Input["_speech_timing"].(map[string]interface{}); ok {
 			timed, err := finalizeTimedSpeech(ctx, p.TaskNo, audioURL, timing, stringAny(p.Input["format"]))
 			if err != nil {
@@ -525,7 +557,7 @@ routeLoop:
 			thumbnail = audioURL
 		}
 		output, _ = json.Marshal(audioOutput)
-		meta, _ = json.Marshal(map[string]interface{}{"audio_url": audioURL})
+		meta, _ = json.Marshal(audioOutput)
 	} else {
 		images := make([]map[string]string, 0, len(resultData))
 		for idx, item := range resultData {
@@ -990,6 +1022,8 @@ func workerRouteProviderCost(route workerModelRoute, input map[string]interface{
 	switch typeName {
 	case "per_token":
 		inputCost := value("input_cost_per_m")
+		audioInputCost := value("audio_input_cost_per_m")
+		audioOutputCost := value("audio_output_cost_per_m")
 		cacheReadCost := value("cache_read_cost_per_m")
 		if cacheReadCost <= 0 {
 			cacheReadCost = inputCost
@@ -1004,11 +1038,33 @@ func workerRouteProviderCost(route workerModelRoute, input map[string]interface{
 		if cacheWriteTokens < 0 {
 			cacheWriteTokens = 0
 		}
-		if cacheReadTokens+cacheWriteTokens > promptTokens {
+		audioInputTokens := intAny(firstNonNil(input["_actual_audio_input_tokens"], input["audio_input_tokens"], input["estimated_audio_input_tokens"]))
+		audioOutputTokens := intAny(firstNonNil(input["_actual_audio_output_tokens"], input["audio_output_tokens"], input["estimated_audio_output_tokens"]))
+		if audioInputTokens < 0 {
+			audioInputTokens = 0
+		}
+		if audioOutputTokens < 0 {
+			audioOutputTokens = 0
+		}
+		if promptTokens <= 0 && audioInputTokens > 0 {
+			promptTokens = audioInputTokens
+		}
+		if outputTokens <= 0 && audioOutputTokens > 0 {
+			outputTokens = audioOutputTokens
+		}
+		if audioInputTokens > promptTokens {
+			audioInputTokens = promptTokens
+		}
+		if audioOutputTokens > outputTokens {
+			audioOutputTokens = outputTokens
+		}
+		textPromptTokens := promptTokens - audioInputTokens
+		textOutputTokens := outputTokens - audioOutputTokens
+		if cacheReadTokens+cacheWriteTokens > textPromptTokens {
 			cacheReadTokens, cacheWriteTokens = 0, 0
 		}
-		uncached := promptTokens - cacheReadTokens - cacheWriteTokens
-		return (float64(uncached)*inputCost + float64(cacheReadTokens)*cacheReadCost + float64(cacheWriteTokens)*cacheWriteCost + float64(outputTokens)*value("output_cost_per_m")) / 1_000_000
+		uncached := textPromptTokens - cacheReadTokens - cacheWriteTokens
+		return (float64(uncached)*inputCost + float64(cacheReadTokens)*cacheReadCost + float64(cacheWriteTokens)*cacheWriteCost + float64(textOutputTokens)*value("output_cost_per_m") + float64(audioInputTokens)*audioInputCost + float64(audioOutputTokens)*audioOutputCost) / 1_000_000
 	case "per_image", "per_request":
 		count := intAny(input["n"])
 		if count <= 0 {
@@ -1098,6 +1154,21 @@ func executeWorkerGenerationAttempt(ctx context.Context, pool *pgxpool.Pool, p I
 					input[key] = 1.0
 				}
 			}
+		}
+		if isOpenRouterAudioAdapter(route.RuntimeRule) {
+			payload, payloadErr := buildOpenRouterAudioPayload(ctx, upstreamModel, p.ModelCode, prompt, input)
+			if payloadErr != nil {
+				return result, payloadErr
+			}
+			body, _ = json.Marshal(payload)
+			endpoint = resolveModelEndpoint(endpoint, upstreamModel)
+			var streamErr error
+			timeout := upstreamRequestTimeout(route.RuntimeRule, true)
+			if route.TimeoutSeconds > 0 {
+				timeout = time.Duration(route.TimeoutSeconds) * time.Second
+			}
+			result.ResponseBody, result.StatusCode, streamErr = postOpenRouterAudioUpstream(ctx, route.Connection, endpoint, payload, timeout)
+			return result, streamErr
 		}
 		body, _ = json.Marshal(videoparams.BuildUpstreamVideoPayload(p.ModelCode, upstreamModel, route.RuntimeRule, extraParams, input))
 	} else {
@@ -1223,6 +1294,240 @@ func executeWorkerGenerationAttempt(ctx context.Context, pool *pgxpool.Pool, p I
 		result.ResponseBody, result.StatusCode, err = doJSONRequestWithLimit(ctx, route.Connection, "POST", joinBaseEndpoint(route.Connection.BaseURL, resolveModelEndpoint(endpoint, upstreamModel)), body, timeout, 96<<20)
 	}
 	return result, err
+}
+
+func isOpenRouterAudioAdapter(runtimeRule map[string]interface{}) bool {
+	upstream, _ := runtimeRule["upstream"].(map[string]interface{})
+	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(upstream["adapter"])), "openrouter_audio")
+}
+
+// buildOpenRouterAudioPayload uses OpenRouter's Chat Completions audio contract.
+// Audio output is deliberately streamed: OpenRouter delivers audio chunks in
+// choices[].delta.audio rather than a single JSON response body.
+func buildOpenRouterAudioPayload(ctx context.Context, upstreamModel, modelCode, prompt string, input map[string]interface{}) (map[string]interface{}, error) {
+	model := strings.TrimSpace(upstreamModel)
+	if model == "" {
+		model = modelCode
+	}
+	content := make([]interface{}, 0, 4)
+	if text := strings.TrimSpace(prompt); text != "" {
+		content = append(content, map[string]interface{}{"type": "text", "text": text})
+	}
+	for _, source := range referenceImageSources(firstNonNil(input["reference_images"], input["reference_image"])) {
+		image := normalizeReferenceImage(ctx, source)
+		if image == "" {
+			continue
+		}
+		content = append(content, map[string]interface{}{"type": "image_url", "image_url": map[string]string{"url": image}})
+	}
+	for _, source := range referenceImageSources(firstNonNil(input["reference_audios"], input["reference_audio"])) {
+		data, format, err := loadOpenRouterAudioInput(ctx, source)
+		if err != nil {
+			return nil, fmt.Errorf("参考音频读取失败: %w", err)
+		}
+		content = append(content, map[string]interface{}{
+			"type":        "input_audio",
+			"input_audio": map[string]string{"data": data, "format": format},
+		})
+	}
+	if len(content) == 0 {
+		content = append(content, map[string]interface{}{"type": "text", "text": "请根据系统指令生成音频。"})
+	}
+
+	payload := map[string]interface{}{
+		"model": model,
+		"messages": []interface{}{map[string]interface{}{
+			"role":    "user",
+			"content": content,
+		}},
+		"modalities":     []string{"text", "audio"},
+		"stream":         true,
+		"stream_options": map[string]interface{}{"include_usage": true},
+	}
+	modelLower := strings.ToLower(model)
+	audio := map[string]interface{}{"format": stringAny(firstNonNil(input["audio_format"], input["format"]))}
+	if strings.TrimSpace(fmt.Sprint(audio["format"])) == "" || fmt.Sprint(audio["format"]) == "<nil>" {
+		audio["format"] = "wav"
+	}
+	if !strings.Contains(modelLower, "lyria") {
+		voice := strings.TrimSpace(stringAny(firstNonNil(input["voice"], input["voice_id"])))
+		if voice == "" {
+			voice = "alloy"
+		}
+		audio["voice"] = voice
+	}
+	payload["audio"] = audio
+	for _, key := range []string{"max_tokens", "max_completion_tokens", "temperature", "top_p", "seed", "response_format"} {
+		if value, ok := input[key]; ok && value != nil && strings.TrimSpace(fmt.Sprint(value)) != "" && fmt.Sprint(value) != "<nil>" {
+			payload[key] = value
+		}
+	}
+	return payload, nil
+}
+
+func loadOpenRouterAudioInput(ctx context.Context, source string) (string, string, error) {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return "", "", errors.New("音频地址为空")
+	}
+	if strings.HasPrefix(source, "data:") {
+		data, contentType, err := loadMediaBytes(ctx, source)
+		if err != nil {
+			return "", "", err
+		}
+		return base64.StdEncoding.EncodeToString(data), openRouterAudioFormat(contentType, source), nil
+	}
+	data, contentType, err := loadMediaBytes(ctx, source)
+	if err != nil && objectStore != nil {
+		if objectKey := objectStore.ObjectKeyFromURL(source); objectKey != "" {
+			data, err = objectStore.ReadAll(ctx, objectKey, 32<<20)
+			contentType = ""
+		}
+	}
+	if err != nil {
+		return "", "", err
+	}
+	if len(data) == 0 || !validDownloadedMedia("audio", contentType, data) {
+		return "", "", errors.New("不是有效的音频文件")
+	}
+	if contentType == "" || !strings.HasPrefix(strings.ToLower(contentType), "audio/") {
+		contentType = http.DetectContentType(data)
+	}
+	return base64.StdEncoding.EncodeToString(data), openRouterAudioFormat(contentType, source), nil
+}
+
+func openRouterAudioFormat(contentType, source string) string {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	switch {
+	case strings.Contains(ct, "wav"), strings.Contains(ct, "wave"):
+		return "wav"
+	case strings.Contains(ct, "flac"):
+		return "flac"
+	case strings.Contains(ct, "ogg") || strings.Contains(ct, "opus"):
+		return "ogg"
+	case strings.Contains(ct, "aac"):
+		return "aac"
+	case strings.Contains(ct, "mp4") || strings.Contains(ct, "m4a"):
+		return "m4a"
+	case strings.Contains(ct, "aiff") || strings.Contains(ct, "aif"):
+		return "aiff"
+	case strings.Contains(ct, "pcm"):
+		return "pcm16"
+	}
+	lower := strings.ToLower(source)
+	for suffix, format := range map[string]string{".wav": "wav", ".flac": "flac", ".ogg": "ogg", ".oga": "ogg", ".opus": "ogg", ".aac": "aac", ".m4a": "m4a", ".aiff": "aiff", ".aif": "aiff", ".mp3": "mp3"} {
+		if strings.Contains(lower, suffix) {
+			return format
+		}
+	}
+	return "mp3"
+}
+
+func postOpenRouterAudioUpstream(ctx context.Context, conn connectionConfig, endpoint string, payload map[string]interface{}, timeout time.Duration) ([]byte, int, error) {
+	target := joinBaseEndpoint(conn.BaseURL, endpoint)
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, err
+	}
+	applyConnectionHeaders(req, conn)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	if timeout <= 0 {
+		timeout = 15 * time.Minute
+	}
+	resp, err := (&http.Client{Timeout: timeout}).Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+		if readErr != nil {
+			return raw, resp.StatusCode, readErr
+		}
+		return raw, resp.StatusCode, nil
+	}
+	format := "wav"
+	if audio, ok := payload["audio"].(map[string]interface{}); ok {
+		if configured := strings.TrimSpace(stringAny(audio["format"])); configured != "" {
+			format = configured
+		}
+	}
+	return collectOpenRouterAudioSSE(resp.Body, format)
+}
+
+func collectOpenRouterAudioSSE(reader io.Reader, format string) ([]byte, int, error) {
+	var text strings.Builder
+	var transcript strings.Builder
+	var audioData strings.Builder
+	var usage interface{}
+	var model string
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 64<<10), 8<<20)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "[DONE]" {
+			break
+		}
+		var chunk map[string]interface{}
+		if json.Unmarshal([]byte(data), &chunk) != nil {
+			continue
+		}
+		if value, ok := chunk["model"].(string); ok {
+			model = value
+		}
+		if value, ok := chunk["usage"]; ok {
+			usage = value
+		}
+		choices, _ := chunk["choices"].([]interface{})
+		if len(choices) == 0 {
+			continue
+		}
+		choice, _ := choices[0].(map[string]interface{})
+		delta, _ := choice["delta"].(map[string]interface{})
+		if delta == nil {
+			delta, _ = choice["message"].(map[string]interface{})
+		}
+		if delta == nil {
+			continue
+		}
+		if value, ok := delta["content"].(string); ok {
+			text.WriteString(value)
+		}
+		if audio, ok := delta["audio"].(map[string]interface{}); ok {
+			if value, ok := audio["data"].(string); ok {
+				audioData.WriteString(value)
+			}
+			if value, ok := audio["transcript"].(string); ok {
+				transcript.WriteString(value)
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, http.StatusOK, err
+	}
+	if audioData.Len() == 0 && text.Len() == 0 && transcript.Len() == 0 {
+		return nil, http.StatusOK, errors.New("上游音频流未返回可用内容")
+	}
+	message := map[string]interface{}{"content": text.String()}
+	if audioData.Len() > 0 || transcript.Len() > 0 {
+		message["audio"] = map[string]interface{}{"data": audioData.String(), "transcript": transcript.String(), "format": format}
+	}
+	response := map[string]interface{}{
+		"id":      model,
+		"model":   model,
+		"choices": []interface{}{map[string]interface{}{"index": 0, "message": message}},
+	}
+	if usage != nil {
+		response["usage"] = usage
+	}
+	raw, err := json.Marshal(response)
+	return raw, http.StatusOK, err
 }
 
 func applyOpenAIImageOptions(out, input map[string]interface{}) {
@@ -1989,7 +2294,7 @@ func normalizeMediaContentType(contentType, kind string) string {
 			return "audio/flac"
 		case "ogg":
 			return "audio/ogg"
-		case "pcm":
+		case "pcm", "pcm16":
 			return "audio/pcm"
 		}
 	}
@@ -2922,6 +3227,56 @@ func parseUpstreamMedia(body []byte) ([]mediaItem, string) {
 	return nil, upstreamID
 }
 
+func parseUpstreamAudioText(body []byte) (string, string) {
+	text, transcript, _ := parseUpstreamAudioDetails(body)
+	return text, transcript
+}
+
+func parseUpstreamAudioDetails(body []byte) (string, string, string) {
+	var raw map[string]interface{}
+	if json.Unmarshal(body, &raw) != nil {
+		return "", "", ""
+	}
+	text := ""
+	transcript := ""
+	format := ""
+	queue := []map[string]interface{}{raw}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if text == "" {
+			text = firstString(current, "text", "output_text")
+			if content, ok := current["content"].(string); ok {
+				text = strings.TrimSpace(content)
+			}
+		}
+		if audio, ok := current["audio"].(map[string]interface{}); ok {
+			if transcript == "" {
+				transcript = firstString(audio, "transcript", "text")
+			}
+			if format == "" {
+				format = firstString(audio, "format", "audio_format")
+			}
+		}
+		if transcript == "" {
+			transcript = firstString(current, "transcript")
+		}
+		for _, key := range []string{"data", "result", "output", "message", "choices"} {
+			switch child := current[key].(type) {
+			case map[string]interface{}:
+				queue = append(queue, child)
+			case []interface{}:
+				for _, item := range child {
+					if itemMap, ok := item.(map[string]interface{}); ok {
+						queue = append(queue, itemMap)
+					}
+				}
+			}
+		}
+	}
+	return strings.TrimSpace(text), strings.TrimSpace(transcript), strings.TrimSpace(format)
+}
+
 func upstreamPollPath(body []byte, baseURL string) string {
 	var raw map[string]interface{}
 	if json.Unmarshal(body, &raw) != nil {
@@ -3066,7 +3421,7 @@ func mediaItemFromMap(m map[string]interface{}) (mediaItem, bool) {
 		thumb := firstMediaURL(m, "thumbnail", "cover_url", "poster_url", "last_frame_url")
 		return mediaItem{URL: mediaURL, Thumbnail: thumb}, true
 	}
-	if b64 := firstString(m, encodedMediaKeys()...); b64 != "" && looksLikeEncodedMedia(b64) {
+	if b64 := firstString(m, encodedMediaKeys()...); b64 != "" && looksLikeEncodedMediaWithHint(b64, m) {
 		return mediaItem{B64JSON: b64, MimeType: firstString(m, "media_type", "mime_type", "mime", "content_type", "format", "audio_format")}, true
 	}
 	for _, key := range []string{"data", "result", "output", "message", "content", "audio", "audio_result", "images", "videos", "audios", "results", "files", "choices"} {
@@ -3084,7 +3439,7 @@ func mediaItemFromValue(v interface{}, parent map[string]interface{}) (mediaItem
 		if isHTTPURL(s) {
 			return mediaItem{URL: s}, true
 		}
-		if looksLikeEncodedMedia(s) {
+		if looksLikeEncodedMediaWithHint(s, parent) {
 			return mediaItem{B64JSON: s, MimeType: firstString(parent, "mime_type", "mime", "content_type", "format", "audio_format")}, true
 		}
 	case map[string]interface{}:
@@ -3203,6 +3558,37 @@ func looksLikeEncodedMedia(s string) bool {
 	}
 	_, err := base64.StdEncoding.DecodeString(s)
 	return err == nil
+}
+
+func looksLikeEncodedMediaWithHint(s string, parent map[string]interface{}) bool {
+	if looksLikeEncodedMedia(s) {
+		return true
+	}
+	if !hasEncodedMediaHint(parent) {
+		return false
+	}
+	_, err := base64.StdEncoding.DecodeString(strings.TrimSpace(s))
+	return err == nil
+}
+
+func hasEncodedMediaHint(parent map[string]interface{}) bool {
+	if len(parent) == 0 {
+		return false
+	}
+	for _, key := range []string{"media_type", "mime_type", "mime", "content_type", "format", "audio_format"} {
+		value := strings.ToLower(strings.TrimSpace(scalarString(parent, key)))
+		if value == "" {
+			continue
+		}
+		if strings.Contains(value, "/") {
+			return strings.HasPrefix(value, "audio/") || strings.HasPrefix(value, "image/") || strings.HasPrefix(value, "video/")
+		}
+		switch value {
+		case "mp3", "mpeg", "wav", "wave", "flac", "ogg", "opus", "pcm", "pcm16", "pcm24", "m4a", "aac", "aiff", "png", "jpg", "jpeg", "webp", "gif", "mp4", "webm", "mov":
+			return true
+		}
+	}
+	return false
 }
 
 // upstreamContentFailure detects otuapi-style errors stored in result_url/fail_reason as plain text.
@@ -3815,6 +4201,8 @@ func pollUpstreamTask(ctx context.Context, pool *pgxpool.Pool, conn connectionCo
 type upstreamUsageDetails struct {
 	PromptTokens       int
 	OutputTokens       int
+	AudioInputTokens   int
+	AudioOutputTokens  int
 	VideoTokens        int
 	InputSeconds       float64
 	OutputSeconds      float64
@@ -3826,11 +4214,11 @@ type upstreamUsageDetails struct {
 }
 
 func (u upstreamUsageDetails) hasAny() bool {
-	return u.PromptTokens > 0 || u.OutputTokens > 0 || u.VideoTokens > 0 || u.HasInputSeconds || u.HasOutputSeconds || u.HasInputImageCount
+	return u.PromptTokens > 0 || u.OutputTokens > 0 || u.AudioInputTokens > 0 || u.AudioOutputTokens > 0 || u.VideoTokens > 0 || u.HasInputSeconds || u.HasOutputSeconds || u.HasInputImageCount
 }
 
 func inputWithActualUpstreamUsage(input map[string]interface{}, usage upstreamUsageDetails) map[string]interface{} {
-	if usage.VideoTokens <= 0 && !usage.HasInputSeconds && !usage.HasOutputSeconds && !usage.HasInputImageCount {
+	if usage.VideoTokens <= 0 && usage.AudioInputTokens <= 0 && usage.AudioOutputTokens <= 0 && !usage.HasInputSeconds && !usage.HasOutputSeconds && !usage.HasInputImageCount {
 		return input
 	}
 	out := make(map[string]interface{}, len(input)+4)
@@ -3848,6 +4236,12 @@ func inputWithActualUpstreamUsage(input map[string]interface{}, usage upstreamUs
 	}
 	if usage.VideoTokens > 0 {
 		out["_actual_video_tokens"] = usage.VideoTokens
+	}
+	if usage.AudioInputTokens > 0 {
+		out["_actual_audio_input_tokens"] = usage.AudioInputTokens
+	}
+	if usage.AudioOutputTokens > 0 {
+		out["_actual_audio_output_tokens"] = usage.AudioOutputTokens
 	}
 	return out
 }
@@ -3867,10 +4261,18 @@ func upstreamUsageFromBody(body []byte) upstreamUsageDetails {
 		current := queue[0]
 		queue = queue[1:]
 		if usage, ok := current["usage"].(map[string]interface{}); ok {
+			promptDetails, _ := usage["prompt_tokens_details"].(map[string]interface{})
+			completionDetails, _ := usage["completion_tokens_details"].(map[string]interface{})
 			details := upstreamUsageDetails{
 				PromptTokens: intAny(firstNonNil(usage["prompt_tokens"], usage["input_tokens"], usage["text_tokens"])),
-				OutputTokens: intAny(firstNonNil(usage["completion_tokens"], usage["output_tokens"], usage["audio_tokens"])),
-				VideoTokens:  intAny(firstNonNil(usage["total_tokens"], usage["video_tokens"])),
+				OutputTokens: intAny(firstNonNil(usage["completion_tokens"], usage["output_tokens"])),
+				AudioInputTokens: intAny(firstNonNil(
+					usage["audio_input_tokens"], usage["input_audio_tokens"], promptDetails["audio_tokens"],
+				)),
+				AudioOutputTokens: intAny(firstNonNil(
+					usage["audio_output_tokens"], usage["output_audio_tokens"], completionDetails["audio_tokens"], usage["audio_tokens"],
+				)),
+				VideoTokens: intAny(firstNonNil(usage["total_tokens"], usage["video_tokens"])),
 			}
 			if details.VideoTokens <= 0 {
 				details.VideoTokens = details.OutputTokens
@@ -3896,7 +4298,7 @@ func upstreamUsageFromBody(body []byte) upstreamUsageDetails {
 					details.HasOutputSeconds = true
 				}
 			}
-			if details.hasAny() {
+			if details.hasAny() || details.CostUSD > 0 {
 				return details
 			}
 		}

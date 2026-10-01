@@ -6164,7 +6164,12 @@ func (h *Handler) AdminTestModelConnection(c *gin.Context) {
 		})
 		return
 	}
-	endpoint, upstreamModel, extra := model.NewAPIEndpoint, model.NewAPIModel, model.NewAPIExtraParams
+	extra := map[string]interface{}{}
+	for key, value := range model.NewAPIExtraParams {
+		extra[key] = value
+	}
+	extra["runtime_rule"] = model.RuntimeRule
+	endpoint, upstreamModel := model.NewAPIEndpoint, model.NewAPIModel
 	selectedRouteID := int64(0)
 	if routes, routeErr := h.models.ListModelRoutes(c.Request.Context(), model.ID, false); routeErr == nil {
 		hasConfiguredRoutes := len(routes) > 0
