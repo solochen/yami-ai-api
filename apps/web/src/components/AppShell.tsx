@@ -11,7 +11,7 @@ import { api, apiCached, apiForLocaleCached } from "@/lib/api";
 import type { Model, User, Wallet } from "@starai/shared-types";
 import { clsx } from "clsx";
 import { agentDisplayCategory, AGENT_CATEGORIES, AGENT_CATEGORY_TAG, CATEGORIES, CATEGORY_TAG, MODEL_ICONS } from "./workbench/categoryMeta";
-import { SiteBrand, useSiteBranding } from "./SiteBrand";
+import { DEFAULT_SITE_DESCRIPTION, SiteBrand, useSiteBranding } from "./SiteBrand";
 import { ReferralShareButton } from "./ReferralShareButton";
 import { useI18n } from "@/i18n/I18nProvider";
 import { WorkbenchTopActions } from "./WorkbenchTopActions";
@@ -1034,7 +1034,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
           <div className="mcdl-app-drawer-header px-3.5 py-4 flex items-center justify-between border-b border-gray-50 dark:border-white/10">
             <SiteBrand
               href="/app"
-              subtitle={site_description || "AI 大模型聚合平台"}
+              subtitle={site_description || DEFAULT_SITE_DESCRIPTION}
               nameClassName="font-bold text-gray-900 truncate"
               subtitleClassName="text-[10px] text-gray-400 truncate"
             />
@@ -1127,7 +1127,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
           {!collapsed && (
             <SiteBrand
               href="/app"
-              subtitle={site_description || "AI 大模型聚合平台"}
+              subtitle={site_description || DEFAULT_SITE_DESCRIPTION}
               nameClassName="font-bold text-gray-900 truncate dark:text-gray-100"
               subtitleClassName="text-[10px] text-gray-400 truncate"
             />

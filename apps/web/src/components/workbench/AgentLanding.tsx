@@ -104,7 +104,7 @@ export function AgentLanding({
         <div className={`agent-feature-card agent-feature-card--landing group mx-auto flex w-full max-w-[640px] flex-col justify-start overflow-hidden rounded-3xl border border-primary/30 bg-white/65 p-4 shadow-xl shadow-primary/20 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-primary/30 hover:bg-white/75 hover:shadow-2xl hover:shadow-primary/20 dark:border-primary/30 dark:bg-transparent dark:shadow-black/30 dark:hover:bg-primary/[0.04] sm:p-5 ${compactOnMobile ? "min-h-[180px]" : "min-h-[230px]"}`}>
           <div className="mb-4 flex items-center justify-between gap-3 lg:mb-5">
             <span className="rounded-xl bg-primary/10 px-3 py-2 text-sm font-black text-primary dark:text-primary">{String(Math.min(activeIndex + 1, safeFeatures.length)).padStart(2, "0")}</span>
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">
+            <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary">
               {generationType === "mixed" ? ts("支持图片、视频与音频链路") : generationType === "video" ? ts("支持视频生成链路") : ts("支持图片生成链路")}
             </span>
           </div>

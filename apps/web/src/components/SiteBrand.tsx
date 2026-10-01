@@ -39,12 +39,14 @@ type BrandData = Pick<
   | "customer_service_hours"
 >;
 
+export const DEFAULT_SITE_DESCRIPTION = "一站式 AI 创作与模型服务平台";
+
 const DEFAULT_BRANDING: BrandData = {
   site_base_url: "",
   site_name: "StarAI",
   site_logo: "",
   site_favicon: "",
-  site_description: "AI 大模型聚合平台",
+  site_description: DEFAULT_SITE_DESCRIPTION,
   site_api_tagline: "Open API Documentation",
   api_docs_enabled: true,
   terms_title: "服务协议",
@@ -121,12 +123,12 @@ export function SiteBrand({
           badgeClassName
         )}
       >
-        {site_logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={site_logo} alt={siteName} className="h-full w-full object-cover" />
-        ) : (
-          siteName.slice(0, 1).toUpperCase()
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={site_logo || "/assets/starai-logo-mark.svg"}
+          alt={`${siteName} logo`}
+          className="h-full w-full object-cover"
+        />
       </div>
       {showName ? (
         <div className="min-w-0">

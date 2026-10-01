@@ -101,7 +101,7 @@ function ChatAttachmentChip({ file, onRemove }: { file: BottomBarState["files"][
         // eslint-disable-next-line @next/next/no-img-element
         <img src={file.url} alt={file.name} className="h-11 w-11 rounded-lg border border-white/70 bg-white object-cover shadow-sm" />
       ) : (
-        <div className="flex h-11 min-w-11 items-center justify-center rounded-lg bg-emerald-500 px-1.5 text-[10px] font-semibold leading-none tracking-wide text-white shadow-sm">
+        <div className="flex h-11 min-w-11 items-center justify-center rounded-lg bg-primary px-1.5 text-[10px] font-semibold leading-none tracking-wide text-dark shadow-sm">
           {extension}
         </div>
       )}

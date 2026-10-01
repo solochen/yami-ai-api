@@ -127,9 +127,9 @@ export function NovelPlayGuide({ open, onClose }: NovelPlayGuideProps) {
               </div>
               <div className="flex gap-3">
                 <div className="flex-shrink-0 w-16 text-center">
-                  <span className="text-xs text-green-400 font-medium">AI</span>
+                  <span className="text-xs text-primary font-medium">AI</span>
                 </div>
-                <div className="flex-1 p-3 bg-green-500/10 rounded-lg border border-green-500/20">
+                <div className="flex-1 p-3 bg-primary/10 rounded-lg border border-primary/20">
                   <p className="text-gray-300">{ts("AI 自动重写，新版立即呈现")}</p>
                 </div>
               </div>

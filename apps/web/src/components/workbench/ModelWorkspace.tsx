@@ -63,7 +63,7 @@ interface Message {
 }
 
 const MAX_CHAT_INPUT_CHARS = 12000;
-const INDEX_DOT_COLORS = ["bg-sky-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500"];
+const INDEX_DOT_COLORS = ["bg-sky-500", "bg-primary", "bg-violet-500", "bg-amber-500"];
 
 function textLength(value: string) {
   return Array.from(value).length;
@@ -2187,7 +2187,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                         : f.theme === "pink"
                         ? "bg-pink-50 text-pink-600"
                         : f.theme === "green"
-                        ? "bg-emerald-50 text-emerald-600"
+                        ? "bg-primary/10 text-primary"
                         : "bg-gray-50 text-gray-600";
                     return (
                       <div key={f.key} className="soft-card p-3 sm:p-4 flex gap-2.5 sm:gap-3 items-start">

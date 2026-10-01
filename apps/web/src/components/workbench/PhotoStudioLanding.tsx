@@ -136,7 +136,7 @@ export function PhotoStudioLanding({ workflowCode, workflowName, workflowDescrip
         <div className="mx-auto mt-3 w-full px-3 sm:mt-4 sm:px-0">
           <div className="flex items-center justify-center gap-3">
             <h2 className="text-sm font-bold text-fuchsia-600 dark:text-fuchsia-300 sm:text-base">{ts("为你效力的 AI 编辑部")}</h2>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300">
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary dark:border-primary/25 dark:bg-primary/10 dark:text-primary">
               <span className="relative flex h-1.5 w-1.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" /></span>
               {t("{count} 位成员在线", { count: team.length })}
             </span>

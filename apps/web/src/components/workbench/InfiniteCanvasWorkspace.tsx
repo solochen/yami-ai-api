@@ -226,9 +226,9 @@ const CanvasNodeActions = createContext<NodeActions | null>(null);
 
 const NODE_TEMPLATES = [
   { id: "text-image", icon: Sparkles, titleKey: "canvas.template.textImage", descKey: "canvas.template.textImageDesc", tone: "orange" },
-  { id: "image-image", icon: ImageIcon, titleKey: "canvas.template.imageImage", descKey: "canvas.template.imageImageDesc", tone: "emerald" },
+  { id: "image-image", icon: ImageIcon, titleKey: "canvas.template.imageImage", descKey: "canvas.template.imageImageDesc", tone: "primary" },
   { id: "text-image-mix", icon: FileImage, titleKey: "canvas.template.textImageMix", descKey: "canvas.template.textImageMixDesc", tone: "blue" },
-  { id: "content-image-post", icon: Images, titleKey: "canvas.template.contentImagePost", descKey: "canvas.template.contentImagePostDesc", tone: "emerald" },
+  { id: "content-image-post", icon: Images, titleKey: "canvas.template.contentImagePost", descKey: "canvas.template.contentImagePostDesc", tone: "primary" },
   { id: "multi-image", icon: Images, titleKey: "canvas.template.multiImage", descKey: "canvas.template.multiImageDesc", tone: "amber" },
   { id: "text-video", icon: Film, titleKey: "canvas.template.textVideo", descKey: "canvas.template.textVideoDesc", tone: "pink" },
   { id: "image-video", icon: Boxes, titleKey: "canvas.template.imageVideo", descKey: "canvas.template.imageVideoDesc", tone: "violet" },
@@ -245,7 +245,7 @@ const LIBRARY_TEMPLATES = [
   { id: "social-campaign", icon: Sparkles, titleKey: "canvas.template.socialCampaign", descKey: "canvas.template.socialCampaignDesc", tone: "pink" },
   { id: "product-showcase-video", icon: Film, titleKey: "canvas.template.productShowcase", descKey: "canvas.template.productShowcaseDesc", tone: "orange" },
   { id: "brand-visual-kit", icon: Boxes, titleKey: "canvas.template.brandKit", descKey: "canvas.template.brandKitDesc", tone: "violet" },
-  { id: "photo-restoration", icon: ImageIcon, titleKey: "canvas.template.photoRestore", descKey: "canvas.template.photoRestoreDesc", tone: "emerald" },
+  { id: "photo-restoration", icon: ImageIcon, titleKey: "canvas.template.photoRestore", descKey: "canvas.template.photoRestoreDesc", tone: "primary" },
 ] as const;
 
 const ALL_TEMPLATE_DEFINITIONS = [...NODE_TEMPLATES, ...LIBRARY_TEMPLATES] as const;
@@ -284,7 +284,7 @@ const DEFAULT_TEMPLATE_ZH: Record<string, { name: string; description: string }>
 
 const TEMPLATE_TONES: Record<string, string> = {
   orange: "bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-300",
-  emerald: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300",
+  primary: "bg-primary/10 text-primary dark:bg-primary/10 dark:text-primary",
   blue: "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300",
   amber: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300",
   pink: "bg-pink-100 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300",
@@ -1440,7 +1440,7 @@ function TextInputNode({ id, data, selected }: NodeProps<CanvasNode>) {
           </button>
         </div>
         {isContentSource && (
-          <div className="nodrag rounded-xl border border-emerald-200/70 bg-emerald-50/70 p-2 dark:border-emerald-400/15 dark:bg-emerald-500/[0.06]">
+          <div className="nodrag rounded-xl border border-primary/30 bg-primary/5 p-2 dark:border-primary/30 dark:bg-primary/10">
             <span className="mb-1 block text-[9px] text-gray-500 dark:text-gray-300">{t("canvas.content.sourceURL")}</span>
             <div className="flex gap-1.5">
               <input
@@ -1450,7 +1450,7 @@ function TextInputNode({ id, data, selected }: NodeProps<CanvasNode>) {
                   if (!event.nativeEvent.isComposing && event.keyCode !== 229 && event.key === "Enter" && contentURL.trim() && !importingContentURL) event.currentTarget.nextElementSibling?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
                 }}
                 placeholder={t("canvas.content.sourceURLPlaceholder")}
-                className="h-8 min-w-0 flex-1 rounded-lg border border-emerald-200 bg-white px-2 text-[10px] text-gray-700 outline-none focus:border-emerald-400 dark:border-emerald-400/20 dark:bg-gray-900 dark:text-gray-100"
+                className="h-8 min-w-0 flex-1 rounded-lg border border-primary/25 bg-white px-2 text-[10px] text-gray-700 outline-none focus:border-primary dark:border-primary/30 dark:bg-gray-900 dark:text-gray-100"
               />
               <button
                 type="button"
@@ -1461,17 +1461,17 @@ function TextInputNode({ id, data, selected }: NodeProps<CanvasNode>) {
                   setImportingContentURL(false);
                   if (imported) setContentURL("");
                 }}
-                className="h-8 shrink-0 rounded-lg bg-emerald-600 px-2.5 text-[10px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                className="h-8 shrink-0 rounded-lg bg-primary px-2.5 text-[10px] font-semibold text-dark hover:brightness-105 disabled:opacity-50"
               >
                 {importingContentURL ? <LoaderCircle size={12} className="animate-spin" /> : <><Link2 size={12} className="mr-1 inline" />{t("canvas.content.import")}</>}
               </button>
             </div>
-            <div className="mt-1.5 text-[9px] text-emerald-700 dark:text-emerald-300">{t("canvas.content.sourceURLHint")}</div>
+            <div className="mt-1.5 text-[9px] text-primary dark:text-primary">{t("canvas.content.sourceURLHint")}</div>
             {data.contentSourceText ? (
-              <div className="mt-2 rounded-lg border border-emerald-200 bg-white/80 p-2 dark:border-emerald-400/20 dark:bg-gray-900/70">
+              <div className="mt-2 rounded-lg border border-primary/20 bg-white/80 p-2 dark:border-primary/25 dark:bg-gray-900/70">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="truncate text-[10px] font-semibold text-emerald-800 dark:text-emerald-200">{[data.contentSourcePlatform, data.contentSourceTitle].map((value) => String(value || "").trim()).filter(Boolean).join(" · ")}</div>
+                    <div className="truncate text-[10px] font-semibold text-primary dark:text-primary">{[data.contentSourcePlatform, data.contentSourceTitle].map((value) => String(value || "").trim()).filter(Boolean).join(" · ")}</div>
                     <div className="mt-0.5 text-[9px] text-gray-400">{t("canvas.content.imported", { count: Array.from(String(data.contentSourceText)).length })}{data.contentSourceTruncated ? ` · ${t("canvas.content.truncated")}` : ""}</div>
                   </div>
                   <button type="button" aria-label={t("canvas.content.clearSource")} title={t("canvas.content.clearSource")} onClick={() => actions?.update(id, { contentSourceURL: "", contentSourcePlatform: "", contentSourceTitle: "", contentSourceAuthor: "", contentSourceText: "", contentSourceTruncated: false })} className="shrink-0 text-gray-400 hover:text-red-500"><X size={12} /></button>
@@ -2711,7 +2711,7 @@ function ContentResultNode({ id, data, selected }: NodeProps<CanvasNode>) {
                   setCopied(true);
                   window.setTimeout(() => setCopied(false), 1600);
                 }}
-                className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-semibold text-white hover:bg-emerald-600"
+                className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-dark hover:brightness-105"
               >
                 {copied ? <Check size={16} /> : <Copy size={16} />}
                 {t(copied ? "canvas.result.copied" : "canvas.result.copy")}
@@ -7840,7 +7840,7 @@ function CanvasEditor({
                 type="button"
                 onClick={() => void runAll()}
                 disabled={reconcilingTasks || (!runningAll && executableNodes.length === 0)}
-                className={`ml-1 flex h-8 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 text-xs font-semibold text-white disabled:opacity-40 ${runningAll ? "bg-red-500 hover:bg-red-600" : hasContinuation ? "bg-amber-500 hover:bg-amber-600" : "bg-emerald-500 hover:bg-emerald-600"}`}
+                className={`ml-1 flex h-8 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 text-xs font-semibold ${runningAll ? "bg-red-500 text-white hover:bg-red-600" : hasContinuation ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-primary text-dark hover:brightness-105"} disabled:opacity-40`}
               >
                 {runningAll ? <X size={14} /> : reconcilingTasks ? <LoaderCircle size={14} className="animate-spin" /> : hasContinuation ? <RotateCcw size={14} /> : <Play size={14} fill="currentColor" />}
                 {reconcilingTasks

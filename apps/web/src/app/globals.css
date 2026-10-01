@@ -165,7 +165,7 @@ body {
     z-index: -1;
     pointer-events: none;
     background:
-      linear-gradient(135deg, rgb(18 214 163 / 0.025), transparent 34%),
+      linear-gradient(135deg, rgb(255 135 17 / 0.025), transparent 34%),
       linear-gradient(315deg, rgb(79 124 255 / 0.025), transparent 42%);
     opacity: 0.5;
   }
@@ -176,7 +176,7 @@ body {
     top: 0;
     height: 1px;
     pointer-events: none;
-    background: linear-gradient(90deg, transparent, rgb(18 214 163 / 0.42), rgb(79 124 255 / 0.28), transparent);
+    background: linear-gradient(90deg, transparent, rgb(255 135 17 / 0.42), rgb(79 124 255 / 0.28), transparent);
   }
   .tech-list-card {
     position: relative;
@@ -186,7 +186,7 @@ body {
     transform: translateX(2px);
   }
   .tech-list-card[data-active="true"] {
-    box-shadow: inset 0 0 0 1px rgb(18 214 163 / 0.16);
+    box-shadow: inset 0 0 0 1px rgb(255 135 17 / 0.16);
   }
   .tech-icon {
     transition: transform 180ms ease, box-shadow 180ms ease;
@@ -198,7 +198,7 @@ body {
     background: none;
   }
   .tech-list-card[data-active="true"] .tech-title {
-    color: #12D6A3;
+    color: #ff8711;
   }
   .pulse-dot {
     position: relative;
@@ -210,8 +210,8 @@ body {
     height: 0.38rem;
     margin-right: 0.35rem;
     border-radius: 999px;
-    background: #12D6A3;
-    box-shadow: 0 0 0 0 rgb(18 214 163 / 0.42);
+    background: #ff8711;
+    box-shadow: 0 0 0 0 rgb(255 135 17 / 0.42);
   }
   .result-scan {
     position: relative;
@@ -222,7 +222,7 @@ body {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(115deg, transparent 25%, rgb(18 214 163 / 0.12) 48%, transparent 70%);
+    background: linear-gradient(115deg, transparent 25%, rgb(255 135 17 / 0.12) 48%, transparent 70%);
     transform: translateX(-120%);
     animation: card-sheen 2.6s ease-in-out infinite;
   }
@@ -235,7 +235,7 @@ body {
     height: 0.45rem;
     flex: 0 0 auto;
     border-radius: 999px;
-    background: #12D6A3;
+    background: #ff8711;
     animation: pulse-dot 1.8s ease-out infinite;
   }
   .typing-status-text {
@@ -257,14 +257,14 @@ body {
   .tech-bg-grid {
     background-image:
       linear-gradient(rgb(79 124 255 / 0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(18 214 163 / 0.022) 1px, transparent 1px);
+      linear-gradient(90deg, rgb(255 135 17 / 0.022) 1px, transparent 1px);
     background-size: 42px 42px;
   }
   .workspace-surface {
     background:
       linear-gradient(rgb(79 124 255 / 0.028) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(18 214 163 / 0.018) 1px, transparent 1px),
-      radial-gradient(circle at 18% 10%, rgb(18 214 163 / 0.035), transparent 24%),
+      linear-gradient(90deg, rgb(255 135 17 / 0.018) 1px, transparent 1px),
+      radial-gradient(circle at 18% 10%, rgb(255 135 17 / 0.035), transparent 24%),
       radial-gradient(circle at 84% 16%, rgb(79 124 255 / 0.045), transparent 26%),
       linear-gradient(135deg, rgb(242 245 249), rgb(247 249 252) 46%, rgb(237 242 248));
     background-size: 56px 56px, 56px 56px, auto, auto, auto;
@@ -272,8 +272,8 @@ body {
   .dark .workspace-surface {
     background:
       linear-gradient(rgb(79 124 255 / 0.045) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(18 214 163 / 0.024) 1px, transparent 1px),
-      radial-gradient(circle at 18% 10%, rgb(18 214 163 / 0.04), transparent 24%),
+      linear-gradient(90deg, rgb(255 135 17 / 0.024) 1px, transparent 1px),
+      radial-gradient(circle at 18% 10%, rgb(255 135 17 / 0.04), transparent 24%),
       radial-gradient(circle at 84% 16%, rgb(79 124 255 / 0.055), transparent 28%),
       linear-gradient(135deg, #080d14, #0c1320 48%, #090f18);
     background-size: 58px 58px, 58px 58px, auto, auto, auto;
@@ -370,13 +370,13 @@ body {
 
 @keyframes pulse-dot {
   0% {
-    box-shadow: 0 0 0 0 rgb(18 214 163 / 0.38);
+    box-shadow: 0 0 0 0 rgb(255 135 17 / 0.38);
   }
   70% {
-    box-shadow: 0 0 0 7px rgb(18 214 163 / 0);
+    box-shadow: 0 0 0 7px rgb(255 135 17 / 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgb(18 214 163 / 0);
+    box-shadow: 0 0 0 0 rgb(255 135 17 / 0);
   }
 }
 

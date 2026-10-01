@@ -72,7 +72,7 @@ export function WorkbenchUserMenu({ onRecharge }: Props) {
 
   const navItems = useMemo(
     () => [
-      { href: "/app/works", label: t("nav.works"), desc: t("menu.worksDesc"), icon: ImageIcon, color: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300" },
+      { href: "/app/works", label: t("nav.works"), desc: t("menu.worksDesc"), icon: ImageIcon, color: "bg-primary/10 text-primary dark:bg-primary/10 dark:text-primary" },
       { href: "/app/wallet", label: t("nav.wallet"), desc: t("menu.walletDesc"), icon: Wallet, color: "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300" },
       { href: "/app/gallery", label: t("nav.gallery"), desc: t("menu.galleryDesc"), icon: Compass, color: "bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300" },
       { href: "/app/settings", label: t("nav.settings"), desc: t("menu.settingsDesc"), icon: Settings, color: "bg-gray-50 text-gray-600 dark:bg-white/10 dark:text-gray-300" },

@@ -2302,7 +2302,7 @@ function LegacyAgentLanding({
         <div className="agent-feature-card group mx-auto flex max-h-[330px] min-h-[260px] w-full max-w-[640px] flex-col justify-center overflow-y-auto rounded-3xl border border-primary/30 bg-white/65 p-4 shadow-xl shadow-primary/20 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-primary/30 hover:bg-white/75 hover:shadow-2xl hover:shadow-primary/20 dark:border-primary/30 dark:bg-transparent dark:shadow-black/30 dark:hover:bg-primary/[0.04] sm:min-h-[300px] sm:p-6 lg:max-h-none lg:min-h-[330px] lg:p-7">
           <div className="mb-4 flex items-center justify-between gap-3 lg:mb-5">
             <span className="rounded-xl bg-primary/10 px-3 py-2 text-sm font-black text-primary dark:text-primary">{String(Math.min(activeIndex + 1, safeFeatures.length)).padStart(2, "0")}</span>
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">
+            <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary">
               {generationType === "video" ? ts("支持视频生成链路") : ts("支持图片生成链路")}
             </span>
           </div>
@@ -2407,7 +2407,7 @@ function ComicFeatureHero({ features, activeIndex, onSelect }: { features: Displ
     <div className="comic-feature-card group mx-auto flex w-full max-w-[640px] flex-col overflow-hidden rounded-3xl border border-primary/30 bg-white/65 p-4 shadow-xl shadow-primary/20 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-primary/30 hover:bg-white/75 hover:shadow-2xl hover:shadow-primary/20 dark:border-primary/30 dark:bg-transparent dark:shadow-black/30 dark:hover:bg-primary/[0.04] sm:p-5 lg:p-6">
       <div className="mb-4 flex items-center justify-between lg:mb-5">
         <span className="rounded-xl bg-primary/10 px-3 py-2 text-sm font-black text-primary dark:text-primary">{String(activeIndex + 1).padStart(2, "0")}</span>
-        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">{item.tags?.[0] || t("comic.tagControl")}</span>
+        <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary">{item.tags?.[0] || t("comic.tagControl")}</span>
       </div>
       <div className="flex items-start gap-4 lg:gap-5">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-2xl text-primary transition duration-300 group-hover:rotate-3 group-hover:scale-110 dark:text-primary sm:h-14 sm:w-14 lg:h-16 lg:w-16">

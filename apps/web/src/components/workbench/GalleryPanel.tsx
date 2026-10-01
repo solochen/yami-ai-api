@@ -486,7 +486,7 @@ function CommunityCard({ item, onOpen, featuredLabel, paidLabel, videoLabel }: {
       <div className="p-3.5">
         <div className="flex items-center gap-1.5">
           {item.is_featured && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">{featuredLabel}</span>}
-          {item.is_paid && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-300/10 dark:text-emerald-200">{item.price || 0} {paidLabel}</span>}
+          {item.is_paid && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-300/10 dark:text-amber-200">{item.price || 0} {paidLabel}</span>}
           <span className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{item.title || "Untitled"}</span>
         </div>
         <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-gray-400">{item.prompt}</p>
@@ -513,11 +513,11 @@ function GalleryDetailModal({ detail, cloning, copied, onClose, onCopy, onUse, t
           </div>
           <div className="flex min-h-0 flex-col p-5 sm:p-7">
             <div className="pr-10">
-              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-primary dark:text-primary">
                 {referenceItem ? <><span>Case {referenceItem.id}</span><span>{taxonomyLabel(referenceItem.category)}</span></> : communityItem?.is_featured ? <span>{t("gallery.featured")}</span> : null}
               </div>
               <h2 className="mt-2 text-2xl font-bold tracking-tight text-gray-950 dark:text-white">{title}</h2>
-              {referenceItem?.sourceLabel && <a href={referenceItem.sourceUrl || referenceItem.githubUrl || REFERENCE_REPOSITORY_URL} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-gray-500 hover:text-emerald-700 dark:text-gray-400 dark:hover:text-emerald-300">{t("gallery.source")}: {referenceItem.sourceLabel}<ExternalLink size={12} /></a>}
+              {referenceItem?.sourceLabel && <a href={referenceItem.sourceUrl || referenceItem.githubUrl || REFERENCE_REPOSITORY_URL} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary">{t("gallery.source")}: {referenceItem.sourceLabel}<ExternalLink size={12} /></a>}
             </div>
             <div className="mt-4 flex flex-wrap gap-1.5">
               {referenceItem

@@ -159,7 +159,7 @@ function LegacyUtilityLanding({
         <div className="agent-feature-card group mx-auto flex min-h-[270px] w-full max-w-[640px] flex-col justify-center overflow-y-auto rounded-3xl border border-primary/30 bg-white/65 p-5 shadow-xl shadow-primary/20 backdrop-blur-xl transition dark:border-primary/30 dark:bg-transparent dark:shadow-black/30 sm:min-h-[300px] sm:p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <span className="rounded-xl bg-primary/10 px-3 py-2 text-sm font-black text-primary dark:text-primary">{String(Math.min(activeIndex + 1, features.length)).padStart(2, "0")}</span>
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">{ts("支持视频处理链路")}</span>
+            <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary dark:border-primary/25 dark:bg-primary/10 dark:text-primary">{ts("支持视频处理链路")}</span>
           </div>
           <div className="flex items-start gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-2xl">{active?.icon || icon}</div>
@@ -670,7 +670,7 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
                 <div className="mt-5">
                   <div className="mb-2 text-xs text-gray-400">{ts("处理模式")}</div>
                   <div className="grid grid-cols-3 gap-2">
-                    {[["auto", ts("自动识别")], ["soft_track", ts("字幕轨")], ["hardcoded_ai", ts("硬字幕 AI")]].map(([value, label]) => <button key={value} type="button" onClick={() => setSubtitleMode(value)} className={`min-h-10 rounded-xl border px-2 text-xs ${subtitleMode === value ? "border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-200" : "border-gray-100 text-gray-500 dark:border-white/10"}`}>{label}</button>)}
+                    {[["auto", ts("自动识别")], ["soft_track", ts("字幕轨")], ["hardcoded_ai", ts("硬字幕 AI")]].map(([value, label]) => <button key={value} type="button" onClick={() => setSubtitleMode(value)} className={`min-h-10 rounded-xl border px-2 text-xs ${subtitleMode === value ? "border-primary bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary" : "border-gray-100 text-gray-500 dark:border-white/10"}`}>{label}</button>)}
                   </div>
                 </div>
                 <div className="mt-4">

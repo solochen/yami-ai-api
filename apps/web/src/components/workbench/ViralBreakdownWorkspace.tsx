@@ -281,7 +281,7 @@ export function ViralBreakdownWorkspace({ workflow }: { workflow: WorkflowLike }
               {complete && <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] text-emerald-200"><CheckCircle2 size={11} />{ts("完整")}</span>}
               {degraded && <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] text-amber-200"><AlertTriangle size={11} />{ts("未完整")}</span>}
             </div>
-            <div className="truncate text-xs text-emerald-100/50">{workflow.description}</div>
+            <div className="truncate text-xs text-gray-400">{workflow.description}</div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button type="button" onClick={() => void loadHistory()} className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-xs"><History size={14} />{ts("历史")}</button>
@@ -289,7 +289,7 @@ export function ViralBreakdownWorkspace({ workflow }: { workflow: WorkflowLike }
           </div>
         </div>
         <div className="mt-3">
-          <div className="mb-1 truncate text-xs text-emerald-200/80">{message || ts("等待分析")}</div>
+          <div className="mb-1 truncate text-xs text-gray-300">{message || ts("等待分析")}</div>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
             <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${project ? percent : 0}%` }} />
           </div>
@@ -298,7 +298,7 @@ export function ViralBreakdownWorkspace({ workflow }: { workflow: WorkflowLike }
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)_280px]">
         <aside className="flex min-h-0 flex-col gap-3 border-white/10 p-4 lg:border-r">
-          <div className="text-xs text-emerald-100/60">{rate > 0 ? `${rate} ${ts("算力/秒")}` : ts("按视频秒数计费")}</div>
+          <div className="text-xs text-gray-400">{rate > 0 ? `${rate} ${ts("算力/秒")}` : ts("按视频秒数计费")}</div>
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setMode("link")} className={`rounded-xl px-3 py-2 text-xs ${mode === "link" ? "bg-primary font-semibold text-dark" : "bg-white/5"}`}>{ts("抖音链接")}</button>
             <button type="button" onClick={() => setMode("upload")} className={`rounded-xl px-3 py-2 text-xs ${mode === "upload" ? "bg-primary font-semibold text-dark" : "bg-white/5"}`}>{ts("本地上传")}</button>
@@ -352,12 +352,12 @@ export function ViralBreakdownWorkspace({ workflow }: { workflow: WorkflowLike }
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-6 whitespace-pre-wrap">
-            {markdown || <span className="text-emerald-100/40">{ts("完整分析后生成可编辑剧本与视频生成包。")}</span>}
+            {markdown || <span className="text-gray-500">{ts("完整分析后生成可编辑剧本与视频生成包。")}</span>}
           </div>
           {complete && resultView === "source" && (
             <div className="mt-3 flex flex-wrap gap-2">
               {REWRITES.map((item) => (
-                <button key={item.id} type="button" disabled={Boolean(rewriting)} onClick={() => void rewrite(item.id)} className={`rounded-full border px-3 py-1.5 text-xs ${rewriteView === item.id ? "border-emerald-300 bg-emerald-400 text-emerald-950" : "border-white/10"}`}>
+                <button key={item.id} type="button" disabled={Boolean(rewriting)} onClick={() => void rewrite(item.id)} className={`rounded-full border px-3 py-1.5 text-xs ${rewriteView === item.id ? "border-primary bg-primary text-dark" : "border-white/10"}`}>
                   {rewriting === item.id ? ts("改写中") : ts(item.label)}
                 </button>
               ))}
@@ -372,25 +372,25 @@ export function ViralBreakdownWorkspace({ workflow }: { workflow: WorkflowLike }
             {keyframes.length > 0 && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px]">{keyframes.length}{ts("帧")}</span>}
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
-            {keyframes.length === 0 ? <p className="pt-16 text-center text-xs text-emerald-100/40">{ts("分析完成后，关键帧将显示在这里。")}</p> : keyframes.map((frame) => (
+            {keyframes.length === 0 ? <p className="pt-16 text-center text-xs text-gray-500">{ts("分析完成后，关键帧将显示在这里。")}</p> : keyframes.map((frame) => (
               <figure key={`${frame.url}-${frame.t_ms}`} className="overflow-hidden rounded-xl border border-white/10">
                 {frame.url && <img src={frame.url} alt={frame.label || ""} className="aspect-video w-full object-cover" />}
-                <figcaption className="px-2 py-1 text-[10px] text-emerald-100/70">{frame.label}</figcaption>
+                <figcaption className="px-2 py-1 text-[10px] text-gray-300">{frame.label}</figcaption>
               </figure>
             ))}
           </div>
-          {busy && <div className="mt-3 flex items-center gap-2 text-xs text-emerald-100/70"><Loader2 size={14} className="animate-spin" />{outputs.progress_message}</div>}
+          {busy && <div className="mt-3 flex items-center gap-2 text-xs text-gray-300"><Loader2 size={14} className="animate-spin" />{outputs.progress_message}</div>}
         </aside>
       </div>
 
       {historyOpen && (
         <div className="absolute inset-0 z-20 flex justify-end bg-black/40" onClick={() => setHistoryOpen(false)}>
-          <div className="h-full w-full max-w-sm overflow-y-auto bg-[#0c1713] p-4" onClick={(event) => event.stopPropagation()}>
+          <div className="h-full w-full max-w-sm overflow-y-auto bg-[#111722] p-4" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 text-sm font-semibold">{ts("历史记录")}</div>
-            {history.length === 0 ? <p className="text-xs text-emerald-100/40">{ts("还没有记录")}</p> : history.map((item) => (
+            {history.length === 0 ? <p className="text-xs text-gray-500">{ts("还没有记录")}</p> : history.map((item) => (
               <button key={item.public_id} type="button" onClick={() => void openHistory(item.public_id)} className="mb-2 block w-full rounded-xl border border-white/10 px-3 py-2 text-left text-xs">
                 <div>{item.created_at}</div>
-                <div className="text-emerald-100/50">{item.status}</div>
+                <div className="text-gray-400">{item.status}</div>
               </button>
             ))}
           </div>
