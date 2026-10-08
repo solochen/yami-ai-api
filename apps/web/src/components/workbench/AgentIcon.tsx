@@ -1,5 +1,6 @@
 import {
   BookOpenText,
+  Calculator,
   Camera,
   CaptionsOff,
   Clapperboard,
@@ -24,6 +25,7 @@ import {
 
 const AGENT_ICON_BY_CODE: Record<string, LucideIcon> = {
   general_creative_agent: WandSparkles,
+  renovation_budget_agent: Calculator,
   infinite_canvas: Workflow,
   one_click_viral_remake: MousePointerClick,
   viral_remake: Flame,

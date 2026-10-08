@@ -94,3 +94,8 @@ docs/*-review-*.md
 docs/*-fix-*.md
 docs/*-acceptance-*.md
 docs/*-lipsync-*.md
+
+# 个人简历与 ZCode 工作区
+*.docx
+简历*
+.zcode/

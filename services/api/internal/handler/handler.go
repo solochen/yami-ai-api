@@ -64,6 +64,7 @@ type Handler struct {
 	emailOTP      *service.EmailOTPService
 	contentI18n   *service.ContentI18nService
 	canvases      *service.CanvasService
+	renovation    *service.RenovationService
 	i18nBackfill  atomic.Bool
 	i18nUIWrite   sync.Mutex
 	documentCache documentTextCache
@@ -72,12 +73,12 @@ type Handler struct {
 func New(cfg *config.Config, auth *service.AuthService, wallet *service.WalletService, models *service.ModelService,
 	chat *service.ChatService, tasks *service.TaskService, works *service.WorksService, admin *service.AdminService,
 	billing *billing.Service, payment *service.PaymentService, ops *service.OpsService, gallery *service.GalleryService,
-	agents *service.AgentService, cacheClient *cache.Client, storageClient storage.Store, homeSvc *service.HomeService, presetSvc *service.PresetService, assetSvc *service.AssetService, roleTplSvc *service.RoleTemplateService, oauthSvc *service.OAuthService, captchaSvc *service.CaptchaService, emailOTPSvc *service.EmailOTPService, contentI18nSvc *service.ContentI18nService, canvasSvc *service.CanvasService, galleryGenSvc *service.GalleryGenerationService, galleryReviewSvc *service.GalleryQualityReviewService) *Handler {
+	agents *service.AgentService, cacheClient *cache.Client, storageClient storage.Store, homeSvc *service.HomeService, presetSvc *service.PresetService, assetSvc *service.AssetService, roleTplSvc *service.RoleTemplateService, oauthSvc *service.OAuthService, captchaSvc *service.CaptchaService, emailOTPSvc *service.EmailOTPService, contentI18nSvc *service.ContentI18nService, canvasSvc *service.CanvasService, galleryGenSvc *service.GalleryGenerationService, galleryReviewSvc *service.GalleryQualityReviewService, renovationSvc *service.RenovationService) *Handler {
 	return &Handler{
 		cfg: cfg, auth: auth, wallet: wallet, models: models, chat: chat, runtime: chat.RuntimeClient(),
 		tasks: tasks, works: works, admin: admin, billing: billing, payment: payment, ops: ops, gallery: gallery, galleryGen: galleryGenSvc, galleryReview: galleryReviewSvc, agents: agents,
 		cache: cacheClient, storage: storageClient, home: homeSvc, presets: presetSvc, assets: assetSvc, roleTpl: roleTplSvc,
-		oauth: oauthSvc, captcha: captchaSvc, emailOTP: emailOTPSvc, contentI18n: contentI18nSvc, canvases: canvasSvc,
+		oauth: oauthSvc, captcha: captchaSvc, emailOTP: emailOTPSvc, contentI18n: contentI18nSvc, canvases: canvasSvc, renovation: renovationSvc,
 	}
 }
 
@@ -201,6 +202,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			auth.POST("/creative-agent/cancel-plan", h.CreativeAgentCancelPlan)
 			auth.POST("/creative-agent/feedback", h.RecordCreativeAgentFeedback)
 			auth.POST("/creative-agent/run-workflow", h.CreativeAgentRunWorkflow)
+			auth.POST("/renovation-budget/chat", h.RenovationBudgetChat)
 			auth.POST("/tasks", h.CreateTask)
 			auth.GET("/tasks", h.ListTasks)
 			auth.POST("/tasks/status", h.GetTaskStatuses)

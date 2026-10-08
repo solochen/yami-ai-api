@@ -45,6 +45,7 @@ const PhotoStudioTopBar = dynamic(() => import("./PhotoStudioLanding").then((mod
 const VirtualTryOnLanding = dynamic(() => import("./VirtualTryOnLanding").then((module) => module.VirtualTryOnLanding), { loading: WorkspaceLoading });
 const VirtualTryOnInputBar = dynamic(() => import("./VirtualTryOnLanding").then((module) => module.VirtualTryOnInputBar), { loading: () => null });
 const VirtualTryOnResult = dynamic(() => import("./VirtualTryOnLanding").then((module) => module.VirtualTryOnResult), { loading: WorkspaceLoading });
+const RenovationBudgetWorkspace = dynamic(() => import("./RenovationBudgetWorkspace").then((module) => module.RenovationBudgetWorkspace), { loading: WorkspaceLoading });
 
 type DisplayStep = AgentDisplayStep;
 type DisplayConfig = {
@@ -482,6 +483,7 @@ export function AgentWorkspace({ code }: { code: string }) {
   const isVideoUtility = ["video_upscale", "video_redraw", "subtitle_remove"].includes(videoUtilityMode || "");
   const isProductImageExtract = workflow?.runtime_config?.agent_mode === "product_image_extract" || workflow?.code === "extract_product_images";
   const isViralBreakdown = workflow?.runtime_config?.agent_mode === "viral_video_breakdown" || workflow?.code === "viral_video_breakdown";
+  const isRenovationBudget = workflow?.runtime_config?.agent_mode === "renovation_budget" || workflow?.code === "renovation_budget_agent";
   const workflowName = workflow ? td(`agent.${workflow.code}.name`, workflow.name) : "";
   const workflowDescription = workflow ? td(`agent.${workflow.code}.description`, workflow.description || "") : "";
   const inputCaps = workflow?.runtime_config?.input_capabilities || {};
@@ -1504,6 +1506,10 @@ export function AgentWorkspace({ code }: { code: string }) {
 
   if (isVideoUtility) {
     return <VideoUpscaleWorkspace workflow={workflow} />;
+  }
+
+  if (isRenovationBudget && workflow) {
+    return <RenovationBudgetWorkspace workflow={workflow} />;
   }
 
   if (isProductImageExtract && workflow) {

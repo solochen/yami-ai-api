@@ -80,6 +80,9 @@ func (s *ChatService) ListConversations(ctx context.Context, userID int64, model
 			)
 		)`
 	}
+	if scope == "renovation_budget" {
+		where += ` AND c.title ~ '^装修预算助理'`
+	}
 	rows, err := s.db.Query(ctx, `
 		SELECT c.public_id, c.title, m.code, c.created_at, c.updated_at
 		FROM conversations c LEFT JOIN models m ON m.id = c.model_id
@@ -280,6 +283,39 @@ func (s *ChatService) CompletionStream(ctx context.Context, userID int64, input 
 			}
 		}()
 		ch = forwarded
+	}
+	return requestID, ch, estimated, nil
+}
+
+// CompletionStreamRaw 与 CompletionStream 行为一致，但消息直接使用原始结构，
+// 支持 assistant.tool_calls 与 tool.tool_call_id，供 Agent 工具循环使用。
+// 每次调用独立冻结/结算（Ephemeral，不自动落库）。
+func (s *ChatService) CompletionStreamRaw(ctx context.Context, userID int64, modelCode string, messages []map[string]interface{}, params map[string]interface{}) (string, <-chan runtime.StreamChunk, float64, error) {
+	input := CompletionInput{ModelCode: modelCode, Params: params, Stream: true, Ephemeral: true}
+	model, err := s.ResolveInputModel(ctx, &input)
+	if err != nil {
+		return "", nil, 0, err
+	}
+	prepareChatBillingParams(&input)
+	estimated := s.models.EstimateCost(model, input.Params, 0, 0)
+	requestID := util.NewRequestID()
+	if err := s.billing.Freeze(ctx, userID, estimated, "chat", requestID); err != nil {
+		if errors.Is(err, billing.ErrInsufficientBalance) {
+			return "", nil, 0, s.balanceError(ctx, userID, input, requestID)
+		}
+		return "", nil, 0, err
+	}
+	var temperature *float64
+	if v, ok := input.Params["temperature"].(float64); ok {
+		temperature = runtime.Float64Ptr(v)
+	}
+	req := runtime.ChatRequest{Model: model.NewAPIModel, Messages: messages, Temperature: temperature}
+	ch, _, err := s.chatCompletionStreamWithFailover(ctx, requestID, model, req, input.Params)
+	if err != nil {
+		if unfreezeErr := s.billing.Unfreeze(ctx, userID, estimated, "chat", requestID); unfreezeErr != nil {
+			return "", nil, 0, fmt.Errorf("模型流启动失败: %v；释放冻结额度失败: %w", err, unfreezeErr)
+		}
+		return "", nil, 0, err
 	}
 	return requestID, ch, estimated, nil
 }

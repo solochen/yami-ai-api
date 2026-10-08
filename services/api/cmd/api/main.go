@@ -124,7 +124,8 @@ func main() {
 		log.Printf("dynamic content translation catalog synced: %d entities", count)
 	}
 
-	h := handler.New(cfg, authSvc, walletSvc, modelSvc, chatSvc, taskSvc, worksSvc, adminSvc, billingSvc, paymentSvc, opsSvc, gallerySvc, agentSvc, cacheClient, storageClient, homeSvc, presetSvc, assetSvc, roleTplSvc, oauthSvc, captchaSvc, emailOTPSvc, contentI18nSvc, canvasSvc, galleryGenerationSvc, galleryReviewSvc)
+	renovationSvc := service.NewRenovationService(pool, chatSvc)
+	h := handler.New(cfg, authSvc, walletSvc, modelSvc, chatSvc, taskSvc, worksSvc, adminSvc, billingSvc, paymentSvc, opsSvc, gallerySvc, agentSvc, cacheClient, storageClient, homeSvc, presetSvc, assetSvc, roleTplSvc, oauthSvc, captchaSvc, emailOTPSvc, contentI18nSvc, canvasSvc, galleryGenerationSvc, galleryReviewSvc, renovationSvc)
 
 	r := gin.New()
 	trustedProxies := []string{}
