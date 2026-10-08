@@ -58,7 +58,7 @@ const EMPTY: FormState = {
   title: "",
   summary: "",
   protocol: "openai-compatible",
-  base_url: "https://api.your-starai-domain.com",
+  base_url: "https://api.your-yihangai-domain.com",
   endpoint: "/v1/chat/completions",
   auth_header: "Authorization: Bearer <API_KEY>",
   sdk: "openai (Node/Python), curl",

@@ -522,10 +522,10 @@ INSERT INTO workflow_definitions VALUES ('general_creative_agent','Agent','','',
 		t.Fatal(err)
 	}
 	d.SetSlot("media_type", "image", "user", "LOGO")
-	d.SetSlot("prompt", "为 StarAI 设计纯图标 LOGO", "user", "LOGO")
+	d.SetSlot("prompt", "为 YiHangAI 设计纯图标 LOGO", "user", "LOGO")
 	videoRequest := "根据公司的和项目的情况，请给我生成一段7秒的宣传视频"
 	videoPlan, err := h.finalizeCreativeAgentDraft(ctx, 1, "logo_video", creativeAgentPlanRequest{Draft: d, VideoModelCode: "video_test"}, map[string]interface{}{
-		"intent": "video", "action": "update", "prompt": "为 StarAI AI 聚合平台制作7秒宣传视频",
+		"intent": "video", "action": "update", "prompt": "为 YiHangAI AI 聚合平台制作7秒宣传视频",
 		"slot_updates": map[string]interface{}{"duration": 7, "purpose": "宣传", "model_code": "untrusted"},
 	}, videoRequest)
 	if err != nil {

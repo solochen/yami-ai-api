@@ -185,19 +185,19 @@ func TestRedFoxConfigAndAPIError(t *testing.T) {
 
 func TestSearchWebWithSearXNG(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/search" || r.URL.Query().Get("q") != "StarAI" || r.URL.Query().Get("format") != "json" || r.URL.Query().Get("time_range") != "week" || r.URL.Query().Get("categories") != "news" || r.URL.Query().Get("safesearch") != "1" || r.URL.Query().Get("language") != "en" {
+		if r.URL.Path != "/search" || r.URL.Query().Get("q") != "YiHangAI" || r.URL.Query().Get("format") != "json" || r.URL.Query().Get("time_range") != "week" || r.URL.Query().Get("categories") != "news" || r.URL.Query().Get("safesearch") != "1" || r.URL.Query().Get("language") != "en" {
 			t.Fatalf("unexpected request: %s", r.URL.String())
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"results":[{"title":"StarAI Result","url":"https://example.com/a","content":"Fresh StarAI result"},{"title":"Duplicate","url":"https://example.com/a","content":"Ignored"},{"title":"Unsafe","url":"javascript:alert(1)","content":"Ignored"}]}`))
+		_, _ = w.Write([]byte(`{"results":[{"title":"YiHangAI Result","url":"https://example.com/a","content":"Fresh YiHangAI result"},{"title":"Duplicate","url":"https://example.com/a","content":"Ignored"},{"title":"Unsafe","url":"javascript:alert(1)","content":"Ignored"}]}`))
 	}))
 	defer server.Close()
 
-	results, err := SearchWebWithOptions(context.Background(), WebSearchConfig{Enabled: true, Provider: "searxng", BaseURL: server.URL, MaxResults: 5, TimeoutSec: 3}, WebSearchRequest{Query: "StarAI", Topic: "news", TimeRange: "week"})
+	results, err := SearchWebWithOptions(context.Background(), WebSearchConfig{Enabled: true, Provider: "searxng", BaseURL: server.URL, MaxResults: 5, TimeoutSec: 3}, WebSearchRequest{Query: "YiHangAI", Topic: "news", TimeRange: "week"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(results) != 1 || results[0].Title != "StarAI Result" || results[0].Snippet != "Fresh StarAI result" {
+	if len(results) != 1 || results[0].Title != "YiHangAI Result" || results[0].Snippet != "Fresh YiHangAI result" {
 		t.Fatalf("unexpected results: %#v", results)
 	}
 }

@@ -3,7 +3,7 @@ import "./globals.css";
 import { I18nProvider } from "@/i18n/I18nProvider";
 
 export const metadata: Metadata = {
-  title: "StarAI",
+  title: "YiHangAI",
   description: "AI 创作聚合平台",
   icons: {
     icon: "/site-icon",

@@ -9,10 +9,10 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
   $PSNativeCommandUseErrorActionPreference = $false
 }
 
-function Info($msg) { Write-Host ("[StarAI] " + $msg) -ForegroundColor Cyan }
-function Warn($msg) { Write-Host ("[StarAI] " + $msg) -ForegroundColor Yellow }
+function Info($msg) { Write-Host ("[YiHangAI] " + $msg) -ForegroundColor Cyan }
+function Warn($msg) { Write-Host ("[YiHangAI] " + $msg) -ForegroundColor Yellow }
 function Fail($msg) {
-  Write-Host ("[StarAI] " + $msg) -ForegroundColor Red
+  Write-Host ("[YiHangAI] " + $msg) -ForegroundColor Red
   exit 1
 }
 
@@ -109,7 +109,7 @@ Set-Location $Root
 Info "Repo: $Root"
 
 if (-not (Test-Path (Join-Path $Root "pnpm-workspace.yaml")) -or -not (Test-Path (Join-Path $Root "infra/docker/docker-compose.yml"))) {
-  Fail "This script must be run from the StarAI repo layout."
+  Fail "This script must be run from the YiHangAI repo layout."
 }
 
 $envLocalPath = Join-Path $Root ".env.local"
@@ -133,7 +133,7 @@ if (-not $Force -and -not $DryRun) {
   }
 }
 
-Info "Stopping local StarAI dev processes"
+Info "Stopping local YiHangAI dev processes"
 Stop-StarAIProcesses
 
 $composeFile = Join-Path $Root "infra/docker/docker-compose.yml"

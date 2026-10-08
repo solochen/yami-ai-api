@@ -1,4 +1,4 @@
-# StarAI 完整备份与本地重建
+# YiHangAI 完整备份与本地重建
 
 如果你希望本地环境完全变成服务器同款，并且不需要保留本地旧测试数据，完整备份恢复比“配置包”更简单。
 
@@ -47,7 +47,7 @@ bash scripts/verify-full-backup.sh backups/full/starai-full-backup-xxxx.tar.gz
 backups/full/starai-full-backup-xxxx.tar.gz
 ```
 
-如果你要彻底清空本地 StarAI Docker 数据：
+如果你要彻底清空本地 YiHangAI Docker 数据：
 
 ```bash
 docker compose --env-file .env.production -f infra/docker/docker-compose.prod.yml down -v --remove-orphans

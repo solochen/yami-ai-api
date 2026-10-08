@@ -88,11 +88,11 @@ func (s *EmailOTPService) SendCode(ctx context.Context, email, captchaID, captch
 func (s *EmailOTPService) siteName(ctx context.Context) string {
 	var raw []byte
 	if err := s.auth.db.QueryRow(ctx, `SELECT value FROM system_configs WHERE key='site_name'`).Scan(&raw); err != nil {
-		return "StarAI"
+		return "YiHangAI"
 	}
 	var name string
 	if json.Unmarshal(raw, &name) != nil || name == "" {
-		return "StarAI"
+		return "YiHangAI"
 	}
 	return name
 }

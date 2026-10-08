@@ -170,7 +170,7 @@ func TestCreatePayPalOrder(t *testing.T) {
 	}))
 	defer server.Close()
 	svc := &PaymentService{httpClient: server.Client(), paypalTestAPI: server.URL}
-	cfg := PaymentProviderConfig{Currency: "USD", ProductName: "Credits", PayPalMode: "sandbox", PayPalClientID: "client", PayPalClientSecret: "secret", PayPalBrandName: "StarAI", SuccessURL: "https://example.com/success", CancelURL: "https://example.com/cancel"}
+	cfg := PaymentProviderConfig{Currency: "USD", ProductName: "Credits", PayPalMode: "sandbox", PayPalClientID: "client", PayPalClientSecret: "secret", PayPalBrandName: "YiHangAI", SuccessURL: "https://example.com/success", CancelURL: "https://example.com/cancel"}
 	checkout, providerID, err := svc.createPayPalOrder(context.Background(), cfg, "ord_test", 12.34)
 	if err != nil || providerID != "PAYPAL_ORDER" || !strings.Contains(checkout, "paypal.com") {
 		t.Fatalf("PayPal order = %q, %q, %v", checkout, providerID, err)

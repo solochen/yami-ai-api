@@ -60,7 +60,7 @@ for table in "${TABLES[@]}"; do
 done
 
 {
-  echo "-- StarAI settings pack"
+  echo "-- YiHangAI settings pack"
   echo "-- Created at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "-- Source env: $ENV_FILE"
   echo "--"
@@ -100,7 +100,7 @@ docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T postgres \
 echo "COMMIT;" >> "$SQL_FILE"
 
 {
-  echo "StarAI settings pack"
+  echo "YiHangAI settings pack"
   echo
   echo "Created: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "Database: $DB_NAME"

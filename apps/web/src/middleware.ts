@@ -15,7 +15,7 @@ export function middleware(request: NextRequest) {
   for (const [key, value] of noStoreHeaderEntries) {
     response.headers.set(key, value);
   }
-  response.headers.set("X-StarAI-Web-Path", request.nextUrl.pathname);
+  response.headers.set("X-YiHangAI-Web-Path", request.nextUrl.pathname);
   return response;
 }
 

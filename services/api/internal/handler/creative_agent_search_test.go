@@ -37,10 +37,10 @@ func TestCreativeAgentClockIsDeterministic(t *testing.T) {
 
 func TestCreativeAgentPlannerPromptUsesConfiguredBrandName(t *testing.T) {
 	prompt := creativeAgentPlannerPrompt(map[string]interface{}{"site_name": "  星河 AI  "})
-	if !strings.HasPrefix(prompt, "你是 星河 AI 的通用创作智能体") || strings.Contains(prompt, "你是 StarAI") {
+	if !strings.HasPrefix(prompt, "你是 星河 AI 的通用创作智能体") || strings.Contains(prompt, "你是 YiHangAI") {
 		t.Fatalf("unexpected branded prompt: %s", prompt)
 	}
-	if fallback := creativeAgentPlannerPrompt(nil); !strings.HasPrefix(fallback, "你是 StarAI 的通用创作智能体") {
+	if fallback := creativeAgentPlannerPrompt(nil); !strings.HasPrefix(fallback, "你是 YiHangAI 的通用创作智能体") {
 		t.Fatalf("unexpected fallback prompt: %s", fallback)
 	}
 }

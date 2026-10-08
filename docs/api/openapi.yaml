@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
-  title: StarAI Public API
+  title: YiHangAI Public API
   version: 1.0.0
   description: OpenAI-compatible chat API plus async-first image, video and audio task APIs. Media endpoints can wait synchronously when wait=true or response_format=sync; models whose configured poll budget exceeds 10 minutes return an async task instead. Reference video and audio URLs must be publicly reachable by the upstream provider.
 servers:
-  - url: https://api.your-starai-domain.com
+  - url: https://api.your-yihangai-domain.com
 security:
   - bearerAuth: []
 tags:

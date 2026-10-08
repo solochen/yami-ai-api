@@ -89,7 +89,7 @@ fi
 cp "$ENV_FILE" "$WORK_DIR/env.production"
 
 {
-  echo "StarAI full backup"
+  echo "YiHangAI full backup"
   echo
   echo "Created: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "Database: $DB_NAME"

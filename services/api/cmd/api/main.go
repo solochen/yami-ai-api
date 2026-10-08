@@ -168,7 +168,7 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("StarAI API listening on :%s", port)
+	log.Printf("YiHangAI API listening on :%s", port)
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           r,

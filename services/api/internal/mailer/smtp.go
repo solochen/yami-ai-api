@@ -152,7 +152,7 @@ func (s *Service) sendResend(ctx context.Context, cfg Config, to, subject, body 
 	req.Header.Set("Authorization", "Bearer "+cfg.ResendAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "StarAI/1.0")
+	req.Header.Set("User-Agent", "YiHangAI/1.0")
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)

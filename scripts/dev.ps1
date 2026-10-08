@@ -4,10 +4,10 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
   $PSNativeCommandUseErrorActionPreference = $false
 }
 
-function Info($msg) { Write-Host ("[StarAI] " + $msg) -ForegroundColor Cyan }
-function Warn($msg) { Write-Host ("[StarAI] " + $msg) -ForegroundColor Yellow }
+function Info($msg) { Write-Host ("[YiHangAI] " + $msg) -ForegroundColor Cyan }
+function Warn($msg) { Write-Host ("[YiHangAI] " + $msg) -ForegroundColor Yellow }
 function Fail($msg) {
-  Write-Host ("[StarAI] " + $msg) -ForegroundColor Red
+  Write-Host ("[YiHangAI] " + $msg) -ForegroundColor Red
   exit 1
 }
 

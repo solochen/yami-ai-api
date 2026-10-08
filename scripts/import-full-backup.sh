@@ -24,7 +24,7 @@ if [ "$CONFIRM_RESTORE" != "1" ] && [ "$CONFIRM_RESTORE" != "true" ]; then
   cat >&2 <<'EOF'
 Refusing to restore without CONFIRM_RESTORE=1.
 
-This restores a full StarAI backup and can replace local database data.
+This restores a full YiHangAI backup and can replace local database data.
 Use it on a local/dev machine or a new server. Do not run it on production unless restoring from disaster.
 
 Example:

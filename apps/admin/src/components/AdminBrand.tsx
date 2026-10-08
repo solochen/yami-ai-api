@@ -26,14 +26,14 @@ async function fetchBranding() {
         brandCache = data;
         return data;
       })
-      .catch(() => ({ site_name: "StarAI", site_logo: "", site_description: "AI 大模型聚合平台", admin_site_description: "管理后台" }));
+      .catch(() => ({ site_name: "YiHangAI", site_logo: "", site_description: "AI 大模型聚合平台", admin_site_description: "管理后台" }));
   }
   return brandPromise;
 }
 
 export function useAdminBranding() {
   const [branding, setBranding] = useState<BrandData>(
-    brandCache || { site_name: "StarAI", site_logo: "", site_description: "AI 大模型聚合平台", admin_site_description: "管理后台" }
+    brandCache || { site_name: "YiHangAI", site_logo: "", site_description: "AI 大模型聚合平台", admin_site_description: "管理后台" }
   );
 
   useEffect(() => {
@@ -63,16 +63,12 @@ export function AdminBrand({
   subtitle?: string;
 }) {
   const { site_name, site_logo, admin_site_description } = useAdminBranding();
-  const name = site_name || "StarAI";
+  const name = site_name || "YiHangAI";
   return (
     <div className={clsx("flex items-center gap-3 min-w-0", className)}>
       <div className={clsx("flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gray-950 text-white shrink-0", badgeClassName)}>
-        {site_logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={site_logo} alt={name} className="h-full w-full object-cover" />
-        ) : (
-          <span className="text-base font-bold">{name.slice(0, 1).toUpperCase()}</span>
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={site_logo || "/assets/yihangai-logo.png"} alt={`${name} logo`} className="h-full w-full object-cover" />
       </div>
       <div className="min-w-0">
         <div className={clsx("font-bold truncate", titleClassName)}>{name} Admin</div>

@@ -1060,7 +1060,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
         {renderMobileTopBar(
             subpageLabel(SUBPAGE_LINKS.find((l) => pathname.startsWith(l.href) && l.href !== "/app")?.href || "/app") ||
             site_name ||
-            "StarAI"
+            "YiHangAI"
         )}
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {!hideSubpageRail && (

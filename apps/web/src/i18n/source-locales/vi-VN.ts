@@ -91,7 +91,7 @@ const sourceTranslations: Record<string, string> = {
   "模型不存在或未启用，请检查 model 是否为后台模型编码或接入模型名": "Model không tồn tại hoặc chưa bật. Hãy kiểm tra model là mã nền tảng hoặc tên model upstream đã cấu hình.",
   "为莫来石产品生成电商商品主图，白底，高级质感，真实摄影风格": "Tạo ảnh chính thương mại điện tử cho sản phẩm mullite với nền trắng, cảm giác cao cấp và phong cách chụp ảnh chân thực.",
   "生成一段商品展示短视频，突出产品质感、卖点和镜头推进": "Tạo video giới thiệu sản phẩm ngắn, làm nổi bật chất liệu, điểm bán hàng và chuyển động máy quay.",
-  "欢迎使用 StarAI 开放平台。": "Chào mừng bạn đến với Nền tảng mở StarAI.",
+  "欢迎使用 YiHangAI 开放平台。": "Chào mừng bạn đến với Nền tảng mở YiHangAI.",
   "MiniMax 海螺语音克隆模型。支持上传音频复刻专属音色，提供 HD 高清与 Turbo 极速两种合成质量，可调语速、音调、情感与音效。": "Model nhân bản giọng nói MiniMax Hailuo. Tải mẫu âm thanh lên để tái tạo giọng tùy chỉnh, chọn chất lượng HD hoặc Turbo và điều chỉnh tốc độ, cao độ, cảm xúc cùng hiệu ứng âm thanh.",
   "快速图片生成，支持多种尺寸": "Tạo ảnh nhanh với nhiều tùy chọn kích thước",
   "文本生成短视频，支持时长与画幅设置": "Tạo video từ văn bản với thời lượng và tỷ lệ khung hình tùy chỉnh",

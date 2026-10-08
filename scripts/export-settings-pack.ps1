@@ -58,7 +58,7 @@ if ($IncludeAdminAccounts) {
 }
 
 $truncateLines = @(
-  "-- StarAI settings pack",
+  "-- YiHangAI settings pack",
   "-- Created at: $((Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))",
   "-- Source env: $EnvFile",
   "--",
@@ -118,7 +118,7 @@ Add-Content -LiteralPath $sqlFile -Value $dump -Encoding UTF8
 Add-Content -LiteralPath $sqlFile -Value "COMMIT;" -Encoding UTF8
 
 $meta = @(
-  "StarAI settings pack",
+  "YiHangAI settings pack",
   "",
   "Created: $((Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))",
   "Database: $dbName",

@@ -98,7 +98,7 @@ def sql_json(value: object) -> str:
 
 
 def main() -> None:
-    request = urllib.request.Request(CATALOG, headers={"Accept": "application/json", "User-Agent": "starai-model-import"})
+    request = urllib.request.Request(CATALOG, headers={"Accept": "application/json", "User-Agent": "yihangai-model-import"})
     with urllib.request.urlopen(request, timeout=60) as response:
         catalog = {item["id"]: item for item in json.load(response).get("data", [])}
     missing = [model_id for model_id in COPY if model_id not in catalog]

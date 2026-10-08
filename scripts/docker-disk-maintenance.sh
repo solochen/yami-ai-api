@@ -9,7 +9,7 @@ STOPPED_CONTAINER_AGE="${STOPPED_CONTAINER_AGE:-168h}"
 
 usage() {
   cat <<'EOF'
-StarAI Docker 磁盘分析与清理
+YiHangAI Docker 磁盘分析与清理
 
 用法：
   bash scripts/docker-disk-maintenance.sh report
@@ -89,7 +89,7 @@ report() {
   fi
 
   echo
-  echo "========== StarAI 本地数据目录 =========="
+  echo "========== YiHangAI 本地数据目录 =========="
   directory_size "$PROJECT_DIR/data"
   directory_size "$PROJECT_DIR/data/uploads"
   directory_size "$PROJECT_DIR/backups"
@@ -99,7 +99,7 @@ report() {
 }
 
 safe_clean() {
-  echo "开始安全清理：不会删除任何 Docker volume 或 StarAI 数据目录。"
+  echo "开始安全清理：不会删除任何 Docker volume 或 YiHangAI 数据目录。"
 
   echo "==> 清理超过 $STOPPED_CONTAINER_AGE 的已停止容器"
   docker container prune -f --filter "until=$STOPPED_CONTAINER_AGE"

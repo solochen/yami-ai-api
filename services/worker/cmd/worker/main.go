@@ -182,7 +182,7 @@ func main() {
 	if pollTimeoutSec := getenvInt("WORKER_POLL_TIMEOUT_SEC", 0); pollTimeoutSec > 0 {
 		defaultPollTimeout = time.Duration(pollTimeoutSec) * time.Second
 	}
-	log.Printf("StarAI Worker config: concurrency=%d default poll timeout=%s", concurrency, defaultPollTimeout)
+	log.Printf("YiHangAI Worker config: concurrency=%d default poll timeout=%s", concurrency, defaultPollTimeout)
 
 	srv := asynq.NewServer(redisOpt, asynq.Config{
 		Concurrency: concurrency,
@@ -219,7 +219,7 @@ func main() {
 		return processGalleryGenerationTask(ctx, pool, newAPIBase, newAPIToken, payload)
 	})
 
-	log.Println("StarAI Worker started")
+	log.Println("YiHangAI Worker started")
 	if err := srv.Run(mux); err != nil {
 		log.Fatal(err)
 	}

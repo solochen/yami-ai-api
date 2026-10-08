@@ -43,7 +43,7 @@ export const DEFAULT_SITE_DESCRIPTION = "一站式 AI 创作与模型服务平�
 
 const DEFAULT_BRANDING: BrandData = {
   site_base_url: "",
-  site_name: "StarAI",
+  site_name: "YiHangAI",
   site_logo: "",
   site_favicon: "",
   site_description: DEFAULT_SITE_DESCRIPTION,
@@ -112,7 +112,7 @@ export function SiteBrand({
 }) {
   const { ts } = useI18n();
   const { site_name, site_logo, site_description } = useSiteBranding();
-  const siteName = site_name || DEFAULT_BRANDING.site_name || "StarAI";
+  const siteName = site_name || DEFAULT_BRANDING.site_name || "YiHangAI";
   const siteSubtitle = ts(subtitle ?? site_description ?? "");
 
   return (
@@ -125,7 +125,7 @@ export function SiteBrand({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={site_logo || "/assets/starai-logo-mark.svg"}
+          src={site_logo || "/assets/yihangai-logo.png"}
           alt={`${siteName} logo`}
           className="h-full w-full object-cover"
         />

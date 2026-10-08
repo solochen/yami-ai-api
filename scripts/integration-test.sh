@@ -27,7 +27,7 @@ restore_config() {
 }
 trap restore_config EXIT
 
-printf '=== StarAI integration smoke: %s ===\n' "$API"
+printf '=== YiHangAI integration smoke: %s ===\n' "$API"
 
 health="$(curl -sSf --max-time 15 "$API/health")" || fail "API health request"
 require_json "$health" '.data.status == "ok"' "API health payload"

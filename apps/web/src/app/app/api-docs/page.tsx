@@ -46,7 +46,7 @@ interface Operation extends OperationVariant {
   variants?: OperationVariant[];
 }
 
-const DEFAULT_BASE_URL = "https://api.your-starai-domain.com";
+const DEFAULT_BASE_URL = "https://api.your-yihangai-domain.com";
 
 const GROUPS = [
   { id: "chat", label: "聊天与文本" },

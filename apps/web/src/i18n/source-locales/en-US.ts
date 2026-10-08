@@ -92,7 +92,7 @@ const sourceTranslations: Record<string, string> = {
   "模型不存在或未启用，请检查 model 是否为后台模型编码或接入模型名": "Model does not exist or is not enabled. Check that model is a configured platform code or upstream model name.",
   "为莫来石产品生成电商商品主图，白底，高级质感，真实摄影风格": "Create an e-commerce hero image for a mullite product with a white background, premium feel, and realistic photography.",
   "生成一段商品展示短视频，突出产品质感、卖点和镜头推进": "Create a short product showcase video highlighting the product texture, selling points, and camera movement.",
-  "欢迎使用 StarAI 开放平台。": "Welcome to the StarAI Open Platform.",
+  "欢迎使用 YiHangAI 开放平台。": "Welcome to the YiHangAI Open Platform.",
   "MiniMax 海螺语音克隆模型。支持上传音频复刻专属音色，提供 HD 高清与 Turbo 极速两种合成质量，可调语速、音调、情感与音效。": "MiniMax Hailuo voice cloning model. Upload an audio sample to replicate a custom voice. Choose HD or Turbo synthesis quality, with adjustable speed, pitch, emotion, and sound effects.",
   "快速图片生成，支持多种尺寸": "Fast image generation with multiple size options",
   "文本生成短视频，支持时长与画幅设置": "Text-to-video generation with configurable duration and aspect ratio",

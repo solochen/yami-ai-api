@@ -1359,7 +1359,7 @@ export function CreativeAgentWorkspace({
                 <div className={`flex max-w-[96%] items-start gap-2.5 ${message.role === "user" ? "flex-row-reverse" : ""}`}>
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/80 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900">
                     {message.role === "assistant" ? (
-                      <img loading="lazy" decoding="async" src={siteLogo || "/assets/default-app-icon.svg"} alt={siteName || "Agent"} className="h-full w-full object-cover" />
+                      <img loading="lazy" decoding="async" src={siteLogo || "/assets/yihangai-logo.png"} alt={siteName || "Agent"} className="h-full w-full object-cover" />
                     ) : user?.avatar_url ? (
                       <img loading="lazy" decoding="async" src={user.avatar_url} alt={user.nickname || "用户"} className="h-full w-full object-cover" />
                     ) : (

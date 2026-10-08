@@ -7,7 +7,7 @@ use_default_settings:
 
 general:
   debug: false
-  instance_name: "StarAI Internal Search"
+  instance_name: "YiHangAI Internal Search"
   enable_metrics: false
 
 search:

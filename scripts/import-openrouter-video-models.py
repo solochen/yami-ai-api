@@ -59,7 +59,7 @@ COPY = {
 
 
 def fetch_json(url: str) -> dict:
-    request = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "starai-model-import"})
+    request = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "yihangai-model-import"})
     with urllib.request.urlopen(request, timeout=60) as response:
         return json.load(response)
 

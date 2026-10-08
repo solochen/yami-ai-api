@@ -1007,7 +1007,7 @@ func (s *ModelService) normalizeAPIDocInput(ctx context.Context, input APIDocInp
 		input.Protocol = defaultAPIDocProtocol(requestMode)
 	}
 	if input.BaseURL == "" {
-		input.BaseURL = "https://api.your-starai-domain.com"
+		input.BaseURL = "https://api.your-yihangai-domain.com"
 	}
 	if input.Endpoint == "" {
 		input.Endpoint = defaultAPIDocEndpoint(requestMode, upstreamEndpoint)
@@ -1457,7 +1457,7 @@ func defaultAPIDocRequestExample(doc *APIDocDTO) map[string]interface{} {
 		}
 		return example
 	case "audio":
-		text := "欢迎使用 StarAI 开放平台。"
+		text := "欢迎使用 YiHangAI 开放平台。"
 		if strings.Contains(strings.ToLower(doc.NewAPIModel), "fun-music") {
 			text = "夏日清新民谣，木吉他与口琴伴奏，轻快节奏"
 		}

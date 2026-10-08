@@ -1,4 +1,4 @@
-# StarAI integration tests
+# YiHangAI integration tests
 param(
     [string]$API = "http://localhost:8080"
 )

@@ -1,6 +1,6 @@
-# StarAI
+# YiHangAI
 
-StarAI 是一套开源 AI 聚合平台，可把对话、推理、图片、视频、音频、智能体工作流和 OpenAI 兼容 API 聚合到同一个站点中。你可以用它搭建 AI 工具站、AI 创作平台、模型聚合平台或企业内部 AI 助手。
+YiHangAI 是一套开源 AI 聚合平台，可把对话、推理、图片、视频、音频、智能体工作流和 OpenAI 兼容 API 聚合到同一个站点中。你可以用它搭建 AI 工具站、AI 创作平台、模型聚合平台或企业内部 AI 助手。
 
 ## 功能概览
 
@@ -152,7 +152,7 @@ SEARXNG_ENABLED=true
 SEARXNG_SECRET=粘贴生成的随机值
 ```
 
-重新运行部署脚本后，在管理后台“系统配置 → Agent 联网搜索”选择 `SearXNG`，服务地址填写 `http://searxng:8080`。服务仅在 Docker 内网开放，默认限制为 1 CPU、768 MB 内存；搜索结果继续使用 StarAI Redis 缓存。
+重新运行部署脚本后，在管理后台“系统配置 → Agent 联网搜索”选择 `SearXNG`，服务地址填写 `http://searxng:8080`。服务仅在 Docker 内网开放，默认限制为 1 CPU、768 MB 内存；搜索结果继续使用 YiHangAI Redis 缓存。
 
 本地开发可在 `.env.local` 设置 `SEARXNG_ENABLED=true`，重启 `scripts/dev.ps1` 后使用 `http://127.0.0.1:8888`。
 

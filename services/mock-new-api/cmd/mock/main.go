@@ -241,7 +241,7 @@ func buildReply(model string, messages []message) string {
 	assetExcerpt := extractAssetExcerpt(systemBlob)
 	label := model
 	if label == "" {
-		label = "StarAI Mock"
+		label = "YiHangAI Mock"
 	}
 	return buildAnswerReply(label, lastUser, assetExcerpt, systemBlob)
 }

@@ -321,7 +321,7 @@ func (s *OpsService) CreateApiToken(ctx context.Context, userID int64, name stri
 		name = "默认密钥"
 	}
 	raw := randomToken(24)
-	token := "sk-starai-" + raw
+	token := "sk-yihangai-" + raw
 	prefix := token[:14]
 	sum := sha256.Sum256([]byte(token))
 	hash := hex.EncodeToString(sum[:])

@@ -10,10 +10,10 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
   $PSNativeCommandUseErrorActionPreference = $false
 }
 
-function Info($msg) { Write-Host ("[StarAI Restore] " + $msg) -ForegroundColor Cyan }
-function Warn($msg) { Write-Host ("[StarAI Restore] " + $msg) -ForegroundColor Yellow }
+function Info($msg) { Write-Host ("[YiHangAI Restore] " + $msg) -ForegroundColor Cyan }
+function Warn($msg) { Write-Host ("[YiHangAI Restore] " + $msg) -ForegroundColor Yellow }
 function Fail($msg) {
-  Write-Host ("[StarAI Restore] " + $msg) -ForegroundColor Red
+  Write-Host ("[YiHangAI Restore] " + $msg) -ForegroundColor Red
   exit 1
 }
 
@@ -36,7 +36,7 @@ function Invoke-External([scriptblock]$Command) {
 }
 
 if (-not $ConfirmRestore) {
-  Fail "This will delete local StarAI Docker volumes and restore the backup. Re-run with -ConfirmRestore."
+  Fail "This will delete local YiHangAI Docker volumes and restore the backup. Re-run with -ConfirmRestore."
 }
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -49,7 +49,7 @@ New-Item -ItemType Directory -Path $TempDir | Out-Null
 
 try {
   Info "Backup: $BackupFullPath"
-  Warn "Close local StarAI dev windows first if API/Worker/Web/Admin are still running."
+  Warn "Close local YiHangAI dev windows first if API/Worker/Web/Admin are still running."
 
   $DumpFile = $BackupFullPath
   $UploadsArchive = $null
@@ -68,7 +68,7 @@ try {
     Warn "Backup file is not a .dump or .tar.gz; trying to restore it as a pg_restore custom dump."
   }
 
-  Info "Removing local StarAI Docker containers and volumes"
+  Info "Removing local YiHangAI Docker containers and volumes"
   if ((Invoke-External { docker compose -f $ComposeFile down -v --remove-orphans }) -ne 0) {
     Fail "docker compose down failed."
   }

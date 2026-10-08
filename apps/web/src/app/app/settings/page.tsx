@@ -60,7 +60,7 @@ export default function SettingsPage() {
 
   const maskToken = (token?: string, prefix?: string) => {
     if (token) return `${token.slice(0, 14)}${"•".repeat(18)}${token.slice(-6)}`;
-    return `${prefix || "sk-starai-"}${"•".repeat(10)}`;
+    return `${prefix || "sk-yihangai-"}${"•".repeat(10)}`;
   };
 
   const copyToken = async (key: string, token?: string) => {

@@ -2510,7 +2510,7 @@ slot_evidence 为修改字段提供本轮用户原话的最短依据；依据支
 func creativeAgentPlannerPrompt(configValues map[string]interface{}) string {
 	brandName := strings.Join(strings.Fields(strings.TrimSpace(stringAny(configValues["site_name"]))), " ")
 	if brandName == "" {
-		brandName = "StarAI"
+		brandName = "YiHangAI"
 	}
 	if chars := []rune(brandName); len(chars) > 80 {
 		brandName = string(chars[:80])
@@ -3671,7 +3671,7 @@ func creativeAgentReadPage(ctx context.Context, client *http.Client, rawURL stri
 		return "", err
 	}
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; StarAIResearch/1.0)")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; YiHangAIResearch/1.0)")
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
@@ -7297,7 +7297,7 @@ func (h *Handler) AdminImportImage(c *gin.Context) {
 			lastErr = "图片 URL 无效"
 			continue
 		}
-		httpReq.Header.Set("User-Agent", "StarAI/1.0")
+		httpReq.Header.Set("User-Agent", "YiHangAI/1.0")
 		res, err := http.DefaultClient.Do(httpReq)
 		if err != nil {
 			cancel()

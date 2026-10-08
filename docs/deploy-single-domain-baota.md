@@ -1,4 +1,4 @@
-# StarAI 宝塔面板单域名部署教程
+# YiHangAI 宝塔面板单域名部署教程
 
 本文档适用于：
 
@@ -64,7 +64,7 @@ https://yourdomain.com/admin-assets/*  管理后台静态资源
 - Docker
 - Docker Compose
 
-不建议用宝塔单独安装 PostgreSQL、Redis、Node.js 或 Go 来跑 StarAI 业务服务，避免运行环境分散。
+不建议用宝塔单独安装 PostgreSQL、Redis、Node.js 或 Go 来跑 YiHangAI 业务服务，避免运行环境分散。
 
 低配服务器建议额外添加 4GB swap：
 
