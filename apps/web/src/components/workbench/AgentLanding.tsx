@@ -18,6 +18,7 @@ export type AgentLandingTheme = {
 };
 
 export function AgentLanding({
+  workflowCode,
   workflowIcon,
   workflowName,
   workflowDescription,
@@ -29,6 +30,7 @@ export function AgentLanding({
   generationType,
   compactOnMobile = false,
 }: {
+  workflowCode: string;
   workflowIcon: string;
   workflowName: string;
   workflowDescription: string;
@@ -59,7 +61,7 @@ export function AgentLanding({
           {generationType === "mixed" ? ts("全能创作 Agent") : generationType === "video" ? ts("视频智能体") : ts("图片智能体")}
         </div>
         <div className="flex items-center justify-center gap-3">
-          <div className={"flex h-9 w-9 items-center justify-center overflow-hidden rounded-2xl text-xl shadow-sm sm:h-11 sm:w-11 sm:text-2xl " + theme.iconBg}><AgentIcon value={workflowIcon} alt={workflowName} /></div>
+          <div className={"flex h-9 w-9 items-center justify-center overflow-hidden rounded-2xl text-xl shadow-sm sm:h-11 sm:w-11 sm:text-2xl " + theme.iconBg}><AgentIcon code={workflowCode} value={workflowIcon} alt={workflowName} /></div>
           <h1 title={workflowName} className="max-w-[min(78vw,960px)] truncate text-xl font-black tracking-normal text-gray-900 dark:text-white sm:text-3xl">{workflowName}</h1>
         </div>
         {workflowDescription && <p className="mx-auto mt-2 max-w-2xl px-3 text-xs leading-5 text-gray-500 dark:text-gray-300 sm:text-sm">{workflowDescription}</p>}

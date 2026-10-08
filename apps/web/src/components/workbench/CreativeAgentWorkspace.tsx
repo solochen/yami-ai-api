@@ -1319,7 +1319,7 @@ export function CreativeAgentWorkspace({
         {messages.length === 0 ? (
           <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col">
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-3 py-2 text-center md:hidden">
-              <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-primary/15 text-primary"><AgentIcon value={agentIcon} fallback="✦" alt={t("Agent 通用智能体")} /></div>
+              <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-primary/15 text-primary"><AgentIcon code="general_creative_agent" value={agentIcon} fallback="✦" alt={t("Agent 通用智能体")} /></div>
               <h1 className="mt-2 text-lg font-bold text-gray-950 dark:text-gray-50">{ts("Agent 通用智能体")}</h1>
               <p className="mt-1 max-w-sm text-xs leading-5 text-gray-600 dark:text-gray-300">{ts("说出目标，连续完成图片、视频、语音或音乐创作。")}</p>
               <div className="mt-3 grid w-full max-w-sm grid-cols-2 gap-1.5">
@@ -1336,6 +1336,7 @@ export function CreativeAgentWorkspace({
             </div>
             <div className="hidden min-h-0 flex-1 md:flex">
               <AgentLanding
+              workflowCode="general_creative_agent"
               workflowIcon={agentIcon}
               workflowName={ts("Agent 通用智能体")}
               workflowDescription={ts("一句话理解创作目标，连续完成图片、视频、语音与音乐任务；上一轮结果可直接衔接下一轮。")}

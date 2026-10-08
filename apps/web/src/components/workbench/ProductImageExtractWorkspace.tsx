@@ -184,6 +184,7 @@ export function ProductImageExtractWorkspace({ workflow }: { workflow: WorkflowL
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 sm:px-6">
         {!project ? (
           <AgentLanding
+            workflowCode={workflow.code}
             workflowIcon={workflow.icon || "🛍️"}
             workflowName={workflowName}
             workflowDescription={workflowDescription}

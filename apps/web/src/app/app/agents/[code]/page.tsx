@@ -341,7 +341,7 @@ export default function AgentWorkspacePage() {
 
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-2xl bg-gray-900 text-white flex items-center justify-center text-2xl overflow-hidden">
-            <AgentIcon value={workflow.icon} alt={ts(workflow.name)} />
+            <AgentIcon code={workflow.code} value={workflow.icon} alt={ts(workflow.name)} />
           </div>
           <div>
             <h1 className="text-xl font-bold">{ts(workflow.name)}</h1>

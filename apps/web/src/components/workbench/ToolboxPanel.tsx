@@ -163,7 +163,7 @@ export function ToolboxPanel({ agents, category, query }: { agents: ToolboxAgent
               <article key={agent.code} className="soft-card flex min-h-[220px] flex-col p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gray-900 text-lg text-white">
-                    <AgentIcon value={agent.icon} alt={name} />
+                    <AgentIcon code={agent.code} value={agent.icon} alt={name} />
                   </div>
                   <div className="flex flex-wrap justify-end gap-1">
                     {badges.map((badge) => (

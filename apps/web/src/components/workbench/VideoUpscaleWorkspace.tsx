@@ -481,6 +481,7 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
       <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col">
         {!project && (
           <AgentLanding
+            workflowCode={workflow.code}
             workflowIcon={workflow.icon || (isRedraw ? "🪄" : isSubtitle ? "🧹" : "✨")}
             workflowName={td(`agent.${workflow.code}.name`, workflow.name)}
             workflowDescription={td(`agent.${workflow.code}.description`, workflow.description || "")}

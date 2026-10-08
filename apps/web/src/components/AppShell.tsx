@@ -662,7 +662,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                 )}
               >
                 <div className="flex gap-2">
-                <div className="tech-icon flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-200 bg-gray-950 text-lg text-amber-300 shadow-sm dark:border-amber-400/20"><AgentIcon value={creativeAgent.icon} fallback="✦" alt={td(`agent.${creativeAgent.code}.name`, creativeAgent.name)} /></div>
+                <div className="tech-icon flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-200 bg-gray-950 text-lg text-amber-300 shadow-sm dark:border-amber-400/20"><AgentIcon code={creativeAgent.code} value={creativeAgent.icon} fallback="✦" alt={td(`agent.${creativeAgent.code}.name`, creativeAgent.name)} /></div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-1">
                       <span className="tech-title min-w-0 flex-1 line-clamp-2 text-xs font-semibold leading-4 text-gray-900 dark:text-gray-100" title={td(`agent.${creativeAgent.code}.name`, creativeAgent.name)}>{td(`agent.${creativeAgent.code}.name`, creativeAgent.name)}</span>
@@ -826,7 +826,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                 >
                   <div className="flex gap-2">
                     <div className="tech-icon w-10 h-10 rounded-xl bg-gray-900 text-white flex items-center justify-center text-lg shrink-0 overflow-hidden">
-                      <AgentIcon value={a.icon} alt={agentName} />
+                      <AgentIcon code={a.code} value={a.icon} alt={agentName} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-1">

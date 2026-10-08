@@ -1893,6 +1893,7 @@ export function AgentWorkspace({ code }: { code: string }) {
         <div className={project ? "max-w-[1120px] mx-auto space-y-4" : "mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col"}>
           {!project && (
             <AgentLanding
+              workflowCode={workflow.code}
               workflowIcon={workflow.icon || "\u{1F916}"}
               workflowName={workflowName}
               workflowDescription={workflowDescription}
