@@ -1,0 +1,1449 @@
+{
+  "schema_version": "gallery-case-specs/v1",
+  "generated_at": "2026-10-02T03:30:01.833Z",
+  "generator": {
+    "type": "codex",
+    "prompt_version": "stage5-v1",
+    "media_generation_called": false
+  },
+  "source_report": {
+    "path": "docs/inspiration-gallery-coverage-report.json",
+    "snapshot_at": "2026-10-02T01:20:33.212Z",
+    "sha256": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696"
+  },
+  "policy": {
+    "status": "draft",
+    "public_publish_allowed": false,
+    "media_generation_allowed": false
+  },
+  "tasks": [
+    {
+      "public_id": "gap_stage5_style-architecture",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "style",
+      "category": "",
+      "style": "Architecture",
+      "scene": "",
+      "prompt_language": "",
+      "target_count": 8,
+      "current_count": 4,
+      "gap_count": 2,
+      "priority": "high",
+      "title": "Architecture 风格补齐",
+      "rationale": "覆盖率报告显示 Architecture 风格仅 4 个案例，优先补充无品牌、无真实人物的可持续建筑主题。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    },
+    {
+      "public_id": "gap_stage5_style-characters",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "style",
+      "category": "",
+      "style": "Characters",
+      "scene": "",
+      "prompt_language": "",
+      "target_count": 8,
+      "current_count": 2,
+      "gap_count": 2,
+      "priority": "high",
+      "title": "Characters 风格补齐",
+      "rationale": "Characters 风格只有 2 个案例，使用原创人物和通用场景，避开现实名人、版权角色和品牌服饰。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    },
+    {
+      "public_id": "gap_stage5_style-charts",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "style",
+      "category": "",
+      "style": "Charts",
+      "scene": "",
+      "prompt_language": "",
+      "target_count": 8,
+      "current_count": 3,
+      "gap_count": 2,
+      "priority": "high",
+      "title": "Charts 风格补齐",
+      "rationale": "Charts 风格只有 3 个案例，优先补教育和公共知识场景，验收重点是信息层级与可读性。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    },
+    {
+      "public_id": "gap_stage5_style-documents",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "style",
+      "category": "",
+      "style": "Documents",
+      "scene": "",
+      "prompt_language": "",
+      "target_count": 8,
+      "current_count": 4,
+      "gap_count": 2,
+      "priority": "high",
+      "title": "Documents 风格补齐",
+      "rationale": "Documents 风格只有 4 个案例，补充可复用的课程讲义和操作手册版式，不使用真实机构名称。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    },
+    {
+      "public_id": "gap_stage5_style-history",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "style",
+      "category": "",
+      "style": "History",
+      "scene": "",
+      "prompt_language": "",
+      "target_count": 8,
+      "current_count": 7,
+      "gap_count": 1,
+      "priority": "high",
+      "title": "History 风格补齐",
+      "rationale": "History 风格距离目标还差 1 个，使用公共历史主题的抽象叙事，不复刻受版权保护的艺术作品。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    },
+    {
+      "public_id": "gap_stage5_style-photography",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "style",
+      "category": "",
+      "style": "Photography",
+      "scene": "",
+      "prompt_language": "",
+      "target_count": 8,
+      "current_count": 3,
+      "gap_count": 2,
+      "priority": "high",
+      "title": "Photography 风格补齐",
+      "rationale": "Photography 风格只有 3 个案例，先补无品牌静物与通用商业摄影，避免真实人物授权问题。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    },
+    {
+      "public_id": "gap_stage5_style-products",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "style",
+      "category": "",
+      "style": "Products",
+      "scene": "",
+      "prompt_language": "",
+      "target_count": 8,
+      "current_count": 5,
+      "gap_count": 2,
+      "priority": "high",
+      "title": "Products 风格补齐",
+      "rationale": "Products 风格只有 5 个案例，补充无品牌产品展示和结构图，服务电商与设计评审场景。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    },
+    {
+      "public_id": "gap_stage5_style-scenes",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "style",
+      "category": "",
+      "style": "Scenes",
+      "scene": "",
+      "prompt_language": "",
+      "target_count": 8,
+      "current_count": 2,
+      "gap_count": 2,
+      "priority": "high",
+      "title": "Scenes 风格补齐",
+      "rationale": "Scenes 风格只有 2 个案例，补充具有明确环境叙事的原创场景，避免版权世界观。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    },
+    {
+      "public_id": "gap_stage5_pair-category-scene",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "category_scene",
+      "category": "Architecture & Spaces",
+      "style": "",
+      "scene": "Education",
+      "prompt_language": "",
+      "target_count": 8,
+      "current_count": 0,
+      "gap_count": 1,
+      "priority": "medium",
+      "title": "Architecture & Spaces + Education 组合",
+      "rationale": "覆盖率报告显示该组合为 0，且对教学空间、建筑导览和科普展示有明确产品价值。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    },
+    {
+      "public_id": "gap_stage5_pair-category-scene-doc-food",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "category_scene",
+      "category": "Documents & Publishing",
+      "style": "",
+      "scene": "Food",
+      "prompt_language": "",
+      "target_count": 8,
+      "current_count": 0,
+      "gap_count": 1,
+      "priority": "medium",
+      "title": "Documents & Publishing + Food 组合",
+      "rationale": "该组合为 0，适合补充高复用的教程型内容，并能同时验证文本排版与步骤信息。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    },
+    {
+      "public_id": "gap_stage5_pair-category-scene-history",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "category_scene",
+      "category": "History & Classical Themes",
+      "style": "",
+      "scene": "Travel",
+      "prompt_language": "",
+      "target_count": 8,
+      "current_count": 0,
+      "gap_count": 1,
+      "priority": "medium",
+      "title": "History & Classical Themes + Travel 组合",
+      "rationale": "该组合为 0，使用原创公共历史主题和抽象旅行路线，避免真实人物、机构和受保护文物复刻。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    },
+    {
+      "public_id": "gap_stage5_pair-category-scene-story",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "category_scene",
+      "category": "Scenes & Storytelling",
+      "style": "",
+      "scene": "Creative",
+      "prompt_language": "",
+      "target_count": 8,
+      "current_count": 0,
+      "gap_count": 1,
+      "priority": "medium",
+      "title": "Scenes & Storytelling + Creative 组合",
+      "rationale": "该组合为 0，补充创意工作流中的环境叙事案例，适合验证场景连续性和镜头构图。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    },
+    {
+      "public_id": "gap_stage5_language-korean",
+      "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+      "source_snapshot_at": "2026-10-02T01:20:33.212Z",
+      "dimension_type": "scene_language",
+      "category": "",
+      "style": "",
+      "scene": "Creative",
+      "prompt_language": "ko",
+      "target_count": 8,
+      "current_count": 0,
+      "gap_count": 1,
+      "priority": "medium",
+      "title": "Creative + 韩文 Prompt 组合",
+      "rationale": "覆盖率报告显示 Creative + ko 为 0；先建设一个独立的韩文 Prompt 草稿，图片文字语言保持 none，避免把两种语言混为一谈。",
+      "risk_flags": [],
+      "source_context": {
+        "report_path": "docs/inspiration-gallery-coverage-report.json",
+        "selection_policy": "high_value_gap_first",
+        "media_generation_allowed": false
+      }
+    }
+  ],
+  "specs": [
+    {
+      "public_id": "spec_stage5_style-architecture_01",
+      "gap_task_public_id": "gap_stage5_style-architecture",
+      "title": "可持续城市能源中心剖面",
+      "purpose": "以建筑剖面和清晰结构表达能源、储能与公共空间关系。",
+      "prompt": "Create an original, production-ready image concept for 可持续城市能源中心剖面. 以建筑剖面和清晰结构表达能源、储能与公共空间关系。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "en",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Architecture & Spaces",
+      "styles": [
+        "Architecture"
+      ],
+      "scenes": [
+        "Tech"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-architecture",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-architecture_02",
+      "gap_task_public_id": "gap_stage5_style-architecture",
+      "title": "滨水公共图书馆空间导览",
+      "purpose": "用建筑摄影与导览图结合的方式展示空间层级和动线。",
+      "prompt": "Create an original, production-ready image concept for 滨水公共图书馆空间导览. 用建筑摄影与导览图结合的方式展示空间层级和动线。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "en",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Architecture & Spaces",
+      "styles": [
+        "Architecture"
+      ],
+      "scenes": [
+        "Education"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-architecture",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-characters_01",
+      "gap_task_public_id": "gap_stage5_style-characters",
+      "title": "原创植物学研究员角色设定",
+      "purpose": "展示原创成年角色的正面、侧面和工作状态，强调服装材质与工具。",
+      "prompt": "Create an original, production-ready image concept for 原创植物学研究员角色设定. 展示原创成年角色的正面、侧面和工作状态，强调服装材质与工具。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "en",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Characters & People",
+      "styles": [
+        "Characters"
+      ],
+      "scenes": [
+        "Creative"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-characters",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-characters_02",
+      "gap_task_public_id": "gap_stage5_style-characters",
+      "title": "原创城市骑行者角色卡",
+      "purpose": "用原创成年角色表达城市骑行装备、姿态和安全配件。",
+      "prompt": "Create an original, production-ready image concept for 原创城市骑行者角色卡. 用原创成年角色表达城市骑行装备、姿态和安全配件。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Characters & People",
+      "styles": [
+        "Characters"
+      ],
+      "scenes": [
+        "Travel"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-characters",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-charts_01",
+      "gap_task_public_id": "gap_stage5_style-charts",
+      "title": "城市用水循环科普信息图",
+      "purpose": "以流程图、比例图和局部放大解释城市用水循环，不放置真实机构标识。",
+      "prompt": "Create an original, production-ready image concept for 城市用水循环科普信息图. 以流程图、比例图和局部放大解释城市用水循环，不放置真实机构标识。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Charts & Infographics",
+      "styles": [
+        "Charts"
+      ],
+      "scenes": [
+        "Education"
+      ],
+      "aspect_ratio": "4:5",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-charts",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-charts_02",
+      "gap_task_public_id": "gap_stage5_style-charts",
+      "title": "家庭预算分配可视化卡片",
+      "purpose": "用抽象示例数据展示预算分类、比例和趋势，数据必须明确为虚构示例。",
+      "prompt": "Create an original, production-ready image concept for 家庭预算分配可视化卡片. 用抽象示例数据展示预算分类、比例和趋势，数据必须明确为虚构示例。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Charts & Infographics",
+      "styles": [
+        "Charts"
+      ],
+      "scenes": [
+        "Commerce"
+      ],
+      "aspect_ratio": "4:5",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-charts",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-documents_01",
+      "gap_task_public_id": "gap_stage5_style-documents",
+      "title": "植物养护课程讲义版式",
+      "purpose": "制作一页模块化课程讲义，包含标题、步骤、插图占位和注意事项。",
+      "prompt": "Create an original, production-ready image concept for 植物养护课程讲义版式. 制作一页模块化课程讲义，包含标题、步骤、插图占位和注意事项。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Documents & Publishing",
+      "styles": [
+        "Documents"
+      ],
+      "scenes": [
+        "Education"
+      ],
+      "aspect_ratio": "4:5",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-documents",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-documents_02",
+      "gap_task_public_id": "gap_stage5_style-documents",
+      "title": "家庭烘焙步骤手册版式",
+      "purpose": "制作一页易读的烘焙操作手册，使用虚构配方和通用器具。",
+      "prompt": "Create an original, production-ready image concept for 家庭烘焙步骤手册版式. 制作一页易读的烘焙操作手册，使用虚构配方和通用器具。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Documents & Publishing",
+      "styles": [
+        "Documents"
+      ],
+      "scenes": [
+        "Food"
+      ],
+      "aspect_ratio": "4:5",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-documents",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-history_01",
+      "gap_task_public_id": "gap_stage5_style-history",
+      "title": "古代商路地图叙事海报",
+      "purpose": "以原创地图构图讲述古代商路的货物、地形和旅程节点，避免真实机构徽记。",
+      "prompt": "Create an original, production-ready image concept for 古代商路地图叙事海报. 以原创地图构图讲述古代商路的货物、地形和旅程节点，避免真实机构徽记。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "History & Classical Themes",
+      "styles": [
+        "History"
+      ],
+      "scenes": [
+        "Travel"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-history",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-photography_01",
+      "gap_task_public_id": "gap_stage5_style-photography",
+      "title": "无品牌陶器静物商业摄影",
+      "purpose": "拍摄无品牌手作陶器组合，强调材质、光影、留白和电商构图。",
+      "prompt": "Create an original, production-ready image concept for 无品牌陶器静物商业摄影. 拍摄无品牌手作陶器组合，强调材质、光影、留白和电商构图。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Photography & Realism",
+      "styles": [
+        "Photography"
+      ],
+      "scenes": [
+        "Commerce"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-photography",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-photography_02",
+      "gap_task_public_id": "gap_stage5_style-photography",
+      "title": "城市雨后公共空间摄影",
+      "purpose": "表现无可识别人物的雨后公共空间，重点检验真实光线和材质。",
+      "prompt": "Create an original, production-ready image concept for 城市雨后公共空间摄影. 表现无可识别人物的雨后公共空间，重点检验真实光线和材质。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "en",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Photography & Realism",
+      "styles": [
+        "Photography"
+      ],
+      "scenes": [
+        "Travel"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-photography",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-products_01",
+      "gap_task_public_id": "gap_stage5_style-products",
+      "title": "模块化收纳盒产品爆炸图",
+      "purpose": "展示原创模块化收纳盒的组件、连接方式和使用状态，不出现品牌或商标。",
+      "prompt": "Create an original, production-ready image concept for 模块化收纳盒产品爆炸图. 展示原创模块化收纳盒的组件、连接方式和使用状态，不出现品牌或商标。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Products & E-commerce",
+      "styles": [
+        "Products"
+      ],
+      "scenes": [
+        "Commerce"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-products",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-products_02",
+      "gap_task_public_id": "gap_stage5_style-products",
+      "title": "便携净水壶产品展示板",
+      "purpose": "展示原创净水壶的材质、滤芯结构与使用场景，使用中性产品命名。",
+      "prompt": "Create an original, production-ready image concept for 便携净水壶产品展示板. 展示原创净水壶的材质、滤芯结构与使用场景，使用中性产品命名。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "en",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Products & E-commerce",
+      "styles": [
+        "Products"
+      ],
+      "scenes": [
+        "Tech"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-products",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-scenes_01",
+      "gap_task_public_id": "gap_stage5_style-scenes",
+      "title": "森林观测站叙事场景",
+      "purpose": "以原创森林观测站为场景，表达时间、天气和人物行动线索，不出现现实机构。",
+      "prompt": "Create an original, production-ready image concept for 森林观测站叙事场景. 以原创森林观测站为场景，表达时间、天气和人物行动线索，不出现现实机构。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "en",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Scenes & Storytelling",
+      "styles": [
+        "Scenes"
+      ],
+      "scenes": [
+        "Story"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-scenes",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_style-scenes_02",
+      "gap_task_public_id": "gap_stage5_style-scenes",
+      "title": "夜间创意工作室场景",
+      "purpose": "表现原创创意工作室的桌面、草图、灯光与空间关系，不使用真实品牌设备。",
+      "prompt": "Create an original, production-ready image concept for 夜间创意工作室场景. 表现原创创意工作室的桌面、草图、灯光与空间关系，不使用真实品牌设备。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Scenes & Storytelling",
+      "styles": [
+        "Scenes"
+      ],
+      "scenes": [
+        "Creative"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "style-scenes",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_pair-category-scene_01",
+      "gap_task_public_id": "gap_stage5_pair-category-scene",
+      "title": "未来学校建筑剖面教学图",
+      "purpose": "用原创未来学校建筑剖面展示教室、实验室、图书区和公共动线。",
+      "prompt": "Create an original, production-ready image concept for 未来学校建筑剖面教学图. 用原创未来学校建筑剖面展示教室、实验室、图书区和公共动线。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Architecture & Spaces",
+      "styles": [
+        "Architecture"
+      ],
+      "scenes": [
+        "Education"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "pair-category-scene",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_pair-category-scene-doc-food_01",
+      "gap_task_public_id": "gap_stage5_pair-category-scene-doc-food",
+      "title": "家常汤品图文教程页",
+      "purpose": "制作一页通用家常汤品教程，包含食材、步骤、时间和安全提示，文字保持简洁。",
+      "prompt": "Create an original, production-ready image concept for 家常汤品图文教程页. 制作一页通用家常汤品教程，包含食材、步骤、时间和安全提示，文字保持简洁。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Documents & Publishing",
+      "styles": [
+        "Documents"
+      ],
+      "scenes": [
+        "Food"
+      ],
+      "aspect_ratio": "4:5",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "pair-category-scene-doc-food",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_pair-category-scene-history_01",
+      "gap_task_public_id": "gap_stage5_pair-category-scene-history",
+      "title": "古代商路旅行路线图",
+      "purpose": "以原创路线图表现古代商路地理、季节和物资节点，使用抽象地名和图例。",
+      "prompt": "Create an original, production-ready image concept for 古代商路旅行路线图. 以原创路线图表现古代商路地理、季节和物资节点，使用抽象地名和图例。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "History & Classical Themes",
+      "styles": [
+        "History"
+      ],
+      "scenes": [
+        "Travel"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "pair-category-scene-history",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_pair-category-scene-story_01",
+      "gap_task_public_id": "gap_stage5_pair-category-scene-story",
+      "title": "创意工作室的一天",
+      "purpose": "通过同一原创工作室的晨间、制作和收工线索表达创作过程，不出现真实品牌。",
+      "prompt": "Create an original, production-ready image concept for 创意工作室的一天. 通过同一原创工作室的晨间、制作和收工线索表达创作过程，不出现真实品牌。 Use neutral, non-branded subjects, coherent composition, accurate materials, clear hierarchy, and no copyrighted characters or real-person likeness.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "zh-CN",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Scenes & Storytelling",
+      "styles": [
+        "Scenes"
+      ],
+      "scenes": [
+        "Creative"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "pair-category-scene-story",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "public_id": "spec_stage5_language-korean_01",
+      "gap_task_public_id": "gap_stage5_language-korean",
+      "title": "창작 스튜디오 무드보드",
+      "purpose": "창작 스튜디오의 자연광, 재료, 작업 테이블과 차분한 색감을 표현하는 무드보드.",
+      "prompt": "원본 브랜드와 실존 인물을 사용하지 않고 창작 스튜디오의 자연광, 재료, 작업 테이블과 차분한 색감을 표현하는 무드보드.",
+      "negative_prompt": "brand logos, trademarks, real public figures, copyrighted characters, unreadable text, random watermark, distorted anatomy, duplicate objects",
+      "prompt_language": "ko",
+      "image_text_languages": [],
+      "expected_text": [],
+      "category": "Scenes & Storytelling",
+      "styles": [
+        "Scenes"
+      ],
+      "scenes": [
+        "Creative"
+      ],
+      "aspect_ratio": "3:4",
+      "output_media_type": "image",
+      "candidate_models": [
+        {
+          "code": "gpt-image-2",
+          "role": "primary",
+          "rationale": "优先用于文字结构、信息图和复杂构图的候选验证。"
+        },
+        {
+          "code": "seedream-5-0-lite",
+          "role": "fallback",
+          "rationale": "作为成本更低的备选图片模型，便于后续小批量对比。"
+        }
+      ],
+      "acceptance_criteria": [
+        "分类、风格和场景与缺口任务一致，主体可在缩略图中被识别。",
+        "无品牌、名人、版权角色和真实机构标识；如触发风险必须先完成人工风险审核。",
+        "主体结构、材质、光影和构图稳定，未出现明显重复、畸变或不可解释元素。",
+        "图片不要求出现文字；若模型生成随机文字，审核时应判定为需返修。",
+        "生成结果保留模型、参数、成本和资源地址，进入 pending_review，不得自动公开。"
+      ],
+      "selection_reason": "由覆盖率报告的高价值缺口筛选；先覆盖单维度缺口，再覆盖有实际使用价值的分类与场景组合。",
+      "risk_flags": [],
+      "risk_notes": "",
+      "risk_review_status": "not_required",
+      "status": "draft",
+      "generator_type": "codex",
+      "generator_model_code": "",
+      "generator_prompt_version": "stage5-v1",
+      "generation_input": {
+        "source_report_hash": "90c725ff923baf3e8260e90ffb96f0ce36d3e6d25bc1ed0c70b4521ad6952696",
+        "plan_id": "language-korean",
+        "media_generation_allowed": false
+      },
+      "generation_output": {},
+      "estimated_cost": 0,
+      "actual_cost": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  ]
+}

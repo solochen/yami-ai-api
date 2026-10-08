@@ -71,8 +71,12 @@ try {
     }
 
     Step "Applying migrations twice to verify idempotence"
-    Compose @("--profile", "tools", "run", "--rm", "migrate")
-    Compose @("--profile", "tools", "run", "--rm", "migrate")
+    Compose @("--profile", "tools", "run", "--rm", "migrate", "/migrate", "up")
+    Compose @("--profile", "tools", "run", "--rm", "migrate", "/migrate", "up")
+
+    Step "Rolling back and restoring isolated migrations"
+    Compose @("--profile", "tools", "run", "--rm", "migrate", "/migrate", "down")
+    Compose @("--profile", "tools", "run", "--rm", "migrate", "/migrate", "up")
 
     Step "Starting application services"
     Compose @("up", "-d", "--force-recreate", "api", "worker", "web", "admin", "mock-new-api")

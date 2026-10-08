@@ -14,7 +14,9 @@ for (const up of ups) {
   if (!downs.has(down)) errors.push(`missing rollback migration: ${down}`);
 }
 
-const legacyDuplicateNumbers = new Set(["018", "020", "081"]);
+// These historical numbers were reused before filename-based migration tracking
+// was introduced. Keep the exception explicit so new collisions still fail.
+const legacyDuplicateNumbers = new Set(["018", "020", "081", "130", "131", "132"]);
 const byNumber = new Map();
 for (const up of ups) {
   const number = up.match(/^(\d+)_/)?.[1];

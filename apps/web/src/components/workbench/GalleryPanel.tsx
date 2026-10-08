@@ -47,6 +47,12 @@ interface ImageModelOption {
   is_enabled?: boolean;
 }
 
+interface GalleryFilterChip {
+  key: string;
+  label: string;
+  onRemove: () => void;
+}
+
 type GalleryDetail =
   | { kind: "reference"; item: ReferenceGalleryItem }
   | { kind: "community"; item: GalleryItem };
@@ -281,6 +287,42 @@ export function GalleryPanel({
     onCommunityLanguageChange?.(language);
   };
 
+  const clearReferenceFilters = () => {
+    setReferenceQuery("");
+    selectReferenceCategory("all");
+    selectReferenceStyle("all");
+    selectReferenceScene("all");
+    selectReferenceLanguage("all");
+  };
+
+  const clearCommunityFilters = () => {
+    setCommunityQuery("");
+    selectCommunityTag("all");
+    selectCommunityLanguage("all");
+  };
+
+  const referenceFilterChips: GalleryFilterChip[] = [];
+  const referenceSearch = referenceQuery.trim();
+  if (referenceSearch) referenceFilterChips.push({ key: "query", label: `${t("gallery.searchLabel")}: ${referenceSearch}`, onRemove: () => setReferenceQuery("") });
+  if (category !== "all") referenceFilterChips.push({ key: "category", label: `${t("gallery.category")}: ${referenceTaxonomyLabel(category, locale)}`, onRemove: () => selectReferenceCategory("all") });
+  if (style !== "all") referenceFilterChips.push({ key: "style", label: `${t("gallery.style")}: ${referenceTaxonomyLabel(style, locale)}`, onRemove: () => selectReferenceStyle("all") });
+  if (scene !== "all") referenceFilterChips.push({ key: "scene", label: `${t("gallery.scene")}: ${referenceTaxonomyLabel(scene, locale)}`, onRemove: () => selectReferenceScene("all") });
+  if (referenceLanguage !== "all") referenceFilterChips.push({ key: "language", label: `${t("gallery.language")}: ${galleryLanguageLabel(referenceLanguage, locale)}`, onRemove: () => selectReferenceLanguage("all") });
+
+  const communityFilterChips: GalleryFilterChip[] = [];
+  const communitySearch = communityQuery.trim();
+  if (communitySearch) communityFilterChips.push({ key: "query", label: `${t("gallery.searchLabel")}: ${communitySearch}`, onRemove: () => setCommunityQuery("") });
+  if (communityTag !== "all") {
+    const selectedTag = communityNavTags.find((tag) => tag.slug === communityTag);
+    const tagName = selectedTag ? (selectedTag.slug === "all" ? selectedTag.name : td(`gallery.tag.${selectedTag.slug}`, selectedTag.name)) : communityTag;
+    communityFilterChips.push({ key: "category", label: `${t("gallery.category")}: ${tagName}`, onRemove: () => selectCommunityTag("all") });
+  }
+  if (communityLanguage !== "all") communityFilterChips.push({ key: "language", label: `${t("gallery.language")}: ${galleryLanguageLabel(communityLanguage, locale)}`, onRemove: () => selectCommunityLanguage("all") });
+
+  const referenceHasFilters = referenceFilterChips.length > 0;
+  const communityHasFilters = communityFilterChips.length > 0;
+  const communityResultCount = communityHasFilters ? communityVisible.length : communityTotal;
+
   const handleUseCommunity = async (item: GalleryItem) => {
     setCloning(true);
     try {
@@ -339,22 +381,18 @@ export function GalleryPanel({
                 <FilterRow label={t("gallery.style")} values={manifest?.styles || []} value={style} onChange={selectReferenceStyle} allLabel={t("gallery.all")} getLabel={taxonomyLabel} />
                 <FilterRow label={t("gallery.scene")} values={manifest?.scenes || []} value={scene} onChange={selectReferenceScene} allLabel={t("gallery.all")} getLabel={taxonomyLabel} />
                 <FilterRow label={t("gallery.language")} values={referenceLanguages} value={referenceLanguage} onChange={selectReferenceLanguage} allLabel={t("gallery.all")} getLabel={(value) => galleryLanguageLabel(value as GalleryLanguage, locale)} />
+                <GalleryFilterSummary chips={referenceFilterChips} label={t("gallery.activeFilters")} removeLabel={t("gallery.removeFilter")} resetLabel={t("gallery.resetFilters")} onReset={clearReferenceFilters} />
               </div>
             </section>
 
-            <div className="mb-4 flex items-center justify-between gap-4 text-sm text-gray-500 dark:text-gray-400">
+            <div className="mb-4 text-sm text-gray-500 dark:text-gray-400">
               <span>{t("gallery.resultCount", { count: referenceItems.length })}</span>
-              {(category !== "all" || style !== "all" || scene !== "all" || referenceLanguage !== "all" || referenceQuery) && (
-                <button type="button" onClick={() => { setReferenceQuery(""); selectReferenceCategory("all"); selectReferenceStyle("all"); selectReferenceScene("all"); selectReferenceLanguage("all"); }} className="inline-flex items-center gap-1.5 font-medium text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-primary">
-                  <RotateCcw size={14} />{t("gallery.resetFilters")}
-                </button>
-              )}
             </div>
 
             {referenceLoading ? <GallerySkeleton /> : referenceError ? (
               <GalleryError message={referenceError} retry={() => setReferenceReload((value) => value + 1)} retryLabel={t("common.retry")} />
             ) : referenceItems.length === 0 ? (
-              <GalleryEmpty title={t("gallery.noMatches")} description={t("gallery.noMatchesDesc")} />
+              <GalleryEmpty title={referenceHasFilters ? t("gallery.noMatches") : t("gallery.referenceEmpty")} description={referenceHasFilters ? t("gallery.noMatchesDesc") : t("gallery.referenceEmptyDesc")} action={referenceHasFilters ? clearReferenceFilters : undefined} actionLabel={referenceHasFilters ? t("gallery.resetFilters") : undefined} />
             ) : (
               <>
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -397,14 +435,15 @@ export function GalleryPanel({
                   </div>
                 </div>
                 <FilterRow label={t("gallery.language")} values={communityLanguages} value={communityLanguage} onChange={selectCommunityLanguage} allLabel={t("gallery.all")} getLabel={(value) => galleryLanguageLabel(value as GalleryLanguage, locale)} />
+                <GalleryFilterSummary chips={communityFilterChips} label={t("gallery.activeFilters")} removeLabel={t("gallery.removeFilter")} resetLabel={t("gallery.resetFilters")} onReset={clearCommunityFilters} />
               </div>
             </section>
 
-            <div className="mb-4 text-sm text-gray-500 dark:text-gray-400">{t("gallery.resultCount", { count: communityQuery || communityLanguage !== "all" ? communityVisible.length : communityTotal })}</div>
+            <div className="mb-4 text-sm text-gray-500 dark:text-gray-400">{t("gallery.resultCount", { count: communityResultCount })}</div>
             {communityLoading ? <GallerySkeleton /> : communityError ? (
               <GalleryError message={communityError} retry={() => setCommunityReload((value) => value + 1)} retryLabel={t("common.retry")} />
             ) : communityVisible.length === 0 ? (
-              <GalleryEmpty title={t("gallery.empty")} description={t("gallery.communityEmptyDesc")} />
+              <GalleryEmpty title={t("gallery.empty")} description={t("gallery.communityEmptyDesc")} action={communityHasFilters ? clearCommunityFilters : undefined} actionLabel={communityHasFilters ? t("gallery.resetFilters") : undefined} />
             ) : (
               <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
                 {communityVisible.map((item) => <CommunityCard key={item.public_id} item={item} onOpen={() => setDetail({ kind: "community", item })} featuredLabel={t("gallery.featured")} paidLabel={t("common.compute")} videoLabel={t("asset.video")} />)}
@@ -446,6 +485,26 @@ function FilterRow({ label, values, value, onChange, allLabel, getLabel = (item)
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function GalleryFilterSummary({ chips, label, removeLabel, resetLabel, onReset }: { chips: GalleryFilterChip[]; label: string; removeLabel: string; resetLabel: string; onReset: () => void }) {
+  if (chips.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2 rounded-xl bg-gray-50/80 p-3 dark:bg-white/5 sm:flex-row sm:items-start">
+      <span className="shrink-0 pt-1 text-xs font-semibold text-gray-500 dark:text-gray-400">{label}</span>
+      <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+        {chips.map((chip) => (
+          <button key={chip.key} type="button" onClick={chip.onRemove} aria-label={`${removeLabel}: ${chip.label}`} className="inline-flex max-w-full items-center gap-1 rounded-lg border border-primary/20 bg-white px-2.5 py-1.5 text-left text-xs font-medium text-gray-700 transition hover:border-primary/50 hover:text-primary dark:border-primary/30 dark:bg-white/5 dark:text-gray-200">
+            <span className="max-w-[18rem] truncate sm:max-w-[24rem]">{chip.label}</span>
+            <X size={13} className="shrink-0 text-gray-400" aria-hidden="true" />
+          </button>
+        ))}
+      </div>
+      <button type="button" onClick={onReset} className="inline-flex shrink-0 items-center gap-1.5 self-start pt-1 text-xs font-semibold text-gray-600 transition hover:text-primary dark:text-gray-300 dark:hover:text-primary">
+        <RotateCcw size={13} />{resetLabel}
+      </button>
     </div>
   );
 }
@@ -508,7 +567,7 @@ function GalleryDetailModal({ detail, cloning, copied, onClose, onCopy, onUse, t
           <div className="bg-gray-100 dark:bg-gray-950">
             {referenceItem ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={referenceImageURL(referenceItem.image)} alt={referenceItem.imageAlt || title} className="h-full max-h-[86dvh] w-full object-contain" />
+              <img src={referenceImageURL(referenceItem.image)} alt={referenceItem.imageAlt || title} className="h-full max-h-[42dvh] w-full object-contain md:max-h-[86dvh]" />
             ) : communityItem ? <GalleryPreview item={communityItem} detail videoLabel={t("asset.video")} /> : null}
           </div>
           <div className="flex min-h-0 flex-col p-5 sm:p-7">
@@ -549,7 +608,7 @@ function GalleryPreview({ item, detail = false, videoLabel }: { item: GalleryIte
   if (!mediaURL) return <div className="aspect-[4/3] bg-gray-100 dark:bg-white/5" />;
   if (isVideo) {
     return detail ? (
-      <video src={mediaURL} poster={poster && poster !== mediaURL ? poster : undefined} controls playsInline className="w-full bg-gray-950" />
+      <video src={mediaURL} poster={poster && poster !== mediaURL ? poster : undefined} controls playsInline className="max-h-[42dvh] w-full bg-gray-950 object-contain md:max-h-none" />
     ) : (
       <div className="relative aspect-video bg-gray-950">
         <video src={previewURL} poster={poster && poster !== mediaURL ? poster : undefined} muted playsInline preload="metadata" className="h-full w-full object-cover" />
@@ -571,8 +630,8 @@ function GalleryError({ message, retry, retryLabel }: { message: string; retry: 
   return <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-red-200 bg-red-50/70 px-6 text-center dark:border-red-500/20 dark:bg-red-500/5"><AlertCircle className="text-red-500" size={28} /><p className="mt-3 text-sm text-red-700 dark:text-red-300">{message}</p><button type="button" onClick={retry} className="mt-4 rounded-xl bg-gray-950 px-4 py-2 text-sm font-semibold text-white active:scale-[0.98] dark:bg-white dark:text-gray-950">{retryLabel}</button></div>;
 }
 
-function GalleryEmpty({ title, description }: { title: string; description: string }) {
-  return <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white/60 px-6 text-center dark:border-white/15 dark:bg-white/5"><Search className="text-gray-300 dark:text-gray-600" size={30} /><h3 className="mt-4 font-semibold text-gray-800 dark:text-gray-100">{title}</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{description}</p></div>;
+function GalleryEmpty({ title, description, action, actionLabel }: { title: string; description: string; action?: () => void; actionLabel?: string }) {
+  return <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white/60 px-6 text-center dark:border-white/15 dark:bg-white/5"><Search className="text-gray-300 dark:text-gray-600" size={30} /><h3 className="mt-4 font-semibold text-gray-800 dark:text-gray-100">{title}</h3><p className="mt-1 max-w-md text-sm text-gray-500 dark:text-gray-400">{description}</p>{action && actionLabel && <button type="button" onClick={action} className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-dark transition hover:brightness-105 active:scale-[0.98]"><RotateCcw size={15} />{actionLabel}</button>}</div>;
 }
 
 function withVideoPreviewTime(url: string) {

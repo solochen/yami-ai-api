@@ -10,9 +10,11 @@ import {
   BookOpen,
   Boxes,
   ChartNoAxesCombined,
+  ClipboardCheck,
   ClipboardList,
   CreditCard,
   FileText,
+  FileJson,
   GalleryHorizontalEnd,
   GitBranch,
   Layers3,
@@ -24,6 +26,7 @@ import {
   WalletCards,
   Settings,
   ShieldCheck,
+  PlayCircle,
   Users,
 } from "lucide-react";
 import { clearAdminSession, hasAdminSession } from "@/lib/api";
@@ -60,6 +63,10 @@ const NAV_GROUPS = [
       { href: "/admin/withdrawals", label: "提现管理", icon: WalletCards },
       { href: "/admin/announcements", label: "公告管理", icon: Bell },
       { href: "/admin/gallery", label: "灵感广场", icon: GalleryHorizontalEnd },
+      { href: "/admin/gallery/references", label: "参考案例", icon: ShieldCheck },
+      { href: "/admin/gallery/specs", label: "案例规格", icon: FileJson },
+      { href: "/admin/gallery/generation", label: "批量生成", icon: PlayCircle },
+      { href: "/admin/gallery/quality-reviews", label: "质量审核", icon: ClipboardCheck },
     ],
   },
   {

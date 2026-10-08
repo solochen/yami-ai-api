@@ -8,12 +8,14 @@ import (
 )
 
 const (
-	TypeImageTask    = "image:generate"
-	TypeComposeTask  = "media:compose"
-	TypeWorkflowTask = "workflow:run"
-	QueueDefault     = "default"
-	QueueImage       = "image"
-	QueueWorkflow    = "workflow"
+	TypeImageTask             = "image:generate"
+	TypeComposeTask           = "media:compose"
+	TypeWorkflowTask          = "workflow:run"
+	TypeGalleryGenerationTask = "gallery:generation"
+	QueueDefault              = "default"
+	QueueImage                = "image"
+	QueueWorkflow             = "workflow"
+	QueueGallery              = "gallery"
 )
 
 type ImageTaskPayload struct {
@@ -33,6 +35,11 @@ type ComposeTaskPayload struct {
 	TaskNo string                 `json:"task_no"`
 	UserID int64                  `json:"user_id"`
 	Input  map[string]interface{} `json:"input"`
+}
+
+type GalleryGenerationTaskPayload struct {
+	TaskID   int64  `json:"task_id"`
+	PublicID string `json:"public_id"`
 }
 
 func NewClient(redisURL string) (*asynq.Client, error) {
@@ -74,5 +81,15 @@ func EnqueueComposeTask(client *asynq.Client, payload ComposeTaskPayload) error 
 	}
 	task := asynq.NewTask(TypeComposeTask, data)
 	_, err = client.Enqueue(task, asynq.Queue(QueueImage), asynq.MaxRetry(1), asynq.Timeout(90*time.Minute))
+	return err
+}
+
+func EnqueueGalleryGenerationTask(client *asynq.Client, payload GalleryGenerationTaskPayload) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	task := asynq.NewTask(TypeGalleryGenerationTask, data)
+	_, err = client.Enqueue(task, asynq.Queue(QueueGallery), asynq.MaxRetry(5), asynq.Timeout(90*time.Minute))
 	return err
 }

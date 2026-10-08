@@ -1,0 +1,2802 @@
+{
+  "snapshotAt": "2026-10-02T01:20:33.212Z",
+  "sources": {
+    "reference": "https://raw.githubusercontent.com/freestylefly/awesome-gpt-image-2/main/data/cases.json",
+    "community": "http://localhost:8080/api/gallery"
+  },
+  "targets": {
+    "dimension": 8,
+    "pair": 3
+  },
+  "reference": {
+    "manifestTotal": 541,
+    "total": 541,
+    "categories": [
+      {
+        "value": "Architecture & Spaces",
+        "count": 12,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Brand & Logos",
+        "count": 27,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Characters & People",
+        "count": 31,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Charts & Infographics",
+        "count": 53,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Documents & Publishing",
+        "count": 11,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "History & Classical Themes",
+        "count": 16,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Illustration & Art",
+        "count": 59,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Other Use Cases",
+        "count": 28,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Photography & Realism",
+        "count": 78,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Posters & Typography",
+        "count": 90,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Products & E-commerce",
+        "count": 42,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Scenes & Storytelling",
+        "count": 21,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "UI & Interfaces",
+        "count": 73,
+        "target": 8,
+        "gap": 0
+      }
+    ],
+    "styles": [
+      {
+        "value": "3D",
+        "count": 40,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Architecture",
+        "count": 4,
+        "target": 8,
+        "gap": 4
+      },
+      {
+        "value": "Brand",
+        "count": 86,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Character",
+        "count": 113,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Characters",
+        "count": 2,
+        "target": 8,
+        "gap": 6
+      },
+      {
+        "value": "Charts",
+        "count": 3,
+        "target": 8,
+        "gap": 5
+      },
+      {
+        "value": "Classical",
+        "count": 14,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Documents",
+        "count": 4,
+        "target": 8,
+        "gap": 4
+      },
+      {
+        "value": "History",
+        "count": 7,
+        "target": 8,
+        "gap": 1
+      },
+      {
+        "value": "Illustration",
+        "count": 103,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Infographic",
+        "count": 74,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Other Use Cases",
+        "count": 9,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Photography",
+        "count": 3,
+        "target": 8,
+        "gap": 5
+      },
+      {
+        "value": "Poster",
+        "count": 199,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Product",
+        "count": 56,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Products",
+        "count": 5,
+        "target": 8,
+        "gap": 3
+      },
+      {
+        "value": "Realistic",
+        "count": 217,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Scenes",
+        "count": 2,
+        "target": 8,
+        "gap": 6
+      },
+      {
+        "value": "UI",
+        "count": 250,
+        "target": 8,
+        "gap": 0
+      }
+    ],
+    "scenes": [
+      {
+        "value": "Commerce",
+        "count": 382,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Creative",
+        "count": 52,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Education",
+        "count": 42,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Fashion",
+        "count": 122,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Food",
+        "count": 42,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "History",
+        "count": 12,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Social",
+        "count": 87,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Story",
+        "count": 65,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Tech",
+        "count": 404,
+        "target": 8,
+        "gap": 0
+      },
+      {
+        "value": "Travel",
+        "count": 48,
+        "target": 8,
+        "gap": 0
+      }
+    ],
+    "promptLanguages": [
+      {
+        "value": "latin",
+        "count": 249
+      },
+      {
+        "value": "zh",
+        "count": 234
+      },
+      {
+        "value": "ja",
+        "count": 56
+      },
+      {
+        "value": "ko",
+        "count": 2
+      }
+    ],
+    "pairs": {
+      "categoryScene": {
+        "total": 130,
+        "present": 112,
+        "zero": 18,
+        "belowTarget": 46,
+        "pairs": [
+          {
+            "left": "Architecture & Spaces",
+            "right": "Commerce",
+            "count": 6
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Creative",
+            "count": 1
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Education",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Fashion",
+            "count": 1
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Food",
+            "count": 2
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Social",
+            "count": 1
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Story",
+            "count": 1
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Tech",
+            "count": 8
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Travel",
+            "count": 5
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Commerce",
+            "count": 22
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Creative",
+            "count": 3
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Education",
+            "count": 2
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Fashion",
+            "count": 3
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Food",
+            "count": 3
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Social",
+            "count": 5
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Story",
+            "count": 4
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Tech",
+            "count": 20
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Travel",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "Commerce",
+            "count": 25
+          },
+          {
+            "left": "Characters & People",
+            "right": "Creative",
+            "count": 4
+          },
+          {
+            "left": "Characters & People",
+            "right": "Education",
+            "count": 1
+          },
+          {
+            "left": "Characters & People",
+            "right": "Fashion",
+            "count": 12
+          },
+          {
+            "left": "Characters & People",
+            "right": "Food",
+            "count": 1
+          },
+          {
+            "left": "Characters & People",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "Social",
+            "count": 6
+          },
+          {
+            "left": "Characters & People",
+            "right": "Story",
+            "count": 4
+          },
+          {
+            "left": "Characters & People",
+            "right": "Tech",
+            "count": 24
+          },
+          {
+            "left": "Characters & People",
+            "right": "Travel",
+            "count": 0
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Commerce",
+            "count": 39
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Creative",
+            "count": 2
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Education",
+            "count": 21
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Fashion",
+            "count": 4
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Food",
+            "count": 5
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "History",
+            "count": 2
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Social",
+            "count": 6
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Story",
+            "count": 7
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Tech",
+            "count": 38
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Travel",
+            "count": 7
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Commerce",
+            "count": 8
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Creative",
+            "count": 1
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Education",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Fashion",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Food",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Social",
+            "count": 2
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Story",
+            "count": 1
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Tech",
+            "count": 5
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Travel",
+            "count": 1
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Commerce",
+            "count": 5
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Creative",
+            "count": 3
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Education",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Fashion",
+            "count": 3
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Food",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "History",
+            "count": 7
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Social",
+            "count": 7
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Story",
+            "count": 1
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Tech",
+            "count": 6
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Travel",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Commerce",
+            "count": 49
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Creative",
+            "count": 3
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Education",
+            "count": 1
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Fashion",
+            "count": 15
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Food",
+            "count": 5
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Social",
+            "count": 6
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Story",
+            "count": 10
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Tech",
+            "count": 54
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Travel",
+            "count": 7
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Commerce",
+            "count": 14
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Creative",
+            "count": 7
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Education",
+            "count": 4
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Fashion",
+            "count": 3
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Food",
+            "count": 2
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "History",
+            "count": 1
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Social",
+            "count": 3
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Story",
+            "count": 3
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Tech",
+            "count": 15
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Travel",
+            "count": 1
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Commerce",
+            "count": 56
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Creative",
+            "count": 6
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Education",
+            "count": 3
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Fashion",
+            "count": 40
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Food",
+            "count": 5
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Social",
+            "count": 11
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Story",
+            "count": 5
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Tech",
+            "count": 68
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Travel",
+            "count": 4
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Commerce",
+            "count": 68
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Creative",
+            "count": 5
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Education",
+            "count": 5
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Fashion",
+            "count": 20
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Food",
+            "count": 8
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Social",
+            "count": 14
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Story",
+            "count": 10
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Tech",
+            "count": 72
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Travel",
+            "count": 16
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Commerce",
+            "count": 36
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Creative",
+            "count": 2
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Education",
+            "count": 3
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Fashion",
+            "count": 9
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Food",
+            "count": 7
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Social",
+            "count": 4
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Story",
+            "count": 3
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Tech",
+            "count": 33
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Travel",
+            "count": 1
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Commerce",
+            "count": 19
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Creative",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Education",
+            "count": 1
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Fashion",
+            "count": 4
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Food",
+            "count": 3
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "History",
+            "count": 1
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Social",
+            "count": 2
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Story",
+            "count": 5
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Tech",
+            "count": 20
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Travel",
+            "count": 4
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Commerce",
+            "count": 35
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Creative",
+            "count": 15
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Education",
+            "count": 1
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Fashion",
+            "count": 8
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Food",
+            "count": 1
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "History",
+            "count": 1
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Social",
+            "count": 20
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Story",
+            "count": 11
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Tech",
+            "count": 41
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Travel",
+            "count": 2
+          }
+        ],
+        "urgent": [
+          {
+            "left": "Architecture & Spaces",
+            "right": "Education",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Travel",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "Travel",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Education",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Fashion",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Food",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Education",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Food",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Travel",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Creative",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Creative",
+            "count": 1
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Fashion",
+            "count": 1
+          }
+        ]
+      },
+      "categoryStyle": {
+        "total": 247,
+        "present": 120,
+        "zero": 127,
+        "belowTarget": 160,
+        "pairs": [
+          {
+            "left": "Architecture & Spaces",
+            "right": "3D",
+            "count": 1
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Architecture",
+            "count": 4
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Brand",
+            "count": 1
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Character",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Classical",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Illustration",
+            "count": 2
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Infographic",
+            "count": 2
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Poster",
+            "count": 4
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Product",
+            "count": 2
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Realistic",
+            "count": 3
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "UI",
+            "count": 4
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "3D",
+            "count": 2
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Brand",
+            "count": 19
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Character",
+            "count": 1
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Classical",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Illustration",
+            "count": 3
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Infographic",
+            "count": 3
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Poster",
+            "count": 8
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Product",
+            "count": 12
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Realistic",
+            "count": 8
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "UI",
+            "count": 10
+          },
+          {
+            "left": "Characters & People",
+            "right": "3D",
+            "count": 3
+          },
+          {
+            "left": "Characters & People",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "Brand",
+            "count": 7
+          },
+          {
+            "left": "Characters & People",
+            "right": "Character",
+            "count": 18
+          },
+          {
+            "left": "Characters & People",
+            "right": "Characters",
+            "count": 2
+          },
+          {
+            "left": "Characters & People",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "Classical",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "Illustration",
+            "count": 11
+          },
+          {
+            "left": "Characters & People",
+            "right": "Infographic",
+            "count": 2
+          },
+          {
+            "left": "Characters & People",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "Poster",
+            "count": 6
+          },
+          {
+            "left": "Characters & People",
+            "right": "Product",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "Realistic",
+            "count": 16
+          },
+          {
+            "left": "Characters & People",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "Characters & People",
+            "right": "UI",
+            "count": 9
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "3D",
+            "count": 5
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Brand",
+            "count": 1
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Character",
+            "count": 2
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Charts",
+            "count": 3
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Classical",
+            "count": 1
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Illustration",
+            "count": 9
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Infographic",
+            "count": 46
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Poster",
+            "count": 28
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Product",
+            "count": 0
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Realistic",
+            "count": 10
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "Charts & Infographics",
+            "right": "UI",
+            "count": 31
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "3D",
+            "count": 1
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Brand",
+            "count": 1
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Character",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Classical",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Documents",
+            "count": 4
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Illustration",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Infographic",
+            "count": 2
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Poster",
+            "count": 2
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Product",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Realistic",
+            "count": 4
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "Documents & Publishing",
+            "right": "UI",
+            "count": 3
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "3D",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Brand",
+            "count": 1
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Character",
+            "count": 2
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Classical",
+            "count": 5
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "History",
+            "count": 7
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Illustration",
+            "count": 3
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Infographic",
+            "count": 1
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Poster",
+            "count": 2
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Product",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Realistic",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "History & Classical Themes",
+            "right": "UI",
+            "count": 3
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "3D",
+            "count": 8
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Brand",
+            "count": 3
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Character",
+            "count": 22
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Classical",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Illustration",
+            "count": 36
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Infographic",
+            "count": 1
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Poster",
+            "count": 12
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Product",
+            "count": 1
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Realistic",
+            "count": 19
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "Illustration & Art",
+            "right": "UI",
+            "count": 24
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "3D",
+            "count": 3
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Brand",
+            "count": 2
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Character",
+            "count": 4
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Classical",
+            "count": 1
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Illustration",
+            "count": 6
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Infographic",
+            "count": 2
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Other Use Cases",
+            "count": 9
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Poster",
+            "count": 4
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Product",
+            "count": 1
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Realistic",
+            "count": 8
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "Other Use Cases",
+            "right": "UI",
+            "count": 10
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "3D",
+            "count": 4
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Brand",
+            "count": 14
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Character",
+            "count": 25
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Classical",
+            "count": 2
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Illustration",
+            "count": 5
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Infographic",
+            "count": 0
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Photography",
+            "count": 3
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Poster",
+            "count": 12
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Product",
+            "count": 5
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Realistic",
+            "count": 68
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "Photography & Realism",
+            "right": "UI",
+            "count": 23
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "3D",
+            "count": 5
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Brand",
+            "count": 16
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Character",
+            "count": 18
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Classical",
+            "count": 3
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Illustration",
+            "count": 19
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Infographic",
+            "count": 6
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Poster",
+            "count": 83
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Product",
+            "count": 8
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Realistic",
+            "count": 32
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "Posters & Typography",
+            "right": "UI",
+            "count": 40
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "3D",
+            "count": 2
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Brand",
+            "count": 10
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Character",
+            "count": 6
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Classical",
+            "count": 0
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Illustration",
+            "count": 3
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Infographic",
+            "count": 3
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Poster",
+            "count": 15
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Product",
+            "count": 18
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Products",
+            "count": 5
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Realistic",
+            "count": 21
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "Products & E-commerce",
+            "right": "UI",
+            "count": 15
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "3D",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Brand",
+            "count": 2
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Character",
+            "count": 4
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Classical",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Illustration",
+            "count": 2
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Infographic",
+            "count": 2
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Poster",
+            "count": 8
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Product",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Realistic",
+            "count": 14
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "Scenes",
+            "count": 2
+          },
+          {
+            "left": "Scenes & Storytelling",
+            "right": "UI",
+            "count": 15
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "3D",
+            "count": 6
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Brand",
+            "count": 9
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Character",
+            "count": 11
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Classical",
+            "count": 2
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Illustration",
+            "count": 4
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Infographic",
+            "count": 4
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Poster",
+            "count": 15
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Product",
+            "count": 9
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Realistic",
+            "count": 14
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "UI & Interfaces",
+            "right": "UI",
+            "count": 63
+          }
+        ],
+        "urgent": [
+          {
+            "left": "Architecture & Spaces",
+            "right": "Character",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Classical",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "Architecture & Spaces",
+            "right": "Scenes",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Architecture",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Characters",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Charts",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Classical",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Documents",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "History",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Other Use Cases",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Photography",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Products",
+            "count": 0
+          },
+          {
+            "left": "Brand & Logos",
+            "right": "Scenes",
+            "count": 0
+          }
+        ]
+      },
+      "sceneLanguage": {
+        "total": 50,
+        "present": 32,
+        "zero": 18,
+        "belowTarget": 24,
+        "pairs": [
+          {
+            "left": "Commerce",
+            "right": "zh",
+            "count": 119
+          },
+          {
+            "left": "Commerce",
+            "right": "latin",
+            "count": 214
+          },
+          {
+            "left": "Commerce",
+            "right": "ja",
+            "count": 48
+          },
+          {
+            "left": "Commerce",
+            "right": "ko",
+            "count": 1
+          },
+          {
+            "left": "Commerce",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Creative",
+            "right": "zh",
+            "count": 45
+          },
+          {
+            "left": "Creative",
+            "right": "latin",
+            "count": 6
+          },
+          {
+            "left": "Creative",
+            "right": "ja",
+            "count": 1
+          },
+          {
+            "left": "Creative",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "Creative",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Education",
+            "right": "zh",
+            "count": 17
+          },
+          {
+            "left": "Education",
+            "right": "latin",
+            "count": 23
+          },
+          {
+            "left": "Education",
+            "right": "ja",
+            "count": 2
+          },
+          {
+            "left": "Education",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "Education",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Fashion",
+            "right": "zh",
+            "count": 34
+          },
+          {
+            "left": "Fashion",
+            "right": "latin",
+            "count": 79
+          },
+          {
+            "left": "Fashion",
+            "right": "ja",
+            "count": 9
+          },
+          {
+            "left": "Fashion",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "Fashion",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Food",
+            "right": "zh",
+            "count": 15
+          },
+          {
+            "left": "Food",
+            "right": "latin",
+            "count": 20
+          },
+          {
+            "left": "Food",
+            "right": "ja",
+            "count": 7
+          },
+          {
+            "left": "Food",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "Food",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "History",
+            "right": "zh",
+            "count": 10
+          },
+          {
+            "left": "History",
+            "right": "latin",
+            "count": 2
+          },
+          {
+            "left": "History",
+            "right": "ja",
+            "count": 0
+          },
+          {
+            "left": "History",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "History",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Social",
+            "right": "zh",
+            "count": 36
+          },
+          {
+            "left": "Social",
+            "right": "latin",
+            "count": 43
+          },
+          {
+            "left": "Social",
+            "right": "ja",
+            "count": 6
+          },
+          {
+            "left": "Social",
+            "right": "ko",
+            "count": 2
+          },
+          {
+            "left": "Social",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Story",
+            "right": "zh",
+            "count": 27
+          },
+          {
+            "left": "Story",
+            "right": "latin",
+            "count": 34
+          },
+          {
+            "left": "Story",
+            "right": "ja",
+            "count": 4
+          },
+          {
+            "left": "Story",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "Story",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Tech",
+            "right": "zh",
+            "count": 132
+          },
+          {
+            "left": "Tech",
+            "right": "latin",
+            "count": 222
+          },
+          {
+            "left": "Tech",
+            "right": "ja",
+            "count": 48
+          },
+          {
+            "left": "Tech",
+            "right": "ko",
+            "count": 2
+          },
+          {
+            "left": "Tech",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Travel",
+            "right": "zh",
+            "count": 20
+          },
+          {
+            "left": "Travel",
+            "right": "latin",
+            "count": 21
+          },
+          {
+            "left": "Travel",
+            "right": "ja",
+            "count": 7
+          },
+          {
+            "left": "Travel",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "Travel",
+            "right": "other",
+            "count": 0
+          }
+        ],
+        "urgent": [
+          {
+            "left": "Commerce",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Creative",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "Creative",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Education",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "Education",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Fashion",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "Fashion",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Food",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "Food",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "History",
+            "right": "ja",
+            "count": 0
+          },
+          {
+            "left": "History",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "History",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Social",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Story",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "Story",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Tech",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Travel",
+            "right": "ko",
+            "count": 0
+          },
+          {
+            "left": "Travel",
+            "right": "other",
+            "count": 0
+          },
+          {
+            "left": "Commerce",
+            "right": "ko",
+            "count": 1
+          },
+          {
+            "left": "Creative",
+            "right": "ja",
+            "count": 1
+          }
+        ]
+      }
+    },
+    "quality": {
+      "missing": {
+        "title": 0,
+        "prompt": 0,
+        "category": 0,
+        "styles": 0,
+        "scenes": 0
+      },
+      "duplicateGroups": 10,
+      "duplicateItems": 30
+    }
+  },
+  "community": {
+    "status": "ok",
+    "error": "",
+    "total": 4,
+    "tags": [
+      {
+        "value": "concept",
+        "count": 2
+      },
+      {
+        "value": "illustration",
+        "count": 2
+      },
+      {
+        "value": "anime",
+        "count": 1
+      },
+      {
+        "value": "ecommerce",
+        "count": 1
+      },
+      {
+        "value": "photography",
+        "count": 1
+      }
+    ],
+    "promptLanguages": [
+      {
+        "value": "zh",
+        "count": 4
+      }
+    ]
+  }
+}

@@ -44,10 +44,11 @@ var (
 )
 
 const (
-	TypeImageTask      = "image:generate"
-	TypeComposeTask    = "media:compose"
-	TypeWorkflowTask   = "workflow:run"
-	routeHistoryWindow = 200
+	TypeImageTask             = "image:generate"
+	TypeComposeTask           = "media:compose"
+	TypeWorkflowTask          = "workflow:run"
+	TypeGalleryGenerationTask = "gallery:generation"
+	routeHistoryWindow        = 200
 )
 
 func configuredWorkExpiration(ctx context.Context, pool *pgxpool.Pool, fallbackDays int) *time.Time {
@@ -90,6 +91,11 @@ type ComposeTaskPayload struct {
 	TaskNo string                 `json:"task_no"`
 	UserID int64                  `json:"user_id"`
 	Input  map[string]interface{} `json:"input"`
+}
+
+type GalleryGenerationTaskPayload struct {
+	TaskID   int64  `json:"task_id"`
+	PublicID string `json:"public_id"`
 }
 
 func main() {
@@ -180,7 +186,7 @@ func main() {
 
 	srv := asynq.NewServer(redisOpt, asynq.Config{
 		Concurrency: concurrency,
-		Queues:      map[string]int{"image": 3, "workflow": 2, "default": 1},
+		Queues:      map[string]int{"image": 3, "workflow": 2, "gallery": 2, "default": 1},
 	})
 
 	mux := asynq.NewServeMux()
@@ -204,6 +210,13 @@ func main() {
 			return err
 		}
 		return processComposeTask(ctx, pool, payload)
+	})
+	mux.HandleFunc(TypeGalleryGenerationTask, func(ctx context.Context, t *asynq.Task) error {
+		var payload GalleryGenerationTaskPayload
+		if err := json.Unmarshal(t.Payload(), &payload); err != nil {
+			return err
+		}
+		return processGalleryGenerationTask(ctx, pool, newAPIBase, newAPIToken, payload)
 	})
 
 	log.Println("StarAI Worker started")

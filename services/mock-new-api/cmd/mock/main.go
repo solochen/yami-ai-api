@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
+	"image"
+	"image/color"
+	"image/png"
 	"log"
 	"math/rand"
 	"net/http"
@@ -91,11 +96,27 @@ func main() {
 		}
 		var data []gin.H
 		for i := 0; i < n; i++ {
-			seed := rand.Intn(10000)
-			url := fmt.Sprintf("https://picsum.photos/seed/%d/1024/1024", seed)
+			hash := fnv.New32a()
+			_, _ = hash.Write([]byte(req.Prompt))
+			url := fmt.Sprintf("http://mock-new-api:3002/mock-assets/gallery.png?seed=%08x-%d", hash.Sum32(), i)
 			data = append(data, gin.H{"url": url})
 		}
 		c.JSON(200, gin.H{"data": data, "created": time.Now().Unix()})
+	})
+	r.GET("/mock-assets/gallery.png", func(c *gin.Context) {
+		hash := fnv.New32a()
+		_, _ = hash.Write([]byte(c.Query("seed")))
+		value := hash.Sum32()
+		fill := color.RGBA{R: byte(value >> 16), G: byte(value >> 8), B: byte(value), A: 255}
+		img := image.NewRGBA(image.Rect(0, 0, 64, 64))
+		for y := 0; y < 64; y++ {
+			for x := 0; x < 64; x++ {
+				img.SetRGBA(x, y, fill)
+			}
+		}
+		var data bytes.Buffer
+		_ = png.Encode(&data, img)
+		c.Data(http.StatusOK, "image/png", data.Bytes())
 	})
 
 	videoJobs := map[string]int64{}

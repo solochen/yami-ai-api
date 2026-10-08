@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -41,6 +42,116 @@ type GalleryItemDTO struct {
 type GalleryTagDTO struct {
 	Name string `json:"name"`
 	Slug string `json:"slug"`
+}
+
+type GalleryReferenceCaseDTO struct {
+	ID             string   `json:"id"`
+	SourceItemID   string   `json:"source_item_id"`
+	Title          string   `json:"title"`
+	Image          string   `json:"image"`
+	ImageSourceURL string   `json:"image_source_url"`
+	ImageAlt       string   `json:"imageAlt,omitempty"`
+	SourceLabel    string   `json:"sourceLabel,omitempty"`
+	SourceURL      string   `json:"sourceUrl,omitempty"`
+	Prompt         string   `json:"prompt"`
+	PromptPreview  string   `json:"promptPreview,omitempty"`
+	Category       string   `json:"category"`
+	Styles         []string `json:"styles"`
+	Scenes         []string `json:"scenes"`
+	Featured       bool     `json:"featured"`
+	GithubURL      string   `json:"githubUrl,omitempty"`
+	License        string   `json:"license"`
+	LicenseURL     string   `json:"license_url"`
+	Attribution    string   `json:"attribution"`
+	RepositoryURL  string   `json:"repository_url"`
+}
+
+type GalleryReferenceManifestDTO struct {
+	TotalCases int                       `json:"totalCases"`
+	Categories []string                  `json:"categories"`
+	Styles     []string                  `json:"styles"`
+	Scenes     []string                  `json:"scenes"`
+	Cases      []GalleryReferenceCaseDTO `json:"cases"`
+}
+
+// ListPublishedReferences returns only cases that passed the explicit publish
+// gate and have a locally controlled image asset. Pending or hidden cases never
+// enter this query, even if their source metadata is otherwise valid.
+func (s *GalleryService) ListPublishedReferences(ctx context.Context) (*GalleryReferenceManifestDTO, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT c.source_item_id, c.title, c.image_asset_url, c.image_source_url, c.image_alt,
+		       c.source_url, c.github_url, c.prompt, c.prompt_preview, c.category,
+		       c.styles, c.scenes, c.featured,
+		       s.attribution, s.license_name, s.license_url, s.repository_url
+		FROM gallery_reference_cases c
+		JOIN gallery_reference_sources s ON s.id=c.source_id
+		WHERE c.status='published' AND c.is_active=true AND c.image_asset_url IS NOT NULL
+		ORDER BY c.featured DESC, c.id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	manifest := &GalleryReferenceManifestDTO{
+		Categories: []string{},
+		Styles:     []string{},
+		Scenes:     []string{},
+		Cases:      []GalleryReferenceCaseDTO{},
+	}
+	categorySet := map[string]struct{}{}
+	styleSet := map[string]struct{}{}
+	sceneSet := map[string]struct{}{}
+	for rows.Next() {
+		var item GalleryReferenceCaseDTO
+		var stylesRaw, scenesRaw []byte
+		if err := rows.Scan(
+			&item.SourceItemID, &item.Title, &item.Image, &item.ImageSourceURL, &item.ImageAlt,
+			&item.SourceURL, &item.GithubURL, &item.Prompt, &item.PromptPreview, &item.Category,
+			&stylesRaw, &scenesRaw, &item.Featured,
+			&item.Attribution, &item.License, &item.LicenseURL, &item.RepositoryURL,
+		); err != nil {
+			return nil, err
+		}
+		item.ID = item.SourceItemID
+		item.SourceLabel = item.Attribution
+		if err := json.Unmarshal(stylesRaw, &item.Styles); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(scenesRaw, &item.Scenes); err != nil {
+			return nil, err
+		}
+		if item.Styles == nil {
+			item.Styles = []string{}
+		}
+		if item.Scenes == nil {
+			item.Scenes = []string{}
+		}
+		for _, value := range item.Styles {
+			styleSet[value] = struct{}{}
+		}
+		for _, value := range item.Scenes {
+			sceneSet[value] = struct{}{}
+		}
+		categorySet[item.Category] = struct{}{}
+		manifest.Cases = append(manifest.Cases, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	manifest.TotalCases = len(manifest.Cases)
+	manifest.Categories = sortedStringSet(categorySet)
+	manifest.Styles = sortedStringSet(styleSet)
+	manifest.Scenes = sortedStringSet(sceneSet)
+	return manifest, nil
+}
+
+func sortedStringSet(values map[string]struct{}) []string {
+	items := make([]string, 0, len(values))
+	for value := range values {
+		items = append(items, value)
+	}
+	sort.Strings(items)
+	return items
 }
 
 func (s *GalleryService) ListTags(ctx context.Context) ([]GalleryTagDTO, error) {

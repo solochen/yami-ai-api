@@ -8,6 +8,10 @@
     "dev:admin": "pnpm --filter @starai/admin dev",
     "build:web": "pnpm --filter @starai/web build",
     "build:admin": "pnpm --filter @starai/admin build",
+    "gallery:coverage": "node scripts/analyze-gallery-coverage.js",
+    "gallery:specs": "node scripts/generate-gallery-case-specs.js",
+    "gallery:sync": "cd services/api && go run ./cmd/gallery-sync",
+    "preprod:verify": "bash scripts/preprod-verify.sh",
     "lint": "pnpm -r lint"
   },
   "engines": {

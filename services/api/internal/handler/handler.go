@@ -50,6 +50,8 @@ type Handler struct {
 	payment       *service.PaymentService
 	ops           *service.OpsService
 	gallery       *service.GalleryService
+	galleryGen    *service.GalleryGenerationService
+	galleryReview *service.GalleryQualityReviewService
 	agents        *service.AgentService
 	cache         *cache.Client
 	storage       storage.Store
@@ -70,10 +72,10 @@ type Handler struct {
 func New(cfg *config.Config, auth *service.AuthService, wallet *service.WalletService, models *service.ModelService,
 	chat *service.ChatService, tasks *service.TaskService, works *service.WorksService, admin *service.AdminService,
 	billing *billing.Service, payment *service.PaymentService, ops *service.OpsService, gallery *service.GalleryService,
-	agents *service.AgentService, cacheClient *cache.Client, storageClient storage.Store, homeSvc *service.HomeService, presetSvc *service.PresetService, assetSvc *service.AssetService, roleTplSvc *service.RoleTemplateService, oauthSvc *service.OAuthService, captchaSvc *service.CaptchaService, emailOTPSvc *service.EmailOTPService, contentI18nSvc *service.ContentI18nService, canvasSvc *service.CanvasService) *Handler {
+	agents *service.AgentService, cacheClient *cache.Client, storageClient storage.Store, homeSvc *service.HomeService, presetSvc *service.PresetService, assetSvc *service.AssetService, roleTplSvc *service.RoleTemplateService, oauthSvc *service.OAuthService, captchaSvc *service.CaptchaService, emailOTPSvc *service.EmailOTPService, contentI18nSvc *service.ContentI18nService, canvasSvc *service.CanvasService, galleryGenSvc *service.GalleryGenerationService, galleryReviewSvc *service.GalleryQualityReviewService) *Handler {
 	return &Handler{
 		cfg: cfg, auth: auth, wallet: wallet, models: models, chat: chat, runtime: chat.RuntimeClient(),
-		tasks: tasks, works: works, admin: admin, billing: billing, payment: payment, ops: ops, gallery: gallery, agents: agents,
+		tasks: tasks, works: works, admin: admin, billing: billing, payment: payment, ops: ops, gallery: gallery, galleryGen: galleryGenSvc, galleryReview: galleryReviewSvc, agents: agents,
 		cache: cacheClient, storage: storageClient, home: homeSvc, presets: presetSvc, assets: assetSvc, roleTpl: roleTplSvc,
 		oauth: oauthSvc, captcha: captchaSvc, emailOTP: emailOTPSvc, contentI18n: contentI18nSvc, canvases: canvasSvc,
 	}
@@ -129,6 +131,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		api.POST("/payment/webhooks/wechat", middleware.RateLimit(h.cache, "wechat-webhook", 240, time.Minute, middleware.ClientIPIdentity), h.WechatPaymentWebhook)
 		api.GET("/announcements", h.ListAnnouncements)
 		api.GET("/gallery/tags", h.ListGalleryTags)
+		api.GET("/gallery/references", h.ListGalleryReferences)
 		api.GET("/gallery", h.ListGallery)
 		api.GET("/gallery/:id", h.GetGalleryItem)
 		api.POST("/gallery/:id/clone", h.CloneGalleryItem)
@@ -340,6 +343,33 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			adm.PATCH("/announcements/:id", h.AdminUpdateAnnouncement)
 			adm.POST("/announcements/:id/push-notifications", h.AdminPushAnnouncementNotifications)
 			adm.DELETE("/announcements/:id", h.AdminDeleteAnnouncement)
+			adm.GET("/gallery/references", h.AdminListGalleryReferences)
+			adm.GET("/gallery/references/coverage", h.AdminGalleryReferenceCoverage)
+			adm.GET("/gallery/references/:id", h.AdminGetGalleryReference)
+			adm.PATCH("/gallery/references/:id", h.AdminUpdateGalleryReference)
+			adm.POST("/gallery/references/batch", h.AdminBatchGalleryReferences)
+			adm.POST("/gallery/references/import", h.AdminImportGalleryReferences)
+			adm.GET("/gallery/gap-tasks", h.AdminListGalleryGapTasks)
+			adm.PATCH("/gallery/gap-tasks/:id/status", h.AdminSetGalleryGapTaskStatus)
+			adm.GET("/gallery/case-specs", h.AdminListGalleryCaseSpecs)
+			adm.GET("/gallery/case-specs/:id", h.AdminGetGalleryCaseSpec)
+			adm.GET("/gallery/case-specs/:id/versions", h.AdminListGalleryCaseSpecVersions)
+			adm.POST("/gallery/case-specs/import", h.AdminImportGalleryCaseSpecs)
+			adm.PATCH("/gallery/case-specs/:id", h.AdminUpdateGalleryCaseSpec)
+			adm.GET("/gallery/generation-batches", h.AdminListGalleryGenerationBatches)
+			adm.GET("/gallery/generation-batches/eligibility", h.AdminGetGalleryGenerationEligibility)
+			adm.GET("/gallery/generation-batches/:id", h.AdminGetGalleryGenerationBatch)
+			adm.GET("/gallery/generation-batches/:id/tasks", h.AdminListGalleryGenerationTasks)
+			adm.POST("/gallery/generation-batches", h.AdminCreateGalleryGenerationBatch)
+			adm.POST("/gallery/generation-batches/:id/start", h.AdminStartGalleryGenerationBatch)
+			adm.POST("/gallery/generation-batches/:id/cancel", h.AdminCancelGalleryGenerationBatch)
+			adm.POST("/gallery/generation-tasks/:id/retry", h.AdminRetryGalleryGenerationTask)
+			adm.GET("/gallery/quality-reviews", h.AdminListGalleryQualityReviews)
+			adm.GET("/gallery/quality-reviews/:id", h.AdminGetGalleryQualityReview)
+			adm.POST("/gallery/quality-reviews/:id/auto-check", h.AdminAutoCheckGalleryQualityReview)
+			adm.POST("/gallery/quality-reviews/:id/approve", h.AdminApproveGalleryQualityReview)
+			adm.POST("/gallery/quality-reviews/:id/reject", h.AdminRejectGalleryQualityReview)
+			adm.POST("/gallery/quality-reviews/:id/publish", h.AdminPublishGalleryQualityReview)
 			adm.GET("/gallery", h.AdminListGallery)
 			adm.PATCH("/gallery/:id", h.AdminAuditGallery)
 			adm.DELETE("/gallery/:id", h.AdminDeleteGallery)
@@ -7869,6 +7899,16 @@ func (h *Handler) ListGallery(c *gin.Context) {
 		return
 	}
 	util.OK(c, map[string]interface{}{"items": items, "total": total})
+}
+
+func (h *Handler) ListGalleryReferences(c *gin.Context) {
+	manifest, err := h.gallery.ListPublishedReferences(c.Request.Context())
+	if err != nil {
+		util.InternalError(c, err.Error())
+		return
+	}
+	c.Header("Cache-Control", "public, max-age=60, stale-while-revalidate=300")
+	util.OK(c, manifest)
 }
 
 func (h *Handler) GetGalleryItem(c *gin.Context) {

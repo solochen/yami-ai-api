@@ -1,16 +1,20 @@
 export const REFERENCE_REPOSITORY_URL = "https://github.com/freestylefly/awesome-gpt-image-2";
 export const REFERENCE_MANIFEST_URL =
   "https://raw.githubusercontent.com/freestylefly/awesome-gpt-image-2/main/data/cases.json";
+export const REFERENCE_API_PATH = "/api/gallery/references";
+const REFERENCE_API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 const REFERENCE_RAW_ROOT =
   "https://raw.githubusercontent.com/freestylefly/awesome-gpt-image-2/main/data";
-const REFERENCE_CACHE_KEY = "starai:reference-gallery:v1";
+// Version the browser cache with the current product name so a previously
+// cached empty catalog cannot hide newly published reference cases.
+const REFERENCE_CACHE_KEY = "yihangai:reference-gallery:v3";
 const REFERENCE_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 let referenceManifestPromise: Promise<ReferenceGalleryManifest> | null = null;
 
 export interface ReferenceGalleryItem {
-  id: number;
+  id: number | string;
   title: string;
   image: string;
   imageAlt?: string;
@@ -23,6 +27,9 @@ export interface ReferenceGalleryItem {
   scenes: string[];
   featured?: boolean;
   githubUrl?: string;
+  license?: string;
+  licenseUrl?: string;
+  attribution?: string;
 }
 
 export interface ReferenceGalleryManifest {
@@ -155,20 +162,38 @@ export function loadReferenceGalleryManifest(options: { force?: boolean } = {}) 
     if (!options.force && typeof window !== "undefined") {
       try {
         const cached = JSON.parse(sessionStorage.getItem(REFERENCE_CACHE_KEY) || "null") as { savedAt?: number; data?: unknown } | null;
-        if (cached?.savedAt && Date.now() - cached.savedAt < REFERENCE_CACHE_TTL && isReferenceGalleryManifest(cached.data)) return cached.data;
+        if (
+          cached?.savedAt
+          && Date.now() - cached.savedAt < REFERENCE_CACHE_TTL
+          && isReferenceGalleryManifest(cached.data)
+          && cached.data.cases.length > 0
+        ) return cached.data;
       } catch {
         // Ignore stale or unavailable browser storage and use the network.
       }
     }
 
-    const response = await fetch(REFERENCE_MANIFEST_URL, { cache: "force-cache" });
+    const response = await fetch(`${REFERENCE_API_BASE_URL}${REFERENCE_API_PATH}`, {
+      // sessionStorage provides the intentional 24-hour cache; bypass the
+      // browser HTTP cache so a formerly empty API response cannot linger.
+      cache: "no-store",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
     if (!response.ok) throw new Error(String(response.status));
-    const data: unknown = await response.json();
+    const payload: unknown = await response.json();
+    const data = payload && typeof payload === "object" && "data" in payload
+      ? (payload as { data?: unknown }).data
+      : payload;
     if (!isReferenceGalleryManifest(data)) throw new Error("invalid manifest");
 
     if (typeof window !== "undefined") {
       try {
-        sessionStorage.setItem(REFERENCE_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
+        if (data.cases.length > 0) {
+          sessionStorage.setItem(REFERENCE_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
+        } else {
+          sessionStorage.removeItem(REFERENCE_CACHE_KEY);
+        }
       } catch {
         // The in-memory promise still avoids duplicate downloads in this page.
       }
@@ -189,7 +214,7 @@ export function isReferenceGalleryManifest(value: unknown): value is ReferenceGa
   return taxonomies.every((items) => Array.isArray(items) && items.every((item) => typeof item === "string"))
     && Array.isArray(manifest.cases)
     && manifest.cases.every((item) =>
-      typeof item?.id === "number"
+      (typeof item?.id === "number" || typeof item?.id === "string")
       && typeof item.title === "string"
       && typeof item.image === "string"
       && typeof item.prompt === "string"

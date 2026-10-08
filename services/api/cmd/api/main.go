@@ -60,6 +60,7 @@ func main() {
 	adminSvc := service.NewAdminService(pool, billingSvc, cfg.AdminJWT)
 	paymentSvc := service.NewPaymentService(pool, billingSvc)
 	gallerySvc := service.NewGalleryService(pool)
+	galleryGenerationSvc := service.NewGalleryGenerationService(pool, modelSvc, qClient)
 	homeSvc := service.NewHomeService(pool)
 	presetSvc := service.NewPresetService(pool)
 	assetSvc := service.NewAssetService(pool)
@@ -113,6 +114,7 @@ func main() {
 			}
 		}
 	}
+	galleryReviewSvc := service.NewGalleryQualityReviewService(pool, storageClient, cfg.LocalStoragePublicURL, cfg.LocalStorageInternalURL)
 	startExpiredWorksCleaner(ctx, worksSvc, storageClient)
 	agentSvc := service.NewAgentService(pool, billingSvc, qClient, storageClient)
 	startBillingReconciler(ctx, opsSvc, billingSvc, agentSvc)
@@ -122,7 +124,7 @@ func main() {
 		log.Printf("dynamic content translation catalog synced: %d entities", count)
 	}
 
-	h := handler.New(cfg, authSvc, walletSvc, modelSvc, chatSvc, taskSvc, worksSvc, adminSvc, billingSvc, paymentSvc, opsSvc, gallerySvc, agentSvc, cacheClient, storageClient, homeSvc, presetSvc, assetSvc, roleTplSvc, oauthSvc, captchaSvc, emailOTPSvc, contentI18nSvc, canvasSvc)
+	h := handler.New(cfg, authSvc, walletSvc, modelSvc, chatSvc, taskSvc, worksSvc, adminSvc, billingSvc, paymentSvc, opsSvc, gallerySvc, agentSvc, cacheClient, storageClient, homeSvc, presetSvc, assetSvc, roleTplSvc, oauthSvc, captchaSvc, emailOTPSvc, contentI18nSvc, canvasSvc, galleryGenerationSvc, galleryReviewSvc)
 
 	r := gin.New()
 	trustedProxies := []string{}
