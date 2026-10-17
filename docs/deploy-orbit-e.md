@@ -10,7 +10,8 @@
 | https://www.orbit-e.com | `/api/*`（priority 200） | api 容器 172.28.0.31:8080 |
 | https://www.orbit-e.com | `/minio-store/*`（priority 200，proxy-rewrite 去前缀） | minio 172.28.0.33:9000 |
 | https://orbit-e.com | 同 www（裸域同一套规则） | 同上 |
-| https://admin.orbit-e.com | `/*` + `/api/*`（**DNS 记录未加，待补**） | admin 172.28.0.32:3001 / api |
+| https://admin.orbit-e.com | `/*` | admin 172.28.0.32:3001 |
+| https://admin.orbit-e.com | `/api/*` 与 `/admin/api/*`（priority 200；admin 前端调用 `/admin/api/*`） | api 172.28.0.31:8080 |
 
 - 入口：APISIX standalone（`sub2api-apisix` 容器，80/443），路由文件 `/home/ubuntu/sub2api-prod/apisix/apisix.base.yaml`
 - 证书：Let's Encrypt（certbot 宿主机 standalone :8888 + ACME 路由放行），deploy hook 自动续期
@@ -44,10 +45,9 @@ $CMP build api worker web admin   # 升级构建（COMPOSE_PARALLEL_LIMIT=1，4C
 
 **注意**：APISIX 路由级不允许 `retries` 字段（会导致整条路由加载失败被丢弃）；retries/timeout 写在 upstream 级。
 
-## 4. admin.orbit-e.com 待办（DNS 加好后的两步）
+## 4. admin.orbit-e.com（已完成）
 
-1. DNS 服务商给 `admin.orbit-e.com` 加 A 记录 → 124.156.112.244（ACME 路由已在 hosts 放行）
-2. 服务器执行：
+DNS A 记录 → 124.156.112.244 后执行：
 
 ```bash
 sudo certbot certonly --standalone --http-01-port 8888 --http-01-address 0.0.0.0 \
@@ -56,7 +56,7 @@ sudo certbot certonly --standalone --http-01-port 8888 --http-01-address 0.0.0.0
 sudo bash /etc/letsencrypt/renewal-hooks/deploy/yardai-apisix.sh   # 复制证书+重载
 ```
 
-admin 路由/上游已就位（路由 20/21，上游 12/11），证书就位后即生效。
+已上线（2026-10-17）：登录页 /admin/login、管理 API /admin/api/login、证书至 2027-01-15，续期由 deploy hook 自动处理。
 
 ## 5. 重建/重同步手册（从本地恢复）
 
