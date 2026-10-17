@@ -39,6 +39,7 @@ const ProductImageExtractWorkspace = dynamic(() => import("./ProductImageExtract
 const ViralBreakdownWorkspace = dynamic(() => import("./ViralBreakdownWorkspace").then((module) => module.ViralBreakdownWorkspace), { loading: WorkspaceLoading });
 const NovelWorkshopLanding = dynamic(() => import("./NovelWorkshopLanding").then((module) => module.NovelWorkshopLanding), { loading: WorkspaceLoading });
 const ProductRefineWorkspace = dynamic(() => import("./ProductRefineWorkspace").then((module) => module.ProductRefineWorkspace), { loading: WorkspaceLoading });
+const EcomFactoryWorkspace = dynamic(() => import("./EcomFactoryWorkspace").then((module) => module.EcomFactoryWorkspace), { loading: WorkspaceLoading });
 const PhotoStudioLanding = dynamic(() => import("./PhotoStudioLanding").then((module) => module.PhotoStudioLanding), { loading: WorkspaceLoading });
 const PhotoStudioInputBar = dynamic(() => import("./PhotoStudioLanding").then((module) => module.PhotoStudioInputBar), { loading: () => null });
 const PhotoStudioTopBar = dynamic(() => import("./PhotoStudioLanding").then((module) => module.PhotoStudioTopBar), { loading: () => null });
@@ -1319,6 +1320,10 @@ export function AgentWorkspace({ code }: { code: string }) {
   };
 
   if (!workflow) return <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">{ts("加载中...")}</div>;
+
+  if (workflow?.runtime_config?.agent_mode === "ecom_factory") {
+    return <EcomFactoryWorkspace key={`ecomf:${project?.public_id || "new"}`} workflowCode={workflow.code} workflowName={workflowName} project={project ? { ...project, inputs: project.inputs || {}, outputs: project.outputs || {} } : null} onProjectChange={(p) => setProject(p as Project)} onSubmitted={(publicId) => startPolling(publicId)} onStop={async () => { if (!project) return; try { await api(`/api/agent-projects/${project.public_id}/cancel`, { method: "POST" }); setProject(await api<Project>(`/api/agent-projects/${project.public_id}`)); } catch (e) { setError(e instanceof Error ? e.message : ts("停止失败")); } }} onNewTask={() => { resetTask(); }} onLoadHistory={loadHistory} />;
+  }
 
   if (workflow?.runtime_config?.agent_mode === "product_refine") {
     return <ProductRefineWorkspace key={`${photoInputKey}:${project?.public_id || "new"}`} workflowCode={workflow.code} workflowName={workflowName} pricing={workflow.runtime_config?.product_pricing} imageModel={generationModel} defaultReviewMode={workflow.runtime_config?.default_review_mode === "strict" ? "strict" : "standard"} project={project ? { ...project, inputs: project.inputs || {}, outputs: project.outputs || {}, estimated_cost: project.estimated_cost || 0, actual_cost: project.actual_cost || 0 } : null} submitting={submitting} error={error} onSubmit={runPhoto} onNewTask={() => { resetTask(); setPhotoInputKey(key => key + 1); }} onLoadHistory={loadHistory} onStop={async () => { if (!project) return; try { await api(`/api/agent-projects/${project.public_id}/cancel`, { method: "POST" }); setProject(await api<Project>(`/api/agent-projects/${project.public_id}`)); } catch (e) { setError(e instanceof Error ? e.message : ts("停止失败")); } }} onRefresh={async () => {

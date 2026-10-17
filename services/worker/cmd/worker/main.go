@@ -2831,46 +2831,102 @@ func normalizeVideoReferenceImages(ctx context.Context, refs interface{}) interf
 }
 
 func normalizeReferenceImage(ctx context.Context, src string) string {
+	normalized, _ := normalizeReferenceImageDiag(ctx, src)
+	return normalized
+}
+
+// isobmffBrand returns the ISO-BMFF major brand (e.g. avif/heic) when the
+// payload is an ISO base media file. net/http's sniffer does not know these
+// signatures, so AVIF/HEIC uploads slip through as octet-stream.
+func isobmffBrand(data []byte) string {
+	if len(data) < 12 || string(data[4:8]) != "ftyp" {
+		return ""
+	}
+	return strings.ToLower(string(data[8:12]))
+}
+
+// modelUnsupportedImageReason names image containers that browsers render
+// fine but AI vision/image models reject, so the user gets an actionable
+// message instead of a misleading "素材不可访问".
+func modelUnsupportedImageReason(brand string) string {
+	switch brand {
+	case "avif", "avis":
+		return "图片实际是 AVIF 格式（浏览器能正常显示，但 AI 模型无法识别），请将其转换为 JPEG/PNG 后重新上传"
+	case "heic", "heix", "hevc", "heif", "mif1", "msf1":
+		return "图片实际是 HEIC/HEIF 格式（浏览器能正常显示，但 AI 模型无法识别），请将其转换为 JPEG/PNG 后重新上传"
+	}
+	return ""
+}
+
+// sniffImageMIME detects the image MIME from raw bytes, including AVIF/HEIC
+// brands net/http does not know. Byte-level evidence always wins over a
+// declared Content-Type: MinIO stores whatever MIME the uploader claimed
+// (a .jpg-named AVIF arrives as image/jpeg). Returns "" when undetermined.
+func sniffImageMIME(data []byte) string {
+	if detected := http.DetectContentType(data); strings.HasPrefix(detected, "image/") {
+		return detected
+	}
+	switch isobmffBrand(data) {
+	case "avif", "avis":
+		return "image/avif"
+	case "heic", "heix", "hevc", "heif", "mif1", "msf1":
+		return "image/heic"
+	}
+	return ""
+}
+
+func normalizeReferenceImageDiag(ctx context.Context, src string) (string, string) {
 	src = strings.TrimSpace(src)
 	if src == "" || strings.HasPrefix(src, "data:image/") {
-		return src
+		return src, ""
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", src, nil)
 	if err != nil {
-		return src
+		return src, ""
 	}
 	// 参考图规范化同样需要超时，不可达的 URL 不能让任务挂死。
 	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
 	var data []byte
-	contentType := ""
+	headerType := ""
 	if err == nil {
 		defer resp.Body.Close()
 		if resp.StatusCode < 400 {
-			contentType = resp.Header.Get("Content-Type")
+			headerType = resp.Header.Get("Content-Type")
 			data, err = io.ReadAll(io.LimitReader(resp.Body, (20<<20)+1))
-			if len(data) > 0 && !strings.HasPrefix(contentType, "image/") {
-				contentType = http.DetectContentType(data)
+		}
+	}
+	if err != nil || len(data) == 0 || len(data) > 20<<20 {
+		if objectStore != nil {
+			if objectKey := objectStore.ObjectKeyFromURL(src); objectKey != "" {
+				s3Data, s3Err := objectStore.ReadAll(ctx, objectKey, 20<<20)
+				if s3Err == nil && len(s3Data) > 0 && len(s3Data) <= 20<<20 {
+					data = s3Data
+					err = nil
+				}
 			}
 		}
 	}
-	if err != nil || len(data) == 0 || len(data) > 20<<20 || !strings.HasPrefix(contentType, "image/") {
-		if objectStore == nil {
-			return src
-		}
-		objectKey := objectStore.ObjectKeyFromURL(src)
-		if objectKey == "" {
-			return src
-		}
-		data, err = objectStore.ReadAll(ctx, objectKey, 20<<20)
-		if err != nil || len(data) == 0 {
-			return src
-		}
-		contentType = http.DetectContentType(data)
-		if !strings.HasPrefix(contentType, "image/") {
-			return src
+	if err != nil || len(data) == 0 {
+		log.Printf("normalizeReferenceImage: unreadable src=%s err=%v", src, err)
+		return src, ""
+	}
+	if len(data) > 20<<20 {
+		return src, "图片超过20MB"
+	}
+	contentType := sniffImageMIME(data)
+	if contentType == "" {
+		// 字节嗅探认不出时才采信声明头（如 SVG 文本以 image/svg+xml 声明）。
+		if strings.HasPrefix(headerType, "image/") {
+			contentType = headerType
+		} else {
+			return src, "图片数据无效"
 		}
 	}
-	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data)
+	if contentType == "image/avif" || contentType == "image/heic" {
+		log.Printf("normalizeReferenceImage: model-unsupported format %s src=%s", contentType, src)
+		return src, modelUnsupportedImageReason(isobmffBrand(data))
+	}
+	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data), ""
 }
 
 func validateOmniReferencePayload(payload map[string]interface{}) error {

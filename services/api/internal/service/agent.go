@@ -387,6 +387,14 @@ func (s *AgentService) CreateProject(ctx context.Context, userID int64, code str
 			return nil, err
 		}
 	}
+	if stringValue(def.RuntimeConfig["agent_mode"]) == "ecom_factory" {
+		inputs = normalizeEcomFactoryInputs(def.RuntimeConfig, inputs)
+		if err := validateEcomFactoryRequest(ctx, userID, def.RuntimeConfig, inputs); err != nil {
+			return nil, err
+		}
+		count, _ := ecomFactoryPlanCount(inputs)
+		inputs["count"], inputs["n"] = count, count
+	}
 	if stringValue(def.RuntimeConfig["agent_mode"]) == "viral_video_breakdown" {
 		if err := normalizeViralVideoBreakdownInputs(inputs); err != nil {
 			return nil, err
@@ -1696,6 +1704,9 @@ func (s *AgentService) estimateAgentRuntimeCost(ctx context.Context, runtimeCfg 
 		return 0
 	}
 	total := 0.0
+	if stringValue(runtimeCfg["agent_mode"]) == "ecom_factory" {
+		return estimateEcomFactoryCost(ctx, s, runtimeCfg, inputs)
+	}
 	if stringValue(runtimeCfg["agent_mode"]) == "video_upscale" {
 		if code := stringValue(runtimeCfg["generation_model_code"]); code != "" {
 			params := make(map[string]interface{}, len(inputs)+4)

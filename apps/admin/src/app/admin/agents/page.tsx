@@ -10,7 +10,7 @@ import { AgentPolicyEditor } from "./AgentPolicyEditor";
 type GenerationType = "image" | "video" | "video_upscale" | "video_redraw" | "subtitle_remove" | "comic_drama" | "novel_workshop" | "photo_studio" | "virtual_try_on" | "creative_agent";
 type WorkflowNode = { id: string; name: string; type: string; model_code: string; prompt_template?: string; cost: number };
 type RuntimeConfig = {
-  agent_mode?: "simple_pipeline" | "custom_nodes" | "comic_drama" | "novel_workshop" | "photo_studio" | "virtual_try_on" | "infinite_canvas" | "video_upscale" | "video_redraw" | "subtitle_remove" | "creative_chat" | "product_refine" | "product_image_extract" | "viral_video_breakdown";
+  agent_mode?: "simple_pipeline" | "custom_nodes" | "comic_drama" | "novel_workshop" | "photo_studio" | "virtual_try_on" | "infinite_canvas" | "video_upscale" | "video_redraw" | "subtitle_remove" | "creative_chat" | "product_refine" | "product_image_extract" | "viral_video_breakdown" | "ecom_factory";
   system_workspace?: boolean;
   quality_model_code?: string;
   image_concurrency?: number;

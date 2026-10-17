@@ -30,21 +30,46 @@ func main() {
 
 	r := gin.Default()
 	r.POST("/v1/chat/completions", func(c *gin.Context) {
+		// content 同时接受 string 与多模态数组（[{type:image_url|text,...}]），
+		// 供视觉反推等链路在开发环境全链路联调。
 		var req struct {
-			Model    string `json:"model"`
-			Messages []struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			} `json:"messages"`
-			Stream bool `json:"stream"`
+			Model    string          `json:"model"`
+			Messages json.RawMessage `json:"messages"`
+			Stream   bool            `json:"stream"`
 		}
 		c.ShouldBindJSON(&req)
-
-		msgs := make([]message, 0, len(req.Messages))
-		for _, m := range req.Messages {
-			msgs = append(msgs, message{Role: m.Role, Content: m.Content})
+		var rawMsgs []struct {
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
+		}
+		_ = json.Unmarshal(req.Messages, &rawMsgs)
+		msgs := make([]message, 0, len(rawMsgs))
+		multimodal := false
+		for _, m := range rawMsgs {
+			content := ""
+			if len(m.Content) > 0 && m.Content[0] == '[' {
+				multimodal = true
+				var parts []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				}
+				_ = json.Unmarshal(m.Content, &parts)
+				for _, p := range parts {
+					if p.Type == "text" {
+						content += p.Text
+					} else {
+						content += fmt.Sprintf("[media:%s]", p.Type)
+					}
+				}
+			} else {
+				_ = json.Unmarshal(m.Content, &content)
+			}
+			msgs = append(msgs, message{Role: m.Role, Content: content})
 		}
 		reply := buildReply(req.Model, msgs)
+		if multimodal {
+			reply = "反推提示词：一张商业摄影质感的商品图，浅色背景，柔和自然光，主体居中，构图适合移动端电商浏览。"
+		}
 
 		if req.Stream {
 			c.Writer.Header().Set("Content-Type", "text/event-stream")
@@ -76,6 +101,51 @@ func main() {
 		c.JSON(200, gin.H{
 			"choices": []gin.H{{"message": gin.H{"role": "assistant", "content": reply}}},
 			"usage":   gin.H{"prompt_tokens": 50, "completion_tokens": 100, "total_tokens": 150},
+		})
+	})
+
+	// Anthropic 风格端点：content 为 [{type:text|image,...}] 数组，兼容视觉反推链路。
+	r.POST("/v1/messages", func(c *gin.Context) {
+		var req struct {
+			Model    string `json:"model"`
+			Messages []struct {
+				Role    string `json:"role"`
+				Content any    `json:"content"`
+			} `json:"messages"`
+		}
+		_ = c.ShouldBindJSON(&req)
+		var text strings.Builder
+		multimodal := false
+		for _, m := range req.Messages {
+			switch content := m.Content.(type) {
+			case string:
+				text.WriteString(content)
+			case []any:
+				for _, part := range content {
+					if p, ok := part.(map[string]any); ok {
+						switch p["type"] {
+						case "text":
+							if s, ok := p["text"].(string); ok {
+								text.WriteString(s)
+							}
+						case "image", "image_url", "source":
+							multimodal = true
+						}
+					}
+				}
+			}
+		}
+		reply := "反推提示词：一张商业摄影质感的商品图，浅色背景，柔和自然光，主体居中，构图适合移动端电商浏览。"
+		if !multimodal {
+			reply = "已理解您的请求：" + text.String()
+		}
+		c.JSON(200, gin.H{
+			"id":      "msg_mock",
+			"role":    "assistant",
+			"model":   req.Model,
+			"type":    "message",
+			"content": []gin.H{{"type": "text", "text": reply}},
+			"usage":   gin.H{"input_tokens": 50, "output_tokens": 100},
 		})
 	})
 

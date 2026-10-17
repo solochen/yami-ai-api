@@ -103,6 +103,9 @@ func processWorkflowTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token
 	if stringAny(runtimeCfg["agent_mode"]) == "product_refine" {
 		return processProductWorkflow(ctx, pool, baseURL, token, p, publicID, estimated, inputs, runtimeCfg)
 	}
+	if stringAny(runtimeCfg["agent_mode"]) == "ecom_factory" {
+		return processEcomFactoryWorkflow(ctx, pool, baseURL, token, p, publicID, estimated, inputs, runtimeCfg)
+	}
 	if stringAny(runtimeCfg["agent_mode"]) == "product_image_extract" {
 		return processProductImageExtractWorkflow(ctx, pool, p, publicID, estimated, inputs)
 	}
@@ -698,7 +701,7 @@ func processSimpleAgentWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL
 		out, errMsg := runAgentAnalysis(ctx, pool, baseURL, token, stringAny(runtimeCfg["analysis_model_code"]), category, runtimeCfg, inputs)
 		duration := int(time.Since(start).Milliseconds())
 		if errMsg != "" {
-			pool.Exec(ctx, `UPDATE workflow_node_runs SET status='failed', error=$1, duration_ms=$2 WHERE id=$3`, errMsg, duration, nodeRunID)
+			pool.Exec(ctx, `UPDATE workflow_node_runs SET status='failed', output=$1, error=$2, duration_ms=$3 WHERE id=$4`, mustJSON(out), errMsg, duration, nodeRunID)
 			return failWorkflow(ctx, pool, p, publicID, estimated, "需求分析失败："+errMsg)
 		}
 		analysis = out
@@ -1166,6 +1169,30 @@ func compactUpstreamError(body []byte) string {
 		message = string(runes[:180]) + "…"
 	}
 	return message
+}
+
+// gatewayErrorText detects error payloads delivered with an HTTP 200 status.
+// Valid chat completions (openai/claude/gemini) never carry a top-level
+// "error" object or a {"code":…,"success":false} pair, so those signatures
+// mark gateway-level failures (wrong path, auth wrap, etc.) that must fail
+// over instead of surfacing as an empty model reply.
+func gatewayErrorText(body []byte) string {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return ""
+	}
+	if errMsg, ok := raw["error"].(map[string]interface{}); ok && len(errMsg) > 0 {
+		return compactUpstreamError(body)
+	}
+	if _, ok := raw["error"].(string); ok && strings.TrimSpace(raw["error"].(string)) != "" {
+		return compactUpstreamError(body)
+	}
+	success, hasSuccess := raw["success"].(bool)
+	_, hasCode := raw["code"]
+	if hasSuccess && !success && hasCode {
+		return compactUpstreamError(body)
+	}
+	return ""
 }
 
 func normalizeComicDramaPlan(plan, inputs, runtimeCfg map[string]interface{}) map[string]interface{} {
@@ -2222,7 +2249,9 @@ func runAgentAnalysis(ctx context.Context, pool *pgxpool.Pool, baseURL, token, m
 		return nil, refErr.Error()
 	}
 	requestID := fmt.Sprintf("agent_%s_%d", modelCode, time.Now().UnixNano())
-	result, err := executeWorkerLLMWithMedia(ctx, pool, baseURL, token, requestID, model, system, content, 0.35, 90*time.Second, references, analysisVideoReferences(inputs))
+	// 带参考图的电商分析要产出完整结构化方案（多候选+设计系统+详情规划），
+	// 视觉输入与大 JSON 输出都会显著拉长首字节与总时长，90s 会中途掐断。
+	result, err := executeWorkerLLMWithMedia(ctx, pool, baseURL, token, requestID, model, system, content, 0.35, 180*time.Second, references, analysisVideoReferences(inputs))
 	if err != nil {
 		return nil, "模型服务异常：" + err.Error()
 	}
@@ -2241,7 +2270,9 @@ func runAgentAnalysis(ctx context.Context, pool *pgxpool.Pool, baseURL, token, m
 		}
 	} else if stringAny(runtimeCfg["preset_code"]) == "ecommerce_image" || sceneCode == "auto" {
 		if err := validateCommerceAnalysis(parseJSONish(text), inputs); err != nil {
-			return nil, err.Error()
+			// 校验失败时保留原始返回，节点运行记录里能看到模型到底回了什么
+			//（截断的 JSON / 思考泄漏 / 缺字段），否则线上无从诊断。
+			return map[string]interface{}{"raw_text": text}, err.Error()
 		}
 	}
 
@@ -2378,6 +2409,14 @@ func executeWorkerLLMWithMedia(ctx context.Context, pool *pgxpool.Pool, baseURL,
 			responseBody, status, requestErr := doJSONRequest(ctx, conn, "POST", joinBaseEndpoint(conn.BaseURL, resolveModelEndpoint(endpoint, route.UpstreamModel)), body, timeout)
 			latencyMS := int(time.Since(started).Milliseconds())
 			if requestErr == nil && status >= 200 && status < 300 {
+				// 部分网关（如 BigModel 的 anthropic 通道打错路径）会用 HTTP 200 包住
+				// 错误体（{"code":500,"msg":"404 NOT_FOUND"}），不能当成成功线路。
+				if gatewayErrorText(responseBody) != "" {
+					logWorkerRouteAttempt(ctx, pool, requestID, model.ID, route.ID, attempt, "HTTP_200_ERROR_BODY", status, latencyMS)
+					markWorkerRouteFailure(ctx, pool, route.ID, poolEnabled)
+					failures = append(failures, fmt.Sprintf("%s (HTTP 200 错误体): %s", firstNonEmpty(route.UpstreamModel, model.Code), gatewayErrorText(responseBody)))
+					break
+				}
 				markWorkerRouteSuccess(ctx, pool, route.ID)
 				logWorkerRouteAttempt(ctx, pool, requestID, model.ID, route.ID, attempt, "SUCCESS", status, latencyMS)
 				promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens := chatUsageTokenDetails(responseBody)
@@ -2439,7 +2478,9 @@ func buildWorkerLLMRequest(route workerModelRoute, requestMode, fallbackModel, s
 		body["system"] = system
 		body["messages"] = []map[string]string{{"role": "user", "content": user}}
 		if _, ok := body["max_tokens"]; !ok {
-			body["max_tokens"] = 4096
+			// 思考型模型（glm-5.3-flash 等）的 thinking 块与 text 块共享该预算，
+			// 复杂分析的 thinking 就能吃满 4096，导致响应里没有任何文本。
+			body["max_tokens"] = 16384
 		}
 		if _, ok := body["temperature"]; !ok {
 			body["temperature"] = temperature

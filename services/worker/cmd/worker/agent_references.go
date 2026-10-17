@@ -24,8 +24,12 @@ func normalizeLLMImages(ctx context.Context, refs []string) ([]string, error) {
 	refs = append([]string(nil), refs...)
 	total := 0
 	for i, ref := range refs {
-		refs[i] = normalizeReferenceImage(ctx, ref)
+		var reason string
+		refs[i], reason = normalizeReferenceImageDiag(ctx, ref)
 		if !strings.HasPrefix(refs[i], "data:image/") {
+			if reason != "" {
+				return nil, fmt.Errorf("第%d张参考图无法用于生成：%s", i+1, reason)
+			}
 			return nil, fmt.Errorf("第%d张参考图读取失败，请检查素材是否可访问；已停止无图分析", i+1)
 		}
 		header, payload, ok := strings.Cut(refs[i], ",")
