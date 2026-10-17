@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI One-line mark">
+  <!-- S07 · 单线 One-line — 一笔画成的小写 e，极简主义的一根线 -->
+  <rect width="512" height="512" rx="115" fill="#F8F4F0"/>
+
+  <path d="M 442 250 L 372 250 A 118 118 0 1 0 313 358"
+        fill="none" stroke="#160B03" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="216" cy="216" r="24" fill="#FF8711"/>
+</svg>

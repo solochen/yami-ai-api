@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Y mark">
+  <!-- Concept 02 · 字徽 Monogram — 主橙底 + 暖白负空间 Y，小尺寸最清晰 -->
+  <rect width="512" height="512" rx="115" fill="#FF8711"/>
+  <g stroke="#F8F4F0" stroke-width="66" fill="none" stroke-linecap="butt">
+    <path d="M 160 132 L 256 236"/>
+    <path d="M 352 132 L 256 236"/>
+    <path d="M 256 236 L 256 404"/>
+  </g>
+  <!-- 深棕句点：编辑排印的收束符号 -->
+  <circle cx="344" cy="404" r="28" fill="#160B03"/>
+</svg>

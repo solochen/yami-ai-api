@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Beacon mark">
+  <!-- 02 · 信标 Beacon — 塔台与扩散的信号弧，「航」的导航意象 -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <!-- 信号弧（圆心 = 灯） -->
+  <path d="M 183.9 235.5 A 88 88 0 0 1 328.1 235.5"
+        fill="none" stroke="#F2C18D" stroke-width="14" stroke-linecap="round" opacity="0.85"/>
+  <path d="M 138.2 231 A 130 130 0 0 1 373.8 231"
+        fill="none" stroke="#F2C18D" stroke-width="14" stroke-linecap="round" opacity="0.4"/>
+
+  <!-- 塔台与灯 -->
+  <polygon points="220,412 292,412 274,318 238,318" fill="#FF8711"/>
+  <circle cx="256" cy="286" r="34" fill="#FF8711"/>
+  <circle cx="245" cy="275" r="8" fill="#F8F4F0"/>
+
+  <!-- 顶星 -->
+  <path d="M 150 100 L 157 116 L 173 124 L 157 132 L 150 148 L 143 132 L 127 124 L 143 116 Z"
+        fill="#C9B7AC" opacity="0.7"/>
+</svg>

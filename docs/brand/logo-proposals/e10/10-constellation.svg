@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Constellation mark">
+  <!-- 10 · 星座 Constellation — 「亿」为亿万星辰：星点连缀成 E -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <g stroke="#C9B7AC" stroke-width="6" opacity="0.45">
+    <line x1="172" y1="140" x2="340" y2="140"/>
+    <line x1="172" y1="140" x2="172" y2="256"/>
+    <line x1="172" y1="256" x2="172" y2="372"/>
+    <line x1="172" y1="256" x2="312" y2="256"/>
+    <line x1="172" y1="372" x2="340" y2="372"/>
+  </g>
+
+  <circle cx="172" cy="140" r="40" fill="#FF8711"/>
+  <circle cx="340" cy="140" r="26" fill="#F5EFEB"/>
+  <circle cx="172" cy="256" r="32" fill="#F5EFEB"/>
+  <circle cx="312" cy="256" r="22" fill="#F2C18D"/>
+  <circle cx="172" cy="372" r="40" fill="#F5EFEB"/>
+  <circle cx="340" cy="372" r="26" fill="#F5EFEB"/>
+
+  <circle cx="420" cy="206" r="9" fill="#C9B7AC" opacity="0.6"/>
+  <circle cx="110" cy="430" r="7" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="400" cy="320" r="6" fill="#C9B7AC" opacity="0.4"/>
+</svg>

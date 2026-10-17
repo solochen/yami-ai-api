@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Orbit mark">
+  <!-- Concept 04 · 轨道光圈 Orbit — 暖米底 + 相位错开的多层轨道，聚合与聚焦 -->
+  <rect width="512" height="512" rx="115" fill="#F3EEE9"/>
+
+  <!-- 外轨道：300° 弧，缺口朝右上 -->
+  <path d="M 341 108.8 A 170 170 0 1 0 341 403.2"
+        fill="none" stroke="#C9B7AC" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- 中轨道：250° 弧，缺口朝右下 -->
+  <path d="M 275.5 366.3 A 112 112 0 1 0 145.8 236.5"
+        fill="none" stroke="#160B03" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- 轨道上的橙色航点 -->
+  <circle cx="159" cy="200" r="17" fill="#FF8711"/>
+
+  <!-- 圆心 -->
+  <circle cx="256" cy="256" r="63" fill="#FF8711"/>
+</svg>

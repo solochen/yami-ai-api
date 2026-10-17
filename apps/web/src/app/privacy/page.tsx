@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function PrivacyPage() {
   const cfg = await getPublicSystemConfig();
   const locale = cfg.default_locale || "zh-CN";
-  const siteName = cfg.site_name || "YiHangAI";
+  const siteName = cfg.site_name || "Orbit-E AI";
   const title = cfg.privacy_title || staticT(locale, "legal.privacy");
   const content = String(cfg.privacy_content || "").trim();
 

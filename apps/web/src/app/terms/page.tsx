@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function TermsPage() {
   const cfg = await getPublicSystemConfig();
   const locale = cfg.default_locale || "zh-CN";
-  const siteName = cfg.site_name || "YiHangAI";
+  const siteName = cfg.site_name || "Orbit-E AI";
   const title = cfg.terms_title || staticT(locale, "legal.terms");
   const content = String(cfg.terms_content || "").trim();
 

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Compass mark">
+  <!-- Concept 03 · 罗盘 Compass — 调度与路由，画廊徽章式的四芒罗盘 -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <!-- 外环与角刻度 -->
+  <circle cx="256" cy="256" r="178" fill="none" stroke="#C9B7AC" stroke-width="5" opacity="0.22"/>
+  <circle cx="382" cy="130" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="130" cy="130" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="130" cy="382" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="382" cy="382" r="6" fill="#C9B7AC" opacity="0.5"/>
+
+  <!-- 四芒罗盘（色彩不对称：北橙南杏） -->
+  <polygon points="256,96 238,256 274,256" fill="#FF8711"/>
+  <polygon points="256,416 240,256 272,256" fill="#F2C18D"/>
+  <polygon points="376,256 256,242 256,270" fill="#F5EFEB" opacity="0.55"/>
+  <polygon points="136,256 256,242 256,270" fill="#F5EFEB" opacity="0.55"/>
+
+  <!-- 中心 -->
+  <circle cx="256" cy="256" r="15" fill="#F8F4F0"/>
+  <circle cx="256" cy="256" r="6" fill="#1A1715"/>
+</svg>

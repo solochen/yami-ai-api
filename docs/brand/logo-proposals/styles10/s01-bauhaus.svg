@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Bauhaus mark">
+  <!-- S01 · 包豪斯构成 Bauhaus — 圆、方、条的经典构成主义拼贴 -->
+  <rect width="512" height="512" rx="115" fill="#F3EEE9"/>
+  <path d="M 30 170 A 140 140 0 0 1 310 170 Z" fill="#FF8711"/>
+  <path d="M 512 512 L 512 322 A 190 190 0 0 0 322 512 Z" fill="#160B03"/>
+  <rect x="96" y="272" width="320" height="58" rx="29" fill="#F2C18D"/>
+  <circle cx="150" cy="110" r="36" fill="#F8F4F0"/>
+</svg>

@@ -43,7 +43,7 @@ export const DEFAULT_SITE_DESCRIPTION = "一站式 AI 创作与模型服务平�
 
 const DEFAULT_BRANDING: BrandData = {
   site_base_url: "",
-  site_name: "YiHangAI",
+  site_name: "Orbit-E AI",
   site_logo: "",
   site_favicon: "",
   site_description: DEFAULT_SITE_DESCRIPTION,
@@ -112,14 +112,14 @@ export function SiteBrand({
 }) {
   const { ts } = useI18n();
   const { site_name, site_logo, site_description } = useSiteBranding();
-  const siteName = site_name || DEFAULT_BRANDING.site_name || "YiHangAI";
+  const siteName = site_name || DEFAULT_BRANDING.site_name || "Orbit-E AI";
   const siteSubtitle = ts(subtitle ?? site_description ?? "");
 
   return (
     <Link href={href} className={clsx("flex min-w-0 items-center gap-2.5", className)}>
       <div
         className={clsx(
-          "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary text-sm font-bold text-dark",
+          "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl",
           badgeClassName
         )}
       >

@@ -4,7 +4,7 @@ import { getPublicSystemConfig } from "@/lib/public-config";
 
 export async function generateMetadata(): Promise<Metadata> {
   const cfg = await getPublicSystemConfig();
-  const siteName = String(cfg.site_name || "YiHangAI").trim();
+  const siteName = String(cfg.site_name || "Orbit-E AI").trim();
   const title = String(cfg.home_meta_title || "").trim() || `${siteName} - AI 创作聚合平台`;
   const description =
     String(cfg.home_meta_description || "").trim() ||

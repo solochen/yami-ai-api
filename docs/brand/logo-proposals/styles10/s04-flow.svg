@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Flow mark">
+  <!-- S04 · 流体渐变 Gradient Flow — 有机流体形态与暖色渐变，现代 AI 气质 -->
+  <defs>
+    <linearGradient id="f-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF8711"/>
+      <stop offset="0.55" stop-color="#E85D04"/>
+      <stop offset="1" stop-color="#3A2417"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="115" fill="url(#f-bg)"/>
+
+  <!-- 流体绸带 -->
+  <path d="M 132 322 C 172 200 318 156 382 222 C 444 286 402 428 300 426 C 198 424 96 446 132 322 Z"
+        fill="#F8F4F0" opacity="0.94"/>
+  <circle cx="302" cy="300" r="72" fill="#FF8711"/>
+  <circle cx="282" cy="280" r="16" fill="#F8F4F0" opacity="0.9"/>
+
+  <!-- 顶星 -->
+  <path d="M 128 96 L 136 114 L 154 122 L 136 130 L 128 148 L 120 130 L 102 122 L 120 114 Z"
+        fill="#F8F4F0" opacity="0.85"/>
+</svg>

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Stamp mark">
+  <!-- 09 · 印章 Stamp — 邮戳式徽章：环形字轨 + 四芒罗盘星，最 Editorial 的一枚 -->
+  <rect width="512" height="512" rx="115" fill="#F8F4F0"/>
+
+  <circle cx="256" cy="256" r="198" fill="none" stroke="#160B03" stroke-width="7"
+          opacity="0.75" stroke-dasharray="0.1 22" stroke-linecap="round"/>
+
+  <defs>
+    <path id="ehang-ring" d="M 256 66 A 190 190 0 1 1 255.9 66"/>
+  </defs>
+  <text font-family="Manrope, Avenir Next, PingFang SC, sans-serif" font-weight="700"
+        font-size="26" letter-spacing="5" fill="#160B03" opacity="0.85">
+    <textPath href="#ehang-ring">EHANGAI · AI CREATION &amp; MODEL PLATFORM · EST 2026 ·</textPath>
+  </text>
+
+  <polygon points="256,166 240,256 272,256" fill="#FF8711"/>
+  <polygon points="256,346 243,256 269,256" fill="#F2C18D"/>
+  <polygon points="346,256 256,246 256,266" fill="#281F1A" opacity="0.5"/>
+  <polygon points="166,256 256,246 256,266" fill="#281F1A" opacity="0.5"/>
+  <circle cx="256" cy="256" r="13" fill="#160B03"/>
+  <circle cx="256" cy="256" r="5" fill="#F8F4F0"/>
+
+  <circle cx="396" cy="116" r="6" fill="#160B03" opacity="0.4"/>
+  <circle cx="116" cy="116" r="6" fill="#160B03" opacity="0.4"/>
+  <circle cx="116" cy="396" r="6" fill="#160B03" opacity="0.4"/>
+  <circle cx="396" cy="396" r="6" fill="#160B03" opacity="0.4"/>
+</svg>

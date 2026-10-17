@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Retro Aviation mark">
+  <!-- S05 · 复古航空徽章 Vintage Aviation — 双翼机剪影 + 环形字轨 + 双环框 -->
+  <circle cx="256" cy="256" r="256" fill="#F3EEE9"/>
+  <circle cx="256" cy="256" r="238" fill="none" stroke="#160B03" stroke-width="11"/>
+  <circle cx="256" cy="256" r="214" fill="none" stroke="#160B03" stroke-width="3.5"/>
+
+  <defs>
+    <path id="retro-top" d="M 256 78 A 178 178 0 0 1 433 232"/>
+    <path id="retro-bot" d="M 92 300 A 178 178 0 0 0 420 300"/>
+  </defs>
+  <text font-family="Manrope, Avenir Next, PingFang SC, sans-serif" font-weight="800"
+        font-size="44" letter-spacing="10" fill="#160B03">
+    <textPath href="#retro-top" startOffset="50%" text-anchor="middle">EHANGAI</textPath>
+  </text>
+  <text font-family="Manrope, Avenir Next, PingFang SC, sans-serif" font-weight="600"
+        font-size="24" letter-spacing="8" fill="#160B03" opacity="0.75">
+    <textPath href="#retro-bot" startOffset="50%" text-anchor="middle">· AI PLATFORM ·</textPath>
+  </text>
+
+  <!-- 双翼机剪影 -->
+  <g fill="#160B03">
+    <rect x="118" y="186" width="276" height="26" rx="13"/>
+    <rect x="148" y="288" width="216" height="26" rx="13"/>
+    <rect x="234" y="204" width="44" height="152" rx="22"/>
+    <rect x="166" y="206" width="12" height="92" rx="6"/>
+    <rect x="334" y="206" width="12" height="92" rx="6"/>
+    <polygon points="234,392 278,392 268,430 244,430"/>
+  </g>
+  <circle cx="256" cy="164" r="30" fill="#FF8711"/>
+  <circle cx="256" cy="164" r="11" fill="#F3EEE9"/>
+
+  <!-- 翼间星 -->
+  <circle cx="126" cy="330" r="12" fill="#FF8711"/>
+  <circle cx="386" cy="330" r="12" fill="#FF8711"/>
+</svg>

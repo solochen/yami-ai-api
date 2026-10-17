@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI E-Signal mark">
+  <!-- 01 · 信标字徽 E-Signal — 主橙底 + 暖白负空间 E，三横不等长如信号塔横杆 -->
+  <rect width="512" height="512" rx="115" fill="#FF8711"/>
+  <path d="M 170 140 H 360 V 208 H 238 V 244 H 330 V 306 H 238 V 342 H 360 V 410 H 170 Z"
+        fill="#F8F4F0"/>
+  <circle cx="392" cy="410" r="26" fill="#160B03"/>
+</svg>

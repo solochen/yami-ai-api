@@ -26,14 +26,14 @@ async function fetchBranding() {
         brandCache = data;
         return data;
       })
-      .catch(() => ({ site_name: "YiHangAI", site_logo: "", site_description: "AI 大模型聚合平台", admin_site_description: "管理后台" }));
+      .catch(() => ({ site_name: "Orbit-E AI", site_logo: "", site_description: "AI 大模型聚合平台", admin_site_description: "管理后台" }));
   }
   return brandPromise;
 }
 
 export function useAdminBranding() {
   const [branding, setBranding] = useState<BrandData>(
-    brandCache || { site_name: "YiHangAI", site_logo: "", site_description: "AI 大模型聚合平台", admin_site_description: "管理后台" }
+    brandCache || { site_name: "Orbit-E AI", site_logo: "", site_description: "AI 大模型聚合平台", admin_site_description: "管理后台" }
   );
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export function AdminBrand({
   subtitle?: string;
 }) {
   const { site_name, site_logo, admin_site_description } = useAdminBranding();
-  const name = site_name || "YiHangAI";
+  const name = site_name || "Orbit-E AI";
   return (
     <div className={clsx("flex items-center gap-3 min-w-0", className)}>
       <div className={clsx("flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gray-950 text-white shrink-0", badgeClassName)}>

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" role="img" aria-label="YiHangAI horizontal lockup">
+  <!-- Concept 05 · 横向组合 — Y 字徽 + 字标 + eyebrow，用于侧栏与文档页眉 -->
+  <rect width="1200" height="320" rx="64" fill="#F8F4F0"/>
+
+  <!-- Y 字徽（缩小版） -->
+  <g transform="translate(56,56) scale(0.40625)">
+    <rect width="512" height="512" rx="115" fill="#FF8711"/>
+    <g stroke="#F8F4F0" stroke-width="66" fill="none" stroke-linecap="butt">
+      <path d="M 160 132 L 256 236"/>
+      <path d="M 352 132 L 256 236"/>
+      <path d="M 256 236 L 256 404"/>
+    </g>
+    <circle cx="344" cy="404" r="28" fill="#160B03"/>
+  </g>
+
+  <!-- 字标 -->
+  <text x="320" y="185" font-family="Manrope, Avenir Next, PingFang SC, sans-serif"
+        font-weight="800" font-size="104" letter-spacing="2" fill="#281F1A">YiHangAI</text>
+
+  <!-- eyebrow -->
+  <circle cx="326" cy="228" r="7" fill="#FF8711"/>
+  <text x="348" y="238" font-family="Manrope, Avenir Next, PingFang SC, sans-serif"
+        font-weight="600" font-size="25" letter-spacing="7" fill="#665952">AI CREATION &amp; MODEL PLATFORM</text>
+</svg>

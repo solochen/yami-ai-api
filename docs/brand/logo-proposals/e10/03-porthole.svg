@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Porthole mark">
+  <!-- 03 · 舷窗 Porthole — 看见万千模型的窗口：窗框 + 深空星迹 -->
+  <rect width="512" height="512" rx="115" fill="#F3EEE9"/>
+
+  <!-- 舷窗 -->
+  <circle cx="256" cy="256" r="188" fill="none" stroke="#160B03" stroke-width="32"/>
+  <circle cx="256" cy="256" r="150" fill="#1A1715"/>
+
+  <!-- 星与航迹 -->
+  <path d="M 176 316 Q 268 290 330 214"
+        fill="none" stroke="#FF8711" stroke-width="22" stroke-linecap="round"/>
+  <circle cx="312" cy="196" r="40" fill="#FF8711"/>
+  <circle cx="299" cy="183" r="9" fill="#F8F4F0"/>
+  <circle cx="208" cy="180" r="11" fill="#F2C18D"/>
+
+  <!-- 螺栓 -->
+  <circle cx="376.2" cy="135.8" r="10" fill="#C9B7AC"/>
+  <circle cx="135.8" cy="135.8" r="10" fill="#C9B7AC"/>
+  <circle cx="135.8" cy="376.2" r="10" fill="#C9B7AC"/>
+  <circle cx="376.2" cy="376.2" r="10" fill="#C9B7AC"/>
+</svg>

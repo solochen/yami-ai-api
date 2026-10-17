@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Arch mark">
+  <!-- S10 · 拱门 Arch — 画廊门厅的拱，门洞中悬着一轮橙色落日（光影装置感） -->
+  <rect width="512" height="512" rx="115" fill="#F3EEE9"/>
+
+  <path d="M 136 412 V 264 A 120 120 0 0 1 376 264 V 412 Z" fill="#160B03"/>
+  <path d="M 202 412 V 264 A 54 54 0 0 1 310 264 V 412 Z" fill="#F3EEE9"/>
+  <circle cx="256" cy="328" r="36" fill="#FF8711"/>
+
+  <line x1="92" y1="412" x2="420" y2="412" stroke="#C9B7AC" stroke-width="10" stroke-linecap="round"/>
+  <path d="M 256 74 L 262 88 L 276 94 L 262 100 L 256 114 L 250 100 L 236 94 L 250 88 Z"
+        fill="#FF8711" opacity="0.85"/>
+</svg>

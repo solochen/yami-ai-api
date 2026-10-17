@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Orbit-E mark">
+  <!-- 08 · 轨道 E Orbit-E — 椭圆轨道环绕的橙色圆心，负空间 E，一站式聚合 -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <ellipse cx="256" cy="256" rx="212" ry="84" transform="rotate(-24 256 256)"
+           fill="none" stroke="#C9B7AC" stroke-width="12" opacity="0.45"/>
+  <circle cx="62" cy="342" r="19" fill="#FF8711"/>
+  <circle cx="256" cy="256" r="122" fill="#FF8711"/>
+  <path d="M 214 191 H 300 V 217 H 246 V 245 H 284 V 271 H 246 V 299 H 300 V 325 H 214 Z"
+        fill="#F8F4F0"/>
+</svg>

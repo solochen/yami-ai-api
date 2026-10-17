@@ -295,7 +295,7 @@ export function LoginModal({ open, onClose }: Props) {
   };
 
   const hasOAuth = !!providers.google || !!providers.github;
-  const siteName = site_name || "YiHangAI";
+  const siteName = site_name || "Orbit-E AI";
   const legalTitle = legalDoc === "privacy" ? privacy_title || t("login.privacy") : terms_title || t("login.terms");
   const legalContent = legalDoc === "privacy" ? privacy_content || "" : terms_content || "";
 

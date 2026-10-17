@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Spark mark">
+  <!-- 07 · 火花 Spark — Agent 工作台：圆角对话气泡中的智能火花 -->
+  <rect width="512" height="512" rx="115" fill="#FF8711"/>
+
+  <path d="M 292 330 L 350 402 L 240 344 Z" fill="#F8F4F0"/>
+  <rect x="106" y="112" width="300" height="232" rx="62" fill="#F8F4F0"/>
+
+  <path d="M 256 158 L 272 214 L 328 230 L 272 246 L 256 302 L 240 246 L 184 230 L 240 214 Z" fill="#FF8711"/>
+  <path d="M 340 134 L 347 145 L 358 152 L 347 159 L 340 170 L 333 159 L 322 152 L 333 145 Z"
+        fill="#FF8711" opacity="0.9"/>
+</svg>

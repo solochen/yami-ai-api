@@ -169,6 +169,7 @@ services:
     ports:
       - "3001:3001"
     environment:
+      INTERNAL_API_URL: http://api:8080
       NODE_ENV: production
       ADMIN_ASSET_PREFIX: /admin-assets
     depends_on:

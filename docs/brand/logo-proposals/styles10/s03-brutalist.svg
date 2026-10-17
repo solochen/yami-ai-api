@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Brutalist mark">
+  <!-- S03 · 新粗野 Neo-Brutalism — 硬边框、硬投影、粗几何 E，反精致的冲击力 -->
+  <rect width="512" height="512" rx="115" fill="#F8F4F0"/>
+  <rect x="62" y="62" width="388" height="388" rx="24" fill="none" stroke="#160B03" stroke-width="13"/>
+
+  <!-- 硬投影块 -->
+  <rect x="132" y="132" width="292" height="292" rx="20" fill="#160B03"/>
+  <rect x="104" y="104" width="292" height="292" rx="20" fill="#FF8711"/>
+  <path d="M 186 176 H 324 V 214 H 228 V 242 H 302 V 280 H 228 V 308 H 324 V 346 H 186 Z" fill="#160B03"/>
+
+  <!-- 角标 -->
+  <rect x="80" y="80" width="34" height="34" fill="#F2C18D"/>
+</svg>

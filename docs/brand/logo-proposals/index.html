@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YiHangAI Logo 提案 · 2026-10</title>
+<style>
+  :root {
+    --accent: #FF8711; --on-accent: #160B03;
+    --surface: #Eee8e2; --subtle: #e6ddd6; --card: #f8f4f0;
+    --stage: #1a1715; --title: #281f1a; --body: #665952;
+    --ghost: rgba(40,31,26,.1);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--surface); color: var(--title);
+    font-family: Manrope, "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 4rem max(2rem, calc((100vw - 1180px) / 2)) 6rem;
+  }
+  .eyebrow { color: var(--accent); font-weight: 700; font-size: .8rem;
+    letter-spacing: .22em; text-transform: uppercase; display: flex; align-items: center; gap: .5rem; }
+  .eyebrow::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--accent); }
+  h1 { font-family: Epilogue, Manrope, sans-serif; font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 800; margin: .8rem 0 .5rem; letter-spacing: -.02em; }
+  .sub { color: var(--body); max-width: 46rem; line-height: 1.7; margin-bottom: 3rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 2rem; }
+  .card { background: var(--card); border-radius: 1.75rem; padding: 2rem; display: flex; gap: 2rem; align-items: center; }
+  .hero { width: 220px; height: 220px; flex-shrink: 0; filter: drop-shadow(0 1.25rem 3.5rem rgba(0,0,0,.2)); }
+  .meta h2 { font-size: 1.25rem; margin-bottom: .6rem; }
+  .meta p { color: var(--body); line-height: 1.65; font-size: .92rem; }
+  .row { display: flex; gap: 1rem; margin-top: 1.2rem; flex-wrap: wrap; }
+  .swatch { border-radius: 1rem; padding: .9rem; display: flex; flex-direction: column;
+    align-items: center; gap: .5rem; font-size: .7rem; letter-spacing: .08em; }
+  .swatch span { color: var(--body); }
+  .swatch.dark { background: var(--stage); }
+  .swatch.dark span { color: #a99a92; }
+  .swatch.light { background: #fff; border: 1px solid var(--ghost); }
+  .b40 { width: 40px; height: 40px; border-radius: 12px; overflow: hidden; }
+  .b16 { width: 32px; height: 32px; border-radius: 8px; overflow: hidden; }
+  .lockup { margin-top: 2.5rem; background: var(--stage); border-radius: 1.75rem; padding: 2.5rem; }
+  .lockup .art { width: 100%; max-width: 880px; }
+  .lockup .cap { color: #a99a92; font-size: .8rem; margin-top: 1rem; letter-spacing: .08em; }
+  footer { margin-top: 3rem; color: var(--body); font-size: .85rem; line-height: 1.7; }
+  code { background: var(--subtle); padding: .1rem .4rem; border-radius: .4rem; font-size: .85em; }
+</style>
+</head>
+<body>
+  <div class="eyebrow">Brand Proposal · Oct 2026</div>
+  <h1>YiHangAI Logo 重设计提案</h1>
+  <p class="sub">四枚徽章式 logo 概念 + 一张横向组合，遵循产品现有的 Midnight Editorial / Ethereal Vault 视觉体系：主橙 #FF8711、暖米与暖炭双层表面、扁平克制的层次。全部为矢量 SVG，小尺寸经 40px 侧栏与 favicon 场景验证。</p>
+  <div class="grid">
+  <section class="card">
+    <div class="hero"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Voyage mark">
+  <!-- Concept 01 · 航迹 Voyage — 深暖炭底 + 上升航迹 + 航点星标 -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <!-- 上升航迹 -->
+  <path d="M 96 404 C 284 400 348 326 348 176"
+        fill="none" stroke="#FF8711" stroke-width="42" stroke-linecap="round"/>
+
+  <!-- 起点航点 -->
+  <circle cx="96" cy="404" r="31" fill="none" stroke="#F2C18D" stroke-width="5" opacity="0.45"/>
+  <circle cx="96" cy="404" r="20" fill="#F2C18D"/>
+
+  <!-- 终点航点（主星） -->
+  <circle cx="348" cy="170" r="58" fill="none" stroke="#F2C18D" stroke-width="5" opacity="0.3"/>
+  <circle cx="348" cy="170" r="42" fill="#FF8711"/>
+  <circle cx="335" cy="157" r="10" fill="#F8F4F0"/>
+
+  <!-- 途中星尘（四芒星） -->
+  <path d="M 164 118 L 172 134 L 188 142 L 172 150 L 164 166 L 156 150 L 140 142 L 156 134 Z"
+        fill="#C9B7AC" opacity="0.75"/>
+  <path d="M 210 232 L 215 242 L 225 247 L 215 252 L 210 262 L 205 252 L 195 247 L 205 242 Z"
+        fill="#C9B7AC" opacity="0.45"/>
+</svg>
+</div>
+    <div class="meta">
+      <h2>航迹 · Voyage</h2>
+      <p>万千模型的航路。一条上升的橙色航迹自暖炭色深海中拉起，途经星尘、抵达亮星——呼应「亿航」与模型聚合调度。对角动势适合 40px 侧栏与 favicon。</p>
+      <div class="row">
+        <div class="swatch dark"><div class="b40"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Voyage mark">
+  <!-- Concept 01 · 航迹 Voyage — 深暖炭底 + 上升航迹 + 航点星标 -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <!-- 上升航迹 -->
+  <path d="M 96 404 C 284 400 348 326 348 176"
+        fill="none" stroke="#FF8711" stroke-width="42" stroke-linecap="round"/>
+
+  <!-- 起点航点 -->
+  <circle cx="96" cy="404" r="31" fill="none" stroke="#F2C18D" stroke-width="5" opacity="0.45"/>
+  <circle cx="96" cy="404" r="20" fill="#F2C18D"/>
+
+  <!-- 终点航点（主星） -->
+  <circle cx="348" cy="170" r="58" fill="none" stroke="#F2C18D" stroke-width="5" opacity="0.3"/>
+  <circle cx="348" cy="170" r="42" fill="#FF8711"/>
+  <circle cx="335" cy="157" r="10" fill="#F8F4F0"/>
+
+  <!-- 途中星尘（四芒星） -->
+  <path d="M 164 118 L 172 134 L 188 142 L 172 150 L 164 166 L 156 150 L 140 142 L 156 134 Z"
+        fill="#C9B7AC" opacity="0.75"/>
+  <path d="M 210 232 L 215 242 L 225 247 L 215 252 L 210 262 L 205 252 L 195 247 L 205 242 Z"
+        fill="#C9B7AC" opacity="0.45"/>
+</svg>
+</div><span>侧栏 40px · 暗</span></div>
+        <div class="swatch light"><div class="b40"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Voyage mark">
+  <!-- Concept 01 · 航迹 Voyage — 深暖炭底 + 上升航迹 + 航点星标 -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <!-- 上升航迹 -->
+  <path d="M 96 404 C 284 400 348 326 348 176"
+        fill="none" stroke="#FF8711" stroke-width="42" stroke-linecap="round"/>
+
+  <!-- 起点航点 -->
+  <circle cx="96" cy="404" r="31" fill="none" stroke="#F2C18D" stroke-width="5" opacity="0.45"/>
+  <circle cx="96" cy="404" r="20" fill="#F2C18D"/>
+
+  <!-- 终点航点（主星） -->
+  <circle cx="348" cy="170" r="58" fill="none" stroke="#F2C18D" stroke-width="5" opacity="0.3"/>
+  <circle cx="348" cy="170" r="42" fill="#FF8711"/>
+  <circle cx="335" cy="157" r="10" fill="#F8F4F0"/>
+
+  <!-- 途中星尘（四芒星） -->
+  <path d="M 164 118 L 172 134 L 188 142 L 172 150 L 164 166 L 156 150 L 140 142 L 156 134 Z"
+        fill="#C9B7AC" opacity="0.75"/>
+  <path d="M 210 232 L 215 242 L 225 247 L 215 252 L 210 262 L 205 252 L 195 247 L 205 242 Z"
+        fill="#C9B7AC" opacity="0.45"/>
+</svg>
+</div><span>侧栏 40px · 亮</span></div>
+        <div class="swatch dark"><div class="b16"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Voyage mark">
+  <!-- Concept 01 · 航迹 Voyage — 深暖炭底 + 上升航迹 + 航点星标 -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <!-- 上升航迹 -->
+  <path d="M 96 404 C 284 400 348 326 348 176"
+        fill="none" stroke="#FF8711" stroke-width="42" stroke-linecap="round"/>
+
+  <!-- 起点航点 -->
+  <circle cx="96" cy="404" r="31" fill="none" stroke="#F2C18D" stroke-width="5" opacity="0.45"/>
+  <circle cx="96" cy="404" r="20" fill="#F2C18D"/>
+
+  <!-- 终点航点（主星） -->
+  <circle cx="348" cy="170" r="58" fill="none" stroke="#F2C18D" stroke-width="5" opacity="0.3"/>
+  <circle cx="348" cy="170" r="42" fill="#FF8711"/>
+  <circle cx="335" cy="157" r="10" fill="#F8F4F0"/>
+
+  <!-- 途中星尘（四芒星） -->
+  <path d="M 164 118 L 172 134 L 188 142 L 172 150 L 164 166 L 156 150 L 140 142 L 156 134 Z"
+        fill="#C9B7AC" opacity="0.75"/>
+  <path d="M 210 232 L 215 242 L 225 247 L 215 252 L 210 262 L 205 252 L 195 247 L 205 242 Z"
+        fill="#C9B7AC" opacity="0.45"/>
+</svg>
+</div><span>favicon 16px</span></div>
+      </div>
+    </div>
+  </section>
+  <section class="card">
+    <div class="hero"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Y mark">
+  <!-- Concept 02 · 字徽 Monogram — 主橙底 + 暖白负空间 Y，小尺寸最清晰 -->
+  <rect width="512" height="512" rx="115" fill="#FF8711"/>
+  <g stroke="#F8F4F0" stroke-width="66" fill="none" stroke-linecap="butt">
+    <path d="M 160 132 L 256 236"/>
+    <path d="M 352 132 L 256 236"/>
+    <path d="M 256 236 L 256 404"/>
+  </g>
+  <!-- 深棕句点：编辑排印的收束符号 -->
+  <circle cx="344" cy="404" r="28" fill="#160B03"/>
+</svg>
+</div>
+    <div class="meta">
+      <h2>字徽 · Monogram Y</h2>
+      <p>主橙底 + 暖白负空间 Y，右下深棕句点收束（编辑排印语汇）。几何粗壮，16px 下依然清晰，是最通用稳妥的一枚。</p>
+      <div class="row">
+        <div class="swatch dark"><div class="b40"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Y mark">
+  <!-- Concept 02 · 字徽 Monogram — 主橙底 + 暖白负空间 Y，小尺寸最清晰 -->
+  <rect width="512" height="512" rx="115" fill="#FF8711"/>
+  <g stroke="#F8F4F0" stroke-width="66" fill="none" stroke-linecap="butt">
+    <path d="M 160 132 L 256 236"/>
+    <path d="M 352 132 L 256 236"/>
+    <path d="M 256 236 L 256 404"/>
+  </g>
+  <!-- 深棕句点：编辑排印的收束符号 -->
+  <circle cx="344" cy="404" r="28" fill="#160B03"/>
+</svg>
+</div><span>侧栏 40px · 暗</span></div>
+        <div class="swatch light"><div class="b40"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Y mark">
+  <!-- Concept 02 · 字徽 Monogram — 主橙底 + 暖白负空间 Y，小尺寸最清晰 -->
+  <rect width="512" height="512" rx="115" fill="#FF8711"/>
+  <g stroke="#F8F4F0" stroke-width="66" fill="none" stroke-linecap="butt">
+    <path d="M 160 132 L 256 236"/>
+    <path d="M 352 132 L 256 236"/>
+    <path d="M 256 236 L 256 404"/>
+  </g>
+  <!-- 深棕句点：编辑排印的收束符号 -->
+  <circle cx="344" cy="404" r="28" fill="#160B03"/>
+</svg>
+</div><span>侧栏 40px · 亮</span></div>
+        <div class="swatch dark"><div class="b16"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Y mark">
+  <!-- Concept 02 · 字徽 Monogram — 主橙底 + 暖白负空间 Y，小尺寸最清晰 -->
+  <rect width="512" height="512" rx="115" fill="#FF8711"/>
+  <g stroke="#F8F4F0" stroke-width="66" fill="none" stroke-linecap="butt">
+    <path d="M 160 132 L 256 236"/>
+    <path d="M 352 132 L 256 236"/>
+    <path d="M 256 236 L 256 404"/>
+  </g>
+  <!-- 深棕句点：编辑排印的收束符号 -->
+  <circle cx="344" cy="404" r="28" fill="#160B03"/>
+</svg>
+</div><span>favicon 16px</span></div>
+      </div>
+    </div>
+  </section>
+  <section class="card">
+    <div class="hero"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Compass mark">
+  <!-- Concept 03 · 罗盘 Compass — 调度与路由，画廊徽章式的四芒罗盘 -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <!-- 外环与角刻度 -->
+  <circle cx="256" cy="256" r="178" fill="none" stroke="#C9B7AC" stroke-width="5" opacity="0.22"/>
+  <circle cx="382" cy="130" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="130" cy="130" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="130" cy="382" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="382" cy="382" r="6" fill="#C9B7AC" opacity="0.5"/>
+
+  <!-- 四芒罗盘（色彩不对称：北橙南杏） -->
+  <polygon points="256,96 238,256 274,256" fill="#FF8711"/>
+  <polygon points="256,416 240,256 272,256" fill="#F2C18D"/>
+  <polygon points="376,256 256,242 256,270" fill="#F5EFEB" opacity="0.55"/>
+  <polygon points="136,256 256,242 256,270" fill="#F5EFEB" opacity="0.55"/>
+
+  <!-- 中心 -->
+  <circle cx="256" cy="256" r="15" fill="#F8F4F0"/>
+  <circle cx="256" cy="256" r="6" fill="#1A1715"/>
+</svg>
+</div>
+    <div class="meta">
+      <h2>罗盘 · Compass</h2>
+      <p>四芒罗盘，北针主橙、南针浅杏、东西微光。罗盘即「调度与路由」——中转平台的本质。画廊徽章式对称，气质最 Editorial。</p>
+      <div class="row">
+        <div class="swatch dark"><div class="b40"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Compass mark">
+  <!-- Concept 03 · 罗盘 Compass — 调度与路由，画廊徽章式的四芒罗盘 -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <!-- 外环与角刻度 -->
+  <circle cx="256" cy="256" r="178" fill="none" stroke="#C9B7AC" stroke-width="5" opacity="0.22"/>
+  <circle cx="382" cy="130" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="130" cy="130" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="130" cy="382" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="382" cy="382" r="6" fill="#C9B7AC" opacity="0.5"/>
+
+  <!-- 四芒罗盘（色彩不对称：北橙南杏） -->
+  <polygon points="256,96 238,256 274,256" fill="#FF8711"/>
+  <polygon points="256,416 240,256 272,256" fill="#F2C18D"/>
+  <polygon points="376,256 256,242 256,270" fill="#F5EFEB" opacity="0.55"/>
+  <polygon points="136,256 256,242 256,270" fill="#F5EFEB" opacity="0.55"/>
+
+  <!-- 中心 -->
+  <circle cx="256" cy="256" r="15" fill="#F8F4F0"/>
+  <circle cx="256" cy="256" r="6" fill="#1A1715"/>
+</svg>
+</div><span>侧栏 40px · 暗</span></div>
+        <div class="swatch light"><div class="b40"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Compass mark">
+  <!-- Concept 03 · 罗盘 Compass — 调度与路由，画廊徽章式的四芒罗盘 -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <!-- 外环与角刻度 -->
+  <circle cx="256" cy="256" r="178" fill="none" stroke="#C9B7AC" stroke-width="5" opacity="0.22"/>
+  <circle cx="382" cy="130" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="130" cy="130" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="130" cy="382" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="382" cy="382" r="6" fill="#C9B7AC" opacity="0.5"/>
+
+  <!-- 四芒罗盘（色彩不对称：北橙南杏） -->
+  <polygon points="256,96 238,256 274,256" fill="#FF8711"/>
+  <polygon points="256,416 240,256 272,256" fill="#F2C18D"/>
+  <polygon points="376,256 256,242 256,270" fill="#F5EFEB" opacity="0.55"/>
+  <polygon points="136,256 256,242 256,270" fill="#F5EFEB" opacity="0.55"/>
+
+  <!-- 中心 -->
+  <circle cx="256" cy="256" r="15" fill="#F8F4F0"/>
+  <circle cx="256" cy="256" r="6" fill="#1A1715"/>
+</svg>
+</div><span>侧栏 40px · 亮</span></div>
+        <div class="swatch dark"><div class="b16"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Compass mark">
+  <!-- Concept 03 · 罗盘 Compass — 调度与路由，画廊徽章式的四芒罗盘 -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <!-- 外环与角刻度 -->
+  <circle cx="256" cy="256" r="178" fill="none" stroke="#C9B7AC" stroke-width="5" opacity="0.22"/>
+  <circle cx="382" cy="130" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="130" cy="130" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="130" cy="382" r="6" fill="#C9B7AC" opacity="0.5"/>
+  <circle cx="382" cy="382" r="6" fill="#C9B7AC" opacity="0.5"/>
+
+  <!-- 四芒罗盘（色彩不对称：北橙南杏） -->
+  <polygon points="256,96 238,256 274,256" fill="#FF8711"/>
+  <polygon points="256,416 240,256 272,256" fill="#F2C18D"/>
+  <polygon points="376,256 256,242 256,270" fill="#F5EFEB" opacity="0.55"/>
+  <polygon points="136,256 256,242 256,270" fill="#F5EFEB" opacity="0.55"/>
+
+  <!-- 中心 -->
+  <circle cx="256" cy="256" r="15" fill="#F8F4F0"/>
+  <circle cx="256" cy="256" r="6" fill="#1A1715"/>
+</svg>
+</div><span>favicon 16px</span></div>
+      </div>
+    </div>
+  </section>
+  <section class="card">
+    <div class="hero"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Orbit mark">
+  <!-- Concept 04 · 轨道光圈 Orbit — 暖米底 + 相位错开的多层轨道，聚合与聚焦 -->
+  <rect width="512" height="512" rx="115" fill="#F3EEE9"/>
+
+  <!-- 外轨道：300° 弧，缺口朝右上 -->
+  <path d="M 341 108.8 A 170 170 0 1 0 341 403.2"
+        fill="none" stroke="#C9B7AC" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- 中轨道：250° 弧，缺口朝右下 -->
+  <path d="M 275.5 366.3 A 112 112 0 1 0 145.8 236.5"
+        fill="none" stroke="#160B03" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- 轨道上的橙色航点 -->
+  <circle cx="159" cy="200" r="17" fill="#FF8711"/>
+
+  <!-- 圆心 -->
+  <circle cx="256" cy="256" r="63" fill="#FF8711"/>
+</svg>
+</div>
+    <div class="meta">
+      <h2>轨道 · Orbit</h2>
+      <p>暖米底上相位错开的双层轨道环绕橙色圆心，轨道上的一颗航点正在运行。三层等距同心，「一站式聚合、聚焦」的抽象。浅底版本，适合亮色场景。</p>
+      <div class="row">
+        <div class="swatch dark"><div class="b40"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Orbit mark">
+  <!-- Concept 04 · 轨道光圈 Orbit — 暖米底 + 相位错开的多层轨道，聚合与聚焦 -->
+  <rect width="512" height="512" rx="115" fill="#F3EEE9"/>
+
+  <!-- 外轨道：300° 弧，缺口朝右上 -->
+  <path d="M 341 108.8 A 170 170 0 1 0 341 403.2"
+        fill="none" stroke="#C9B7AC" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- 中轨道：250° 弧，缺口朝右下 -->
+  <path d="M 275.5 366.3 A 112 112 0 1 0 145.8 236.5"
+        fill="none" stroke="#160B03" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- 轨道上的橙色航点 -->
+  <circle cx="159" cy="200" r="17" fill="#FF8711"/>
+
+  <!-- 圆心 -->
+  <circle cx="256" cy="256" r="63" fill="#FF8711"/>
+</svg>
+</div><span>侧栏 40px · 暗</span></div>
+        <div class="swatch light"><div class="b40"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Orbit mark">
+  <!-- Concept 04 · 轨道光圈 Orbit — 暖米底 + 相位错开的多层轨道，聚合与聚焦 -->
+  <rect width="512" height="512" rx="115" fill="#F3EEE9"/>
+
+  <!-- 外轨道：300° 弧，缺口朝右上 -->
+  <path d="M 341 108.8 A 170 170 0 1 0 341 403.2"
+        fill="none" stroke="#C9B7AC" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- 中轨道：250° 弧，缺口朝右下 -->
+  <path d="M 275.5 366.3 A 112 112 0 1 0 145.8 236.5"
+        fill="none" stroke="#160B03" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- 轨道上的橙色航点 -->
+  <circle cx="159" cy="200" r="17" fill="#FF8711"/>
+
+  <!-- 圆心 -->
+  <circle cx="256" cy="256" r="63" fill="#FF8711"/>
+</svg>
+</div><span>侧栏 40px · 亮</span></div>
+        <div class="swatch dark"><div class="b16"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="YiHangAI Orbit mark">
+  <!-- Concept 04 · 轨道光圈 Orbit — 暖米底 + 相位错开的多层轨道，聚合与聚焦 -->
+  <rect width="512" height="512" rx="115" fill="#F3EEE9"/>
+
+  <!-- 外轨道：300° 弧，缺口朝右上 -->
+  <path d="M 341 108.8 A 170 170 0 1 0 341 403.2"
+        fill="none" stroke="#C9B7AC" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- 中轨道：250° 弧，缺口朝右下 -->
+  <path d="M 275.5 366.3 A 112 112 0 1 0 145.8 236.5"
+        fill="none" stroke="#160B03" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- 轨道上的橙色航点 -->
+  <circle cx="159" cy="200" r="17" fill="#FF8711"/>
+
+  <!-- 圆心 -->
+  <circle cx="256" cy="256" r="63" fill="#FF8711"/>
+</svg>
+</div><span>favicon 16px</span></div>
+      </div>
+    </div>
+  </section>
+  </div>
+  <div class="lockup">
+    <div class="art"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" role="img" aria-label="YiHangAI horizontal lockup">
+  <!-- Concept 05 · 横向组合 — Y 字徽 + 字标 + eyebrow，用于侧栏与文档页眉 -->
+  <rect width="1200" height="320" rx="64" fill="#F8F4F0"/>
+
+  <!-- Y 字徽（缩小版） -->
+  <g transform="translate(56,56) scale(0.40625)">
+    <rect width="512" height="512" rx="115" fill="#FF8711"/>
+    <g stroke="#F8F4F0" stroke-width="66" fill="none" stroke-linecap="butt">
+      <path d="M 160 132 L 256 236"/>
+      <path d="M 352 132 L 256 236"/>
+      <path d="M 256 236 L 256 404"/>
+    </g>
+    <circle cx="344" cy="404" r="28" fill="#160B03"/>
+  </g>
+
+  <!-- 字标 -->
+  <text x="320" y="185" font-family="Manrope, Avenir Next, PingFang SC, sans-serif"
+        font-weight="800" font-size="104" letter-spacing="2" fill="#281F1A">YiHangAI</text>
+
+  <!-- eyebrow -->
+  <circle cx="326" cy="228" r="7" fill="#FF8711"/>
+  <text x="348" y="238" font-family="Manrope, Avenir Next, PingFang SC, sans-serif"
+        font-weight="600" font-size="25" letter-spacing="7" fill="#665952">AI CREATION &amp; MODEL PLATFORM</text>
+</svg>
+</div>
+    <div class="cap">05 · 横向组合 — 概念二徽章 + 字标，用于登录页 / 文档页眉 / 邮件签名</div>
+  </div>
+  <footer>
+    文件位于 <code>docs/brand/logo-proposals/</code>：SVG 源文件（01–05）、<code>png/</code> 内含 512×512 交付版本。<br>
+    启用方式：选定后将对应 PNG 重命名覆盖 <code>apps/web/public/assets/yihangai-logo.png</code>（后台「系统配置」中未自定义 site_logo / site_favicon 时全站自动生效）。
+  </footer>
+</body>
+</html>

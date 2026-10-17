@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Needle mark">
+  <!-- 05 · 指北针 Needle — 调度与路由：环中悬浮的双色罗盘针，指向东北（上升） -->
+  <rect width="512" height="512" rx="115" fill="#1A1715"/>
+
+  <circle cx="256" cy="256" r="152" fill="none" stroke="#C9B7AC" stroke-width="10" opacity="0.28"/>
+  <circle cx="256" cy="104" r="8" fill="#FF8711"/>
+
+  <g transform="rotate(45 256 256)">
+    <polygon points="256,118 292,256 220,256" fill="#FF8711"/>
+    <polygon points="256,394 292,256 220,256" fill="#F2C18D"/>
+  </g>
+  <circle cx="256" cy="256" r="15" fill="#F5EFEB"/>
+  <circle cx="256" cy="256" r="6" fill="#1A1715"/>
+</svg>

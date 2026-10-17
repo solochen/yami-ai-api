@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EHangAI Stack mark">
+  <!-- 06 · 层叠 Stack — 模型聚合的策展层：三层错位卡片，顶层主橙 -->
+  <rect width="512" height="512" rx="115" fill="#F3EEE9"/>
+
+  <rect x="118" y="118" width="264" height="148" rx="42" fill="#C9B7AC" opacity="0.55"/>
+  <rect x="150" y="188" width="264" height="148" rx="42" fill="#160B03" opacity="0.85"/>
+  <rect x="182" y="258" width="264" height="148" rx="42" fill="#FF8711"/>
+  <circle cx="392" cy="332" r="17" fill="#F8F4F0"/>
+</svg>
