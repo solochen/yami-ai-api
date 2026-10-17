@@ -9,9 +9,11 @@
 | https://www.orbit-e.com | `/*` | web 容器 172.28.0.30:3000 |
 | https://www.orbit-e.com | `/api/*`（priority 200） | api 容器 172.28.0.31:8080 |
 | https://www.orbit-e.com | `/minio-store/*`（priority 200，proxy-rewrite 去前缀） | minio 172.28.0.33:9000 |
-| https://orbit-e.com | 同 www（裸域同一套规则） | 同上 |
+| https://orbit-e.com | `/*` → **301 到 www**（regex_uri 保留路径；query 不保留，属可接受边缘场景） | — |
 | https://admin.orbit-e.com | `/*` | admin 172.28.0.32:3001 |
 | https://admin.orbit-e.com | `/api/*` 与 `/admin/api/*`（priority 200；admin 前端调用 `/admin/api/*`） | api 172.28.0.31:8080 |
+
+**为什么裸域 301 到 www**：前端 API 地址（NEXT_PUBLIC_API_URL）与图片 URL（MINIO_PUBLIC_URL）都是 www 前缀；Go API 的 CORS 白名单硬编码仅 `localhost:3000/3001`（`services/api/cmd/api/main.go` AllowOrigins），从裸域访问会跨域被浏览器拦截（表现为登录验证码不显示、登录失败）。裸域 301 统一到 www 后全站同源，问题根除。若将来需要裸域直用：改 Go 代码把 BASE_URL 加入 AllowOrigins 并重建 api。
 
 - 入口：APISIX standalone（`sub2api-apisix` 容器，80/443），路由文件 `/home/ubuntu/sub2api-prod/apisix/apisix.base.yaml`
 - 证书：Let's Encrypt（certbot 宿主机 standalone :8888 + ACME 路由放行），deploy hook 自动续期
