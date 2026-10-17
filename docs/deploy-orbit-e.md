@@ -78,6 +78,9 @@ ssh yardai 'docker run --rm -v starai_minio_data:/data -v /tmp:/backup alpine ta
 
 ## 6. 已知边界
 
+- **服务器出口公网带宽约 3Mbps（小水管）**：APISIX → 客户端是全链路瓶颈（容器间 40ms 拉 1.4MB，出公网 4.5s；跨境访问未压缩大 JSON 曾达 70s 导致灵感广场渲染为空）。
+  已在 APISIX 网关层开启 gzip（`apisix/config.yaml` http_configuration_snippet：`gzip on` + `gzip_types application/json text/css application/javascript image/svg+xml`；`text/event-stream` 不在列表，**SSE 流式不受影响**）。
+  实测 `/api/gallery/references` 1.4MB → 411KB，跨境端到端 70s → **0.97s**。后续若仍慢：升级服务器带宽，或应用层给该接口瘦身（分页/裁剪字段）。
 - **OpenRouter 生图模型区域限制**：该 HK 出口 IP 调 `openai/gpt-image-2`、`google/gemini-*-image` 均返回 `403 not available in your region`（本地同现象）。**已验证可用**：`seedream-5-0-lite`（生成成功且新图 URL 自动为公共域名）、`qwen-image-3`（慢但在跑）。聊天模型（z-ai/glm-5.3-flash）正常。
   若需切换 ecom_factory 生图模型：
   `UPDATE workflow_definitions SET runtime_config=jsonb_set(runtime_config,'{generation_model_code}','"seedream-5-0-lite"'), updated_at=now() WHERE code='ecom_factory';`
