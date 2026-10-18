@@ -179,14 +179,15 @@ export function LoginModal({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    if (captchaEnabled && tab === "account") {
+    // 邮箱验证码与账号密码登录都要过图形验证码，因此打开弹窗即加载，两个 tab 共用一张。
+    if (captchaEnabled) {
       loadCaptcha();
     } else {
       setCaptchaId("");
       setCaptchaSvg("");
       setCaptchaInput("");
     }
-  }, [open, captchaEnabled, loadCaptcha, tab]);
+  }, [open, captchaEnabled, loadCaptcha]);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -210,6 +211,7 @@ export function LoginModal({ open, onClose }: Props) {
   const sendCode = async () => {
     if (!email.trim()) return setError(t("login.enterEmail"));
     if (!agreed) return setError(t("login.agreeRequired"));
+    if (captchaEnabled && !captchaInput.trim()) return setError(t("login.enterCaptcha"));
     setLoading(true);
     setError("");
     try {
@@ -225,6 +227,8 @@ export function LoginModal({ open, onClose }: Props) {
     } catch (err) {
       setError(err instanceof Error ? err.message : t("login.sendFailed"));
     } finally {
+      // 图形验证码是一次性的（后端校验即消费），无论成败都要换一张。
+      if (captchaEnabled) loadCaptcha();
       setLoading(false);
     }
   };
@@ -342,6 +346,7 @@ export function LoginModal({ open, onClose }: Props) {
               {tab === "email" ? (
                 <form onSubmit={verifyEmail} className="space-y-4">
                   <input type="email" placeholder={t("login.email")} value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none" />
+                  {captchaEnabled && <CaptchaRow captchaSvg={captchaSvg} captchaInput={captchaInput} onCaptchaInputChange={setCaptchaInput} onRefresh={loadCaptcha} />}
                   <div className="flex gap-2">
                     <input type="text" placeholder={t("login.emailCode")} value={emailCode} onChange={(e) => setEmailCode(e.target.value)} required maxLength={6} className="min-w-0 flex-1 rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none" />
                     <button type="button" disabled={loading || countdown > 0} onClick={sendCode} className="shrink-0 rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">

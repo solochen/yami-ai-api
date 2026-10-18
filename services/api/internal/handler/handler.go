@@ -537,7 +537,7 @@ func (h *Handler) SendEmailCode(c *gin.Context) {
 		util.BadRequest(c, "参数错误")
 		return
 	}
-	res, err := h.emailOTP.SendCode(c.Request.Context(), req.Email, req.CaptchaID, req.CaptchaCode, false)
+	res, err := h.emailOTP.SendCode(c.Request.Context(), req.Email, req.CaptchaID, req.CaptchaCode, h.imageCaptchaEnabled(c.Request.Context()))
 	if err != nil {
 		util.Fail(c, 400, 400, err.Error())
 		return
