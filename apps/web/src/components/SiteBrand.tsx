@@ -36,6 +36,9 @@ type BrandData = Pick<
   | "customer_service_qr_tip"
   | "customer_service_phone"
   | "customer_service_wechat"
+  | "customer_service_telegram"
+  | "customer_service_qq"
+  | "customer_service_email"
   | "customer_service_hours"
 >;
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Bot, Boxes, Check, Clock3, Code2, Compass, Copy, Download, Headphones, ImageIcon, KeyRound, MessageCircle, Phone, Play, UserRound, Wand2, X } from "lucide-react";
+import { ArrowRight, Bot, Boxes, Check, Clock3, Code2, Compass, Copy, Download, Headphones, ImageIcon, KeyRound, Mail, MessageCircle, MessagesSquare, Phone, Play, Send, UserRound, Wand2, X } from "lucide-react";
 import { siAlibabacloud, siAnthropic, siDeepseek, siFlux, siGooglegemini, siHuggingface, siKuaishou, type SimpleIcon } from "simple-icons";
 import { LoginModal } from "@/components/LoginModal";
 import { SiteBrand, useSiteBranding } from "@/components/SiteBrand";
@@ -514,6 +514,13 @@ function CustomerService({ config }: { config: CustomerServiceConfig }) {
   const name = config.customer_service_name || t("customerService.name");
   const subtitle = config.customer_service_subtitle || t("customerService.subtitle");
   const qrTip = config.customer_service_qr_tip || t("customerService.qrTip");
+  // Telegram 允许填 @用户名、用户名或完整链接，统一解析成可直接打开的地址。
+  const telegramHref = (() => {
+    const raw = (config.customer_service_telegram || "").trim();
+    if (!raw) return "";
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return `https://t.me/${raw.replace(/^@/, "")}`;
+  })();
   const copyValue = async (label: string, value?: string) => {
     if (!value) return;
     await navigator.clipboard?.writeText(value);
@@ -609,6 +616,34 @@ function CustomerService({ config }: { config: CustomerServiceConfig }) {
                     <span className="flex items-center gap-3"><MessageCircle size={18} className="text-[var(--mcdl-color-accent)]" /><span><span className="mcdl-muted-copy block text-[11px]">{t("customerService.wechat")}</span><span className="text-sm font-semibold">{config.customer_service_wechat}</span></span></span>
                     {copied === "wechat" ? <Check size={17} className="text-[var(--mcdl-color-positive)]" /> : <Copy size={17} className="mcdl-muted-copy" />}
                   </button>
+                )}
+                {config.customer_service_telegram && (
+                  <div className="mcdl-hover-quiet flex w-full items-center gap-2 rounded-xl border border-[var(--mcdl-border-ghost)] bg-[rgba(245,239,235,.035)] px-3.5 py-3 transition">
+                    <a href={telegramHref} target="_blank" rel="noreferrer" className="flex min-w-0 flex-1 items-center gap-3">
+                      <Send size={18} className="shrink-0 text-[var(--mcdl-color-accent)]" />
+                      <span className="min-w-0"><span className="mcdl-muted-copy block text-[11px]">{t("customerService.telegram")}</span><span className="block truncate text-sm font-semibold">{config.customer_service_telegram}</span></span>
+                    </a>
+                    <button type="button" onClick={() => copyValue("telegram", config.customer_service_telegram)} aria-label={t("common.copy")} className="mcdl-hover-press grid h-8 w-8 shrink-0 place-items-center rounded-lg">
+                      {copied === "telegram" ? <Check size={17} className="text-[var(--mcdl-color-positive)]" /> : <Copy size={17} className="mcdl-muted-copy" />}
+                    </button>
+                  </div>
+                )}
+                {config.customer_service_qq && (
+                  <button type="button" onClick={() => copyValue("qq", config.customer_service_qq)} className="mcdl-hover-quiet mcdl-hover-press flex w-full items-center justify-between rounded-xl border border-[var(--mcdl-border-ghost)] bg-[rgba(245,239,235,.035)] px-3.5 py-3 text-left transition">
+                    <span className="flex items-center gap-3"><MessagesSquare size={18} className="text-[var(--mcdl-color-accent)]" /><span><span className="mcdl-muted-copy block text-[11px]">{t("customerService.qq")}</span><span className="text-sm font-semibold">{config.customer_service_qq}</span></span></span>
+                    {copied === "qq" ? <Check size={17} className="text-[var(--mcdl-color-positive)]" /> : <Copy size={17} className="mcdl-muted-copy" />}
+                  </button>
+                )}
+                {config.customer_service_email && (
+                  <div className="mcdl-hover-quiet flex w-full items-center gap-2 rounded-xl border border-[var(--mcdl-border-ghost)] bg-[rgba(245,239,235,.035)] px-3.5 py-3 transition">
+                    <a href={`mailto:${config.customer_service_email}`} className="flex min-w-0 flex-1 items-center gap-3">
+                      <Mail size={18} className="shrink-0 text-[var(--mcdl-color-accent)]" />
+                      <span className="min-w-0"><span className="mcdl-muted-copy block text-[11px]">{t("customerService.email")}</span><span className="block truncate text-sm font-semibold">{config.customer_service_email}</span></span>
+                    </a>
+                    <button type="button" onClick={() => copyValue("email", config.customer_service_email)} aria-label={t("common.copy")} className="mcdl-hover-press grid h-8 w-8 shrink-0 place-items-center rounded-lg">
+                      {copied === "email" ? <Check size={17} className="text-[var(--mcdl-color-positive)]" /> : <Copy size={17} className="mcdl-muted-copy" />}
+                    </button>
+                  </div>
                 )}
                 {config.customer_service_hours && (
                   <div className="flex items-center gap-3 rounded-xl border border-[var(--mcdl-border-ghost)] bg-[rgba(245,239,235,.035)] px-3.5 py-3">

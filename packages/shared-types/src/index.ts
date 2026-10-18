@@ -180,6 +180,9 @@ export interface SystemConfig {
   customer_service_qr_tip?: string;
   customer_service_phone?: string;
   customer_service_wechat?: string;
+  customer_service_telegram?: string;
+  customer_service_qq?: string;
+  customer_service_email?: string;
   customer_service_hours?: string;
   generation_languages?: GenerationLanguage[];
   ui_languages?: UILanguage[];

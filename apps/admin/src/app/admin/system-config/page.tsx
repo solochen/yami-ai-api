@@ -1311,6 +1311,9 @@ export default function SystemConfigPage() {
                 {renderItem({ key: "customer_service_qr_tip", label: "二维码提示语", type: "text", hint: "显示在二维码下方。" })}
                 {renderItem({ key: "customer_service_phone", label: "手机号", type: "text" })}
                 {renderItem({ key: "customer_service_wechat", label: "微信号", type: "text" })}
+                {renderItem({ key: "customer_service_telegram", label: "Telegram", type: "text", hint: "填 @用户名、用户名或 t.me 链接，前台点击直接打开。" })}
+                {renderItem({ key: "customer_service_qq", label: "QQ 号", type: "text", hint: "前台点击复制号码。" })}
+                {renderItem({ key: "customer_service_email", label: "客服邮箱", type: "text", hint: "前台点击直接唤起写信。" })}
                 {renderItem({ key: "customer_service_hours", label: "工作时间", type: "text", hint: "例如：00:00 - 23:59。" })}
               </div>
 
@@ -1401,6 +1404,9 @@ export default function SystemConfigPage() {
                 <div className="mt-5 space-y-2 text-xs text-white/60">
                   <div>手机号：{String(configs.customer_service_phone || "未配置")}</div>
                   <div>微信号：{String(configs.customer_service_wechat || "未配置")}</div>
+                  <div>Telegram：{String(configs.customer_service_telegram || "未配置")}</div>
+                  <div>QQ：{String(configs.customer_service_qq || "未配置")}</div>
+                  <div>邮箱：{String(configs.customer_service_email || "未配置")}</div>
                   <div>工作时间：{String(configs.customer_service_hours || "未配置")}</div>
                 </div>
               </div>
