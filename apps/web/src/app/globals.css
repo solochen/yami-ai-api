@@ -1319,6 +1319,14 @@ html.mcdl-product-ui .rounded-3xl {
   background: var(--mcdl-color-surface-subtle);
 }
 
+/* hover: 变体不会被上面的类名映射覆盖：缺了这段，悬停背景会回落到 Tailwind
+   的原始浅色（gray-50 接近纯白），而文字仍是暗色主题 token，形成白底白字。 */
+.mcdl-dialog-surface .hover\:bg-gray-50:hover,
+.mcdl-dialog-surface .hover\:bg-gray-100:hover,
+.mcdl-dialog-surface .hover\:bg-gray-200:hover {
+  background: var(--mcdl-hover-surface);
+}
+
 .mcdl-dialog-surface .bg-white:not(img) {
   background: var(--mcdl-color-surface-card);
 }
