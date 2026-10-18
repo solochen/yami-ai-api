@@ -94,14 +94,21 @@ func (s *Service) IsDebugOTP(ctx context.Context) bool {
 
 // Send delivers a plain-text email via the configured provider.
 func (s *Service) Send(ctx context.Context, cfg Config, to, subject, body string) error {
-	if cfg.Provider == "resend" {
-		return s.sendResend(ctx, cfg, to, subject, body)
-	}
-	return s.sendSMTP(cfg, to, subject, body)
+	return s.SendRich(ctx, cfg, to, subject, body, "")
 }
 
-// sendSMTP delivers a plain-text email via SMTP (supports SSL:465 and STARTTLS:587).
-func (s *Service) sendSMTP(cfg Config, to, subject, body string) error {
+// SendRich delivers a multipart/alternative email: clients that render HTML use
+// htmlBody, everything else falls back to textBody. An empty htmlBody degrades
+// to the original single-part plain-text message.
+func (s *Service) SendRich(ctx context.Context, cfg Config, to, subject, textBody, htmlBody string) error {
+	if cfg.Provider == "resend" {
+		return s.sendResend(ctx, cfg, to, subject, textBody, htmlBody)
+	}
+	return s.sendSMTP(cfg, to, subject, textBody, htmlBody)
+}
+
+// sendSMTP delivers an email via SMTP (supports SSL:465 and STARTTLS:587).
+func (s *Service) sendSMTP(cfg Config, to, subject, textBody, htmlBody string) error {
 	if !cfg.Enabled || cfg.Host == "" || cfg.User == "" || cfg.Pass == "" {
 		return fmt.Errorf("SMTP 未启用或配置不完整")
 	}
@@ -117,7 +124,7 @@ func (s *Service) sendSMTP(cfg Config, to, subject, body string) error {
 	if !strings.EqualFold(extractEmail(from), strings.TrimSpace(cfg.User)) {
 		from = cfg.User
 	}
-	msg := buildMessage(from, to, subject, body)
+	msg := buildMessage(from, to, subject, textBody, htmlBody)
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	auth := smtp.PlainAuth("", cfg.User, cfg.Pass, cfg.Host)
 
@@ -127,7 +134,7 @@ func (s *Service) sendSMTP(cfg Config, to, subject, body string) error {
 	return smtp.SendMail(addr, auth, extractEmail(from), []string{to}, msg)
 }
 
-func (s *Service) sendResend(ctx context.Context, cfg Config, to, subject, body string) error {
+func (s *Service) sendResend(ctx context.Context, cfg Config, to, subject, textBody, htmlBody string) error {
 	if !cfg.Enabled || cfg.ResendAPIKey == "" || cfg.ResendFrom == "" {
 		return fmt.Errorf("Resend 未启用或配置不完整")
 	}
@@ -139,7 +146,10 @@ func (s *Service) sendResend(ctx context.Context, cfg Config, to, subject, body 
 		"from":    cfg.ResendFrom,
 		"to":      []string{to},
 		"subject": subject,
-		"text":    body,
+		"text":    textBody,
+	}
+	if strings.TrimSpace(htmlBody) != "" {
+		payload["html"] = htmlBody
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -206,9 +216,10 @@ func sendTLS(addr, host string, auth smtp.Auth, from string, to []string, msg []
 }
 
 // buildMessage assembles an RFC-compliant message: non-ASCII headers are
-// RFC 2047 encoded and the body is base64 — QQ/163 reject raw UTF-8 headers
-// with "502 Invalid input".
-func buildMessage(from, to, subject, body string) []byte {
+// RFC 2047 encoded and bodies are base64 — QQ/163 reject raw UTF-8 headers
+// with "502 Invalid input". A non-empty htmlBody produces
+// multipart/alternative with the plain-text part first, as RFC 2046 requires.
+func buildMessage(from, to, subject, textBody, htmlBody string) []byte {
 	fromName, fromAddr := splitAddress(from)
 	fromHeader := fmt.Sprintf("<%s>", fromAddr)
 	if fromName != "" {
@@ -221,10 +232,29 @@ func buildMessage(from, to, subject, body string) []byte {
 		fmt.Sprintf("Date: %s", time.Now().Format(time.RFC1123Z)),
 		fmt.Sprintf("Message-ID: <%s@%s>", randomID(), domainOf(fromAddr)),
 		"MIME-Version: 1.0",
-		"Content-Type: text/plain; charset=UTF-8",
-		"Content-Transfer-Encoding: base64",
 	}
-	return []byte(strings.Join(headers, "\r\n") + "\r\n\r\n" + wrapBase64(body) + "\r\n")
+	if strings.TrimSpace(htmlBody) == "" {
+		headers = append(headers,
+			"Content-Type: text/plain; charset=UTF-8",
+			"Content-Transfer-Encoding: base64")
+		return []byte(strings.Join(headers, "\r\n") + "\r\n\r\n" + wrapBase64(textBody) + "\r\n")
+	}
+
+	boundary := "=_orbit_e_" + randomID()
+	headers = append(headers, fmt.Sprintf("Content-Type: multipart/alternative; boundary=%q", boundary))
+
+	var b strings.Builder
+	b.WriteString(strings.Join(headers, "\r\n") + "\r\n\r\n")
+	writePart := func(contentType, content string) {
+		b.WriteString("--" + boundary + "\r\n")
+		b.WriteString("Content-Type: " + contentType + "; charset=UTF-8\r\n")
+		b.WriteString("Content-Transfer-Encoding: base64\r\n\r\n")
+		b.WriteString(wrapBase64(content) + "\r\n")
+	}
+	writePart("text/plain", textBody)
+	writePart("text/html", htmlBody)
+	b.WriteString("--" + boundary + "--\r\n")
+	return []byte(b.String())
 }
 
 // splitAddress parses `Name <addr>` or a bare address.

@@ -1630,6 +1630,7 @@ export default function SystemConfigPage() {
             {renderItem({ key: "smtp_user", label: "SMTP 用户名", type: "text", hint: "通常是完整邮箱地址。" })}
             {renderItem({ key: "smtp_pass", label: `SMTP ${smtpProvider?.passLabel || "密码/授权码"}`, type: "password" })}
             {renderItem({ key: "smtp_from", label: "发件人", type: "text", hint: "例如 你的站点名称 <noreply@yourdomain.com>。留空则使用 SMTP 用户名。" }, "md:col-span-2")}
+            {renderItem({ key: "email_logo_url", label: "邮件模板 Logo 地址", type: "text", hint: "留空则使用站点地址下的 /assets/yihangai-logo.png。必须是公网可访问的绝对地址，邮件客户端才能加载。" }, "md:col-span-2")}
               </>
             )}
           </div>

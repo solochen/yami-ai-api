@@ -22,6 +22,9 @@ import (
 
 var emailRe = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 
+// emailOTPTTL 同时决定验证码在缓存里的存活时间与邮件正文中告知用户的有效期。
+const emailOTPTTL = 10 * time.Minute
+
 type EmailOTPService struct {
 	auth    *AuthService
 	captcha *CaptchaService
@@ -52,7 +55,7 @@ func (s *EmailOTPService) SendCode(ctx context.Context, email, captchaID, captch
 		return nil, errors.New("发送过于频繁，请稍后再试")
 	}
 	code := randomDigits(6)
-	if err := s.cache.SetTemp(ctx, "email_otp:"+email, code, 10*time.Minute); err != nil {
+	if err := s.cache.SetTemp(ctx, "email_otp:"+email, code, emailOTPTTL); err != nil {
 		return nil, err
 	}
 	_ = s.cache.SetTemp(ctx, "email_otp_cooldown:"+email, "1", 60*time.Second)
@@ -64,8 +67,15 @@ func (s *EmailOTPService) SendCode(ctx context.Context, email, captchaID, captch
 	if mailCfg.Enabled {
 		siteName := s.siteName(ctx)
 		subject := fmt.Sprintf("%s 登录验证码", siteName)
-		body := fmt.Sprintf("您好！\n\n您的登录验证码是：%s\n有效期 10 分钟，请勿泄露给他人。\n\n— %s", code, siteName)
-		if err := s.mailer.Send(ctx, mailCfg, email, subject, body); err != nil {
+		htmlBody, textBody := mailer.RenderOTPEmail(mailer.OTPEmailData{
+			SiteName: siteName,
+			Tagline:  s.configString(ctx, "site_description"),
+			LogoURL:  s.emailLogoURL(ctx),
+			SiteURL:  s.siteBaseURL(ctx),
+			Code:     code,
+			Minutes:  int(emailOTPTTL / time.Minute),
+		})
+		if err := s.mailer.SendRich(ctx, mailCfg, email, subject, textBody, htmlBody); err != nil {
 			log.Printf("[email_otp] mail send failed provider=%s to=%s err=%v", mailCfg.Provider, email, err)
 			if !debug {
 				return nil, fmt.Errorf("邮件发送失败：%v", err)
@@ -88,13 +98,45 @@ func (s *EmailOTPService) SendCode(ctx context.Context, email, captchaID, captch
 func (s *EmailOTPService) siteName(ctx context.Context) string {
 	var raw []byte
 	if err := s.auth.db.QueryRow(ctx, `SELECT value FROM system_configs WHERE key='site_name'`).Scan(&raw); err != nil {
-		return "YiHangAI"
+		return "Orbit-E AI"
 	}
 	var name string
 	if json.Unmarshal(raw, &name) != nil || name == "" {
-		return "YiHangAI"
+		return "Orbit-E AI"
 	}
 	return name
+}
+
+// configString 读取 system_configs 中以 JSON 字符串保存的配置项。
+func (s *EmailOTPService) configString(ctx context.Context, key string) string {
+	var raw []byte
+	if err := s.auth.db.QueryRow(ctx, `SELECT value FROM system_configs WHERE key=$1`, key).Scan(&raw); err != nil {
+		return ""
+	}
+	var v string
+	if json.Unmarshal(raw, &v) != nil {
+		return ""
+	}
+	return strings.TrimSpace(v)
+}
+
+// siteBaseURL 返回站点根地址（已去掉末尾斜杠）。
+func (s *EmailOTPService) siteBaseURL(ctx context.Context) string {
+	return strings.TrimRight(s.configString(ctx, "site_base_url"), "/")
+}
+
+// emailLogoURL 决定邮件头部 logo 的地址。邮件客户端只接受绝对地址，
+// 所以优先用 email_logo_url 配置；未配置时回退到站点自身的静态资源，
+// 站点地址也为空时返回空串，由模板省略 logo 而不是渲染一个坏图。
+func (s *EmailOTPService) emailLogoURL(ctx context.Context) string {
+	if v := s.configString(ctx, "email_logo_url"); v != "" {
+		return v
+	}
+	base := s.siteBaseURL(ctx)
+	if base == "" {
+		return ""
+	}
+	return base + "/assets/yihangai-logo.png"
 }
 
 type EmailVerifyResult struct {
@@ -202,15 +244,12 @@ func randomDigits(n int) string {
 	return b.String()
 }
 
-var nickAdjs = []string{"星光", "晨曦", "云端", "灵感", "智慧", "幻想", "量子", "星云", "极光", "流星"}
-var nickNouns = []string{"旅人", "探索者", "创作者", "梦想家", "行者", "玩家", "访客", "旅者"}
-
+// randomUserProfile 生成首次注册用户的默认昵称与头像。
+// 昵称格式为 orbit + 4 位数字，例如 orbit0722。
 func randomUserProfile() (nickname, avatarURL string) {
-	a, _ := rand.Int(rand.Reader, big.NewInt(int64(len(nickAdjs))))
-	n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(nickNouns))))
 	suffix, _ := rand.Int(rand.Reader, big.NewInt(10000))
 	seed, _ := rand.Int(rand.Reader, big.NewInt(1<<31))
-	nickname = fmt.Sprintf("%s%s%04d", nickAdjs[a.Int64()], nickNouns[n.Int64()], suffix.Int64())
+	nickname = fmt.Sprintf("orbit%04d", suffix.Int64())
 	avatarURL = fmt.Sprintf("https://api.dicebear.com/7.x/avataaars/svg?seed=%d", seed.Int64())
 	return nickname, avatarURL
 }
