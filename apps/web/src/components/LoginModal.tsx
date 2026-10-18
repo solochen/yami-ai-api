@@ -196,6 +196,7 @@ export function LoginModal({ open, onClose }: Props) {
   }, [countdown]);
 
   const oauthLogin = async (provider: "google" | "github") => {
+    if (!agreed) return setError(t("login.agreeRequired"));
     setOauthLoading(provider);
     setError("");
     try {
@@ -261,6 +262,7 @@ export function LoginModal({ open, onClose }: Props) {
 
   const accountLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!agreed) return setError(t("login.agreeRequired"));
     if (captchaEnabled && !captchaInput.trim()) return setError(t("login.enterCaptcha"));
     setLoading(true);
     setError("");
@@ -302,6 +304,19 @@ export function LoginModal({ open, onClose }: Props) {
   const siteName = site_name || "Orbit-E AI";
   const legalTitle = legalDoc === "privacy" ? privacy_title || t("login.privacy") : terms_title || t("login.terms");
   const legalContent = legalDoc === "privacy" ? privacy_content || "" : terms_content || "";
+
+  // 两个 tab 共用：账号密码 tab 同样能看到 OAuth 按钮，勾选框必须在该 tab 内可见可勾。
+  const agreementRow = (
+    <label className="flex cursor-pointer select-none items-start gap-2 text-xs text-gray-500">
+      <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
+      <span>
+        {t("login.agreePrefix")}
+        <button type="button" onClick={(e) => { e.preventDefault(); setLegalDoc("terms"); }} className="mx-0.5 text-primary hover:underline">{t("login.terms")}</button>
+        {t("login.and")}
+        <button type="button" onClick={(e) => { e.preventDefault(); setLegalDoc("privacy"); }} className="mx-0.5 text-primary hover:underline">{t("login.privacy")}</button>
+      </span>
+    </label>
+  );
 
   return (
     <Dialog.Root open={open} onOpenChange={(value) => !value && onClose()}>
@@ -354,15 +369,7 @@ export function LoginModal({ open, onClose }: Props) {
                     </button>
                   </div>
                   <input type="text" placeholder={t("login.referral")} value={referralCode} onChange={(e) => setReferralCode(e.target.value.replace(/\D/g, "").slice(0, 6))} maxLength={6} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none" />
-                  <label className="flex cursor-pointer select-none items-start gap-2 text-xs text-gray-500">
-                    <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
-                    <span>
-                      {t("login.agreePrefix")}
-                      <button type="button" onClick={(e) => { e.preventDefault(); setLegalDoc("terms"); }} className="mx-0.5 text-primary hover:underline">{t("login.terms")}</button>
-                      {t("login.and")}
-                      <button type="button" onClick={(e) => { e.preventDefault(); setLegalDoc("privacy"); }} className="mx-0.5 text-primary hover:underline">{t("login.privacy")}</button>
-                    </span>
-                  </label>
+                  {agreementRow}
                   {error && <p className="text-sm text-danger">{error}</p>}
                   <button type="submit" disabled={loading || !agreed} className="w-full rounded-xl bg-primary py-3 font-semibold text-dark transition hover:bg-primary/90 disabled:opacity-50">
                     {loading ? t("login.verifying") : t("login.submit")}
@@ -374,8 +381,9 @@ export function LoginModal({ open, onClose }: Props) {
                   <input type="email" placeholder={t("login.email")} value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none" />
                   <input type="password" placeholder={t("login.password")} value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none" />
                   {captchaEnabled && <CaptchaRow captchaSvg={captchaSvg} captchaInput={captchaInput} onCaptchaInputChange={setCaptchaInput} onRefresh={loadCaptcha} />}
+                  {agreementRow}
                   {error && <p className="text-sm text-danger">{error}</p>}
-                  <button type="submit" disabled={loading} className="w-full rounded-xl bg-primary py-3 font-semibold text-dark transition hover:bg-primary/90 disabled:opacity-50">
+                  <button type="submit" disabled={loading || !agreed} className="w-full rounded-xl bg-primary py-3 font-semibold text-dark transition hover:bg-primary/90 disabled:opacity-50">
                     {loading ? t("login.loading") : t("login.login")}
                   </button>
                 </form>
