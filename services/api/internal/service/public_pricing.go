@@ -52,7 +52,11 @@ func (s *ModelService) publicPriceRule(
 		}
 		return nil, fmt.Errorf("%w: %s", billing.ErrProviderCostMissing, model.Code)
 	}
+	// 配了 user_price_rule 的线路按售价规则对外展示（与扣费口径一致）。
 	rule := copyMap(selected.CostRule)
+	if len(selected.UserPriceRule) > 0 {
+		rule = copyMap(selected.UserPriceRule)
+	}
 	billingType := strings.ToLower(strings.TrimSpace(stringValue(rule["billing_type"])))
 	price := map[string]interface{}{"billing_type": billingType}
 	// 峰谷计价的上游（如腾讯云 DeepSeek）在不同时段价格不同，前台展示按当前

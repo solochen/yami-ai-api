@@ -18,6 +18,7 @@ interface ModelRoute {
   extra_params: Record<string, unknown>;
   runtime_rule: Record<string, unknown>;
   cost_rule: Record<string, unknown>;
+  user_price_rule?: Record<string, unknown>;
   priority: number;
   weight: number;
   timeout_seconds: number;
@@ -129,7 +130,7 @@ export function ModelRoutesEditor({ modelId, upstreamModel, endpoint, requestMod
   const [profits, setProfits] = useState<ModelRouteProfit[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<RouteForm>(() => emptyRoute({ upstreamModel, endpoint, billingType: defaultBillingType, requestMode }));
-  const [advanced, setAdvanced] = useState({ headers: "{}", extra: "{}", runtime: "{}" });
+  const [advanced, setAdvanced] = useState({ headers: "{}", extra: "{}", runtime: "{}", userPrice: "{}" });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -150,8 +151,21 @@ export function ModelRoutesEditor({ modelId, upstreamModel, endpoint, requestMod
     const next = emptyRoute({ upstreamModel, endpoint, billingType: defaultBillingType, requestMode });
     setEditingId(0);
     setForm(next);
-    setAdvanced({ headers: "{}", extra: "{}", runtime: "{}" });
+    setAdvanced({ headers: "{}", extra: "{}", runtime: "{}", userPrice: "{}" });
     setMessage("");
+  };
+
+  const parseUserPriceRule = (raw: string): Record<string, unknown> => {
+    const text = (raw || "").trim();
+    if (!text || text === "{}") return {};
+    try {
+      const parsed = JSON.parse(text);
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return {};
+      return parsed as Record<string, unknown>;
+    } catch {
+      setMessage("用户售价规则 JSON 格式错误，已按留空处理");
+      return {};
+    }
   };
 
   const beginEdit = (route: ModelRoute) => {
@@ -161,10 +175,11 @@ export function ModelRoutesEditor({ modelId, upstreamModel, endpoint, requestMod
       upstream_model: route.upstream_model, endpoint: route.endpoint, base_url: route.base_url,
       api_key: route.api_key || "", auth_type: route.auth_type, api_key_header: route.api_key_header,
       headers: route.headers || {}, extra_params: route.extra_params || {}, runtime_rule: route.runtime_rule || {}, cost_rule: normalizedCostRule(route.cost_rule, defaultBillingType),
+      user_price_rule: route.user_price_rule || {},
       priority: route.priority, weight: route.weight, timeout_seconds: requestMode === "images" ? Math.max(600, route.timeout_seconds) : route.timeout_seconds,
       max_retries: route.max_retries, is_enabled: route.is_enabled,
     });
-    setAdvanced({ headers: jsonText(route.headers), extra: jsonText(route.extra_params), runtime: jsonText(route.runtime_rule) });
+    setAdvanced({ headers: jsonText(route.headers), extra: jsonText(route.extra_params), runtime: jsonText(route.runtime_rule), userPrice: jsonText(route.user_price_rule || {}) });
     setMessage("");
   };
 
@@ -178,6 +193,7 @@ export function ModelRoutesEditor({ modelId, upstreamModel, endpoint, requestMod
         extra_params: JSON.parse(advanced.extra || "{}"),
         runtime_rule: JSON.parse(advanced.runtime || "{}"),
         cost_rule: { ...normalizedCostRule(form.cost_rule, defaultBillingType), billing_type: billingType },
+        user_price_rule: parseUserPriceRule(advanced.userPrice),
       };
       let savedRoute: ModelRoute;
       if (editingId) {
@@ -365,7 +381,10 @@ export function ModelRoutesEditor({ modelId, upstreamModel, endpoint, requestMod
               </> : <label className="text-xs text-gray-600">上游单位成本（算力）<input type="number" min={0} step="0.000001" value={Number(form.cost_rule?.unit_cost || 0)} onChange={(e) => setCostField("unit_cost", Number(e.target.value))} className="mt-1 w-full rounded-lg border bg-white p-2 text-sm" /></label>}
             </div>
           </div>
-          <details className="col-span-2 rounded-lg border p-3"><summary className="cursor-pointer text-xs font-medium text-gray-700">高级配置</summary><div className="mt-3 grid grid-cols-3 gap-3"><label className="text-xs text-gray-600">请求头 JSON<textarea value={advanced.headers} onChange={(e) => setAdvanced({ ...advanced, headers: e.target.value })} className="mt-1 h-28 w-full rounded-lg border p-2 font-mono text-xs" /></label><label className="text-xs text-gray-600">附加参数 JSON<textarea value={advanced.extra} onChange={(e) => setAdvanced({ ...advanced, extra: e.target.value })} className="mt-1 h-28 w-full rounded-lg border p-2 font-mono text-xs" /></label><label className="text-xs text-gray-600">线路运行规则 JSON<textarea value={advanced.runtime} onChange={(e) => setAdvanced({ ...advanced, runtime: e.target.value })} className="mt-1 h-28 w-full rounded-lg border p-2 font-mono text-xs" /></label></div></details>
+          <details className="col-span-2 rounded-lg border p-3"><summary className="cursor-pointer text-xs font-medium text-gray-700">高级配置</summary><div className="mt-3 grid grid-cols-3 gap-3"><label className="text-xs text-gray-600">请求头 JSON<textarea value={advanced.headers} onChange={(e) => setAdvanced({ ...advanced, headers: e.target.value })} className="mt-1 h-28 w-full rounded-lg border p-2 font-mono text-xs" /></label><label className="text-xs text-gray-600">附加参数 JSON<textarea value={advanced.extra} onChange={(e) => setAdvanced({ ...advanced, extra: e.target.value })} className="mt-1 h-28 w-full rounded-lg border p-2 font-mono text-xs" /></label><label className="text-xs text-gray-600">线路运行规则 JSON<textarea value={advanced.runtime} onChange={(e) => setAdvanced({ ...advanced, runtime: e.target.value })} className="mt-1 h-28 w-full rounded-lg border p-2 font-mono text-xs" /></label><label className="col-span-3 text-xs text-gray-600">用户售价规则 JSON（可选）
+              <textarea value={advanced.userPrice} onChange={(e) => setAdvanced({ ...advanced, userPrice: e.target.value })} placeholder='{"billing_type":"per_token","input_cost_per_m":9,"output_cost_per_m":27}' className="mt-1 h-28 w-full rounded-lg border p-2 font-mono text-xs" />
+              <span className="mt-1 block text-[11px] text-gray-500">留空时用户售价由「上游成本」推导。填写后：<b>成本仍按上游成本记账</b>（毛利报表准确），<b>用户售价按本规则计算</b>（同样叠加平台佣金率）。</span>
+            </label></div></details>
           <div className="col-span-2 grid grid-cols-2 gap-3 rounded-lg border p-3">
             {([ ["vision", "图片理解"], ["video_analysis", "视频理解"] ] as const).map(([key, label]) => {
               let rule: Record<string, unknown> = {};

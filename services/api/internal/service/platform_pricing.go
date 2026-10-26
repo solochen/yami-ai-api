@@ -75,6 +75,24 @@ func chargeRouteProviderCost(providerCost float64, source string, cfg billing.Pr
 	return billing.CalculateCharge(providerCost, cfg.GrossMarginPercent)
 }
 
+// routeChargeBreakdown 组装收费明细：ProviderCost 记上游真实成本（用于毛利
+// 审计），UserCharge 按售价依据计算，两者可来自不同的计价规则。
+func routeChargeBreakdown(providerCost, chargeCost float64, source string, cfg billing.PricingConfig) (billing.ChargeBreakdown, error) {
+	provider, err := chargeRouteProviderCost(providerCost, source, cfg)
+	if err != nil {
+		return billing.ChargeBreakdown{}, err
+	}
+	user, err := chargeRouteProviderCost(chargeCost, source, cfg)
+	if err != nil {
+		return billing.ChargeBreakdown{}, err
+	}
+	return billing.ChargeBreakdown{
+		ProviderCost: provider.ProviderCost,
+		UserCharge:   user.UserCharge,
+		Commission:   user.UserCharge - provider.ProviderCost,
+	}, nil
+}
+
 func (s *ModelService) RouteBillingEstimate(
 	ctx context.Context,
 	model *ModelFull,
@@ -121,7 +139,12 @@ func (s *ModelService) RouteBillingEstimate(
 		if availability.Complimentary {
 			providerCost = 0
 		}
-		charge, err := chargeRouteProviderCost(providerCost, availability.Source, cfg)
+		// 配了 user_price_rule 的线路：成本按 cost_rule 记账，收费按售价规则计算。
+		chargeCost := providerCost
+		if len(route.UserPriceRule) > 0 {
+			chargeCost = EstimateRouteUserChargeCost(route, params, promptTokens, outputTokens, 0, 0)
+		}
+		charge, err := routeChargeBreakdown(providerCost, chargeCost, availability.Source, cfg)
 		if err != nil {
 			continue
 		}
@@ -163,7 +186,13 @@ func (s *ModelService) RouteProviderCharge(
 	if availability.Complimentary {
 		providerCost = 0
 	}
-	charge, err := chargeRouteProviderCost(providerCost, availability.Source, cfg)
+	// 收费依据与成本依据可分离：user_price_rule 存在时用它算用户应付，
+	// provider_cost 仍按上游真实成本记账，毛利报表因此保持准确。
+	chargeCost := providerCost
+	if len(route.UserPriceRule) > 0 {
+		chargeCost = EstimateRouteUserChargeCost(route, params, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens)
+	}
+	charge, err := routeChargeBreakdown(providerCost, chargeCost, availability.Source, cfg)
 	return charge, true, cfg, err
 }
 

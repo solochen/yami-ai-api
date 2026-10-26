@@ -357,6 +357,8 @@ export default function SystemConfigPage() {
         vidu_voice_price_per_minute: 2.8125,
         vidu_video_price_per_minute: 2.8125,
         vidu_text_credit_rate: 0.03125,
+        price_drift_threshold_percent: 10,
+        price_drift_alert_email: "",
         web_search_provider: "tavily",
         web_search_api_key: "",
         web_search_exa_api_key: "",
@@ -1441,6 +1443,15 @@ export default function SystemConfigPage() {
             {renderItem({ key: "chat_compression_min_chars", label: "触发字数", type: "number", min: 500, hint: "去掉系统提示后，历史超过这个字数才会压缩。默认 6000。" })}
             {renderItem({ key: "chat_compression_min_messages", label: "触发消息条数", type: "number", min: 2, hint: "历史消息超过这个条数也会压缩。默认 8。" })}
             {renderItem({ key: "chat_compression_keep_messages", label: "保留最近消息条数", type: "number", min: 2, hint: "最近这些消息保持原文，更早的内容才进入摘要。默认 6。" })}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm shadow-gray-950/5">
+          <div className="mb-1 text-sm font-semibold text-gray-900">上游价格漂移巡检</div>
+          <p className="mb-5 text-xs leading-relaxed text-gray-400">定时比对 OpenRouter 实时价与线路配置的上游成本。配了「用户售价规则」的线路，上游涨价不会自动反映到用户售价，毛利会被悄悄压缩，因此这项巡检用于提前发现。超阈值的结果写入 price_drift_alerts，并在配置了收件人时发邮件。</p>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {renderItem({ key: "price_drift_threshold_percent", label: "偏差阈值（%）", type: "number", min: 0, step: 0.1, hint: "上游现价与配置成本偏差超过该比例即告警，默认 10。" })}
+            {renderItem({ key: "price_drift_alert_email", label: "告警收件邮箱", type: "text", hint: "留空则不发邮件，仅写入告警表。" })}
           </div>
         </section>
 

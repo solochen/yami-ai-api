@@ -39,6 +39,10 @@ type ModelRoute struct {
 	ExtraParams         map[string]interface{} `json:"extra_params"`
 	RuntimeRule         map[string]interface{} `json:"runtime_rule"`
 	CostRule            map[string]interface{} `json:"cost_rule"`
+	// UserPriceRule 可选：用户售价的计价依据。为空时售价由 CostRule 推导；
+	// 配置后成本仍按 CostRule 记账（上游真实成本），而售价按本规则计算，
+	// 用于「上游成本恒定、但按另一套价格向用户收费」的场景。
+	UserPriceRule       map[string]interface{} `json:"user_price_rule"`
 	Priority            int                    `json:"priority"`
 	Weight              int                    `json:"weight"`
 	TimeoutSeconds      int                    `json:"timeout_seconds"`
@@ -67,6 +71,7 @@ type ModelRouteInput struct {
 	ExtraParams    map[string]interface{} `json:"extra_params"`
 	RuntimeRule    map[string]interface{} `json:"runtime_rule"`
 	CostRule       map[string]interface{} `json:"cost_rule"`
+	UserPriceRule  map[string]interface{} `json:"user_price_rule"`
 	Priority       int                    `json:"priority"`
 	Weight         int                    `json:"weight"`
 	TimeoutSeconds int                    `json:"timeout_seconds"`
@@ -198,10 +203,10 @@ func validateRouteCostRule(rule map[string]interface{}) error {
 
 func scanModelRoute(row pgx.Row, cipherKey string) (*ModelRoute, error) {
 	var route ModelRoute
-	var headers, extra, runtimeRule, costRule []byte
+	var headers, extra, runtimeRule, costRule, userPriceRule []byte
 	err := row.Scan(&route.ID, &route.ModelID, &route.RouteName, &route.Provider, &route.Protocol,
 		&route.UpstreamModel, &route.Endpoint, &route.BaseURL, &route.APIKey, &route.AuthType,
-		&route.APIKeyHeader, &headers, &extra, &runtimeRule, &costRule, &route.Priority,
+		&route.APIKeyHeader, &headers, &extra, &runtimeRule, &costRule, &userPriceRule, &route.Priority,
 		&route.Weight, &route.TimeoutSeconds, &route.MaxRetries, &route.IsEnabled,
 		&route.HealthStatus, &route.ConsecutiveFailures, &route.SuccessCount, &route.FailureCount,
 		&route.LastSuccessAt, &route.LastFailureAt, &route.CooldownUntil)
@@ -219,11 +224,12 @@ func scanModelRoute(row pgx.Row, cipherKey string) (*ModelRoute, error) {
 	_ = json.Unmarshal(extra, &route.ExtraParams)
 	_ = json.Unmarshal(runtimeRule, &route.RuntimeRule)
 	_ = json.Unmarshal(costRule, &route.CostRule)
+	_ = json.Unmarshal(userPriceRule, &route.UserPriceRule)
 	return &route, nil
 }
 
 const modelRouteColumns = `id, model_id, route_name, provider, protocol, upstream_model, endpoint,
-	base_url, api_key, auth_type, api_key_header, headers, extra_params, runtime_rule, cost_rule,
+	base_url, api_key, auth_type, api_key_header, headers, extra_params, runtime_rule, cost_rule, user_price_rule,
 	priority, weight, timeout_seconds, max_retries, is_enabled, health_status,
 	consecutive_failures, success_count, failure_count, last_success_at, last_failure_at, cooldown_until`
 
@@ -495,14 +501,15 @@ func (s *ModelService) CreateModelRoute(ctx context.Context, modelID int64, in M
 	extra, _ := json.Marshal(in.ExtraParams)
 	runtimeRule, _ := json.Marshal(in.RuntimeRule)
 	costRule, _ := json.Marshal(in.CostRule)
+	userPriceRule, _ := json.Marshal(nonNilRouteRule(in.UserPriceRule))
 	storedAPIKey, err := util.EncryptSecret(in.APIKey, s.routeCipherKey)
 	if err != nil {
 		return nil, errors.New("线路密钥加密失败")
 	}
 	row := s.db.QueryRow(ctx, `INSERT INTO model_routes
-		(model_id,route_name,provider,protocol,upstream_model,endpoint,base_url,api_key,auth_type,api_key_header,headers,extra_params,runtime_rule,cost_rule,priority,weight,timeout_seconds,max_retries,is_enabled)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING `+modelRouteColumns,
-		modelID, in.RouteName, in.Provider, in.Protocol, in.UpstreamModel, in.Endpoint, in.BaseURL, storedAPIKey, in.AuthType, in.APIKeyHeader, headers, extra, runtimeRule, costRule, in.Priority, in.Weight, in.TimeoutSeconds, in.MaxRetries, in.IsEnabled)
+		(model_id,route_name,provider,protocol,upstream_model,endpoint,base_url,api_key,auth_type,api_key_header,headers,extra_params,runtime_rule,cost_rule,user_price_rule,priority,weight,timeout_seconds,max_retries,is_enabled)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING `+modelRouteColumns,
+		modelID, in.RouteName, in.Provider, in.Protocol, in.UpstreamModel, in.Endpoint, in.BaseURL, storedAPIKey, in.AuthType, in.APIKeyHeader, headers, extra, runtimeRule, costRule, userPriceRule, in.Priority, in.Weight, in.TimeoutSeconds, in.MaxRetries, in.IsEnabled)
 	route, err := scanModelRoute(row, s.routeCipherKey)
 	if err != nil {
 		return nil, err
@@ -642,9 +649,10 @@ func (s *ModelService) UpdateModelRoute(ctx context.Context, modelID, routeID in
 	extra, _ := json.Marshal(in.ExtraParams)
 	runtimeRule, _ := json.Marshal(in.RuntimeRule)
 	costRule, _ := json.Marshal(in.CostRule)
-	row := s.db.QueryRow(ctx, `UPDATE model_routes SET route_name=$1,provider=$2,protocol=$3,upstream_model=$4,endpoint=$5,base_url=$6,api_key=$7,auth_type=$8,api_key_header=$9,headers=$10,extra_params=$11,runtime_rule=$12,cost_rule=$13,priority=$14,weight=$15,timeout_seconds=$16,max_retries=$17,is_enabled=$18,updated_at=now()
-		WHERE id=$19 AND model_id=$20 RETURNING `+modelRouteColumns,
-		in.RouteName, in.Provider, in.Protocol, in.UpstreamModel, in.Endpoint, in.BaseURL, storedAPIKey, in.AuthType, in.APIKeyHeader, headers, extra, runtimeRule, costRule, in.Priority, in.Weight, in.TimeoutSeconds, in.MaxRetries, in.IsEnabled, routeID, modelID)
+	userPriceRule, _ := json.Marshal(nonNilRouteRule(in.UserPriceRule))
+	row := s.db.QueryRow(ctx, `UPDATE model_routes SET route_name=$1,provider=$2,protocol=$3,upstream_model=$4,endpoint=$5,base_url=$6,api_key=$7,auth_type=$8,api_key_header=$9,headers=$10,extra_params=$11,runtime_rule=$12,cost_rule=$13,user_price_rule=$14,priority=$15,weight=$16,timeout_seconds=$17,max_retries=$18,is_enabled=$19,updated_at=now()
+		WHERE id=$20 AND model_id=$21 RETURNING `+modelRouteColumns,
+		in.RouteName, in.Provider, in.Protocol, in.UpstreamModel, in.Endpoint, in.BaseURL, storedAPIKey, in.AuthType, in.APIKeyHeader, headers, extra, runtimeRule, costRule, userPriceRule, in.Priority, in.Weight, in.TimeoutSeconds, in.MaxRetries, in.IsEnabled, routeID, modelID)
 	route, err := scanModelRoute(row, s.routeCipherKey)
 	if err != nil {
 		return nil, err
@@ -882,10 +890,14 @@ func estimateRouteProviderCostBase(route *ModelRoute, params map[string]interfac
 	if route == nil {
 		return 0
 	}
+	return estimateRuleCostBase(route.CostRule, params, promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens)
+}
+
+// estimateRuleCostBase 按给定的计价规则（成本规则或用户售价规则）计算金额。
+func estimateRuleCostBase(rule map[string]interface{}, params map[string]interface{}, promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens int) float64 {
 	if params == nil {
 		params = map[string]interface{}{}
 	}
-	rule := route.CostRule
 	typeName := strings.ToLower(strings.TrimSpace(stringValue(rule["billing_type"])))
 	switch typeName {
 	case "per_token":
@@ -994,4 +1006,28 @@ func mergeRouteRuntimeRule(modelRule, routeRule map[string]interface{}) map[stri
 		out[key] = value
 	}
 	return out
+}
+
+// nonNilRouteRule 保证写入 jsonb 列时不会因 nil map 变成 SQL NULL。
+func nonNilRouteRule(rule map[string]interface{}) map[string]interface{} {
+	if rule == nil {
+		return map[string]interface{}{}
+	}
+	return rule
+}
+
+// EstimateRouteUserChargeCost 返回该线路用于「用户售价」的计价金额：
+// 配了 user_price_rule 就按它算（成本仍按 cost_rule 记账），否则等于上游成本。
+func EstimateRouteUserChargeCost(route *ModelRoute, params map[string]interface{}, promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens int) float64 {
+	if route == nil {
+		return 0
+	}
+	if len(route.UserPriceRule) == 0 {
+		return EstimateRouteProviderCostWithTokenDetails(route, params, promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens)
+	}
+	cost := estimateRuleCostBase(route.UserPriceRule, params, promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens)
+	if cost <= 0 {
+		return cost
+	}
+	return cost * routeCostTimeMultiplier(route.UserPriceRule, time.Now())
 }

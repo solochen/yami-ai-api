@@ -136,6 +136,15 @@ func workerRouteCostSource(route workerModelRoute) string {
 	return "route_cost"
 }
 
+// workerRouteProviderCostRule 按给定规则计算成本（用于 user_price_rule 的售价依据）。
+func workerRouteProviderCostRule(rule map[string]interface{}, input map[string]interface{}, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens int) float64 {
+	cost := workerRouteProviderCostBase(workerModelRoute{CostRule: rule}, input, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens)
+	if cost <= 0 {
+		return cost
+	}
+	return cost * workerRouteCostTimeMultiplier(rule, time.Now())
+}
+
 func workerProviderCostFromRoute(route workerModelRoute, input map[string]interface{}, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens int) (float64, bool) {
 	switch workerRouteCostSource(route) {
 	case "route_cost":
@@ -147,17 +156,28 @@ func workerProviderCostFromRoute(route workerModelRoute, input map[string]interf
 	}
 }
 
-func workerChargeRouteProviderCost(ctx context.Context, pool *pgxpool.Pool, providerCost float64, source string) (workerChargeBreakdown, error) {
+// workerChargeRouteProviderCost 组装收费明细：providerCost 是上游真实成本
+// （用于毛利审计），chargeCost 是用户应付的计价依据，两者可来自不同规则
+// （线路配了 user_price_rule 时）。
+func workerChargeRouteProviderCost(ctx context.Context, pool *pgxpool.Pool, providerCost, chargeCost float64, source string) (workerChargeBreakdown, error) {
 	cfg := loadWorkerPricingConfig(ctx, pool)
 	if providerCost < 0 || (providerCost == 0 && source != "complimentary" && source != "local_free" && cfg.MissingCostPolicy == "block") {
 		return workerChargeBreakdown{}, errWorkerProviderCostMissing
 	}
-	charge, err := workerCalculateCharge(providerCost, cfg.GrossMarginPercent)
+	provider, err := workerCalculateCharge(providerCost, cfg.GrossMarginPercent)
 	if err != nil {
 		return workerChargeBreakdown{}, err
 	}
-	charge.Config = cfg
-	return charge, nil
+	user, err := workerCalculateCharge(chargeCost, cfg.GrossMarginPercent)
+	if err != nil {
+		return workerChargeBreakdown{}, err
+	}
+	return workerChargeBreakdown{
+		ProviderCost: provider.ProviderCost,
+		UserCharge:   user.UserCharge,
+		Commission:   user.UserCharge - provider.ProviderCost,
+		Config:       cfg,
+	}, nil
 }
 
 type workerSettlement struct {

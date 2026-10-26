@@ -448,7 +448,11 @@ routeLoop:
 		}
 		costSource, costComplete = "upstream_reported", true
 	}
-	charge, err := workerChargeRouteProviderCost(ctx, pool, providerCost, costSource)
+	chargeCost := providerCost
+	if len(selected.Route.UserPriceRule) > 0 {
+		chargeCost = workerRouteProviderCostRule(selected.Route.UserPriceRule, billingInput, usage.PromptTokens, usage.OutputTokens, 0, 0)
+	}
+	charge, err := workerChargeRouteProviderCost(ctx, pool, providerCost, chargeCost, costSource)
 	if err != nil {
 		message := "上游未返回可核验成本，已停止扣费：" + err.Error()
 		_, _ = pool.Exec(ctx,
@@ -745,6 +749,7 @@ type workerModelRoute struct {
 	RuntimeRule         map[string]interface{}
 	MediaOverrides      map[string]interface{}
 	CostRule            map[string]interface{}
+	UserPriceRule       map[string]interface{}
 	Priority            int
 	Weight              int
 	TimeoutSeconds      int
@@ -810,7 +815,7 @@ func workerRouteRequestTransform(route workerModelRoute) map[string]interface{} 
 var errNoEnabledModelRoutes = errors.New("model has configured routes but none are enabled")
 
 func loadWorkerModelRoutes(ctx context.Context, pool *pgxpool.Pool, modelID int64, fallbackBaseURL, fallbackToken, legacyModel, legacyEndpoint string, legacyExtra, legacyRuntime map[string]interface{}) ([]workerModelRoute, error) {
-	rows, err := pool.Query(ctx, `SELECT id,protocol,upstream_model,endpoint,base_url,api_key,auth_type,api_key_header,headers,extra_params,runtime_rule,cost_rule,priority,weight,timeout_seconds,max_retries,health_status,consecutive_failures,success_count,failure_count,cooldown_until
+	rows, err := pool.Query(ctx, `SELECT id,protocol,upstream_model,endpoint,base_url,api_key,auth_type,api_key_header,headers,extra_params,runtime_rule,cost_rule,user_price_rule,priority,weight,timeout_seconds,max_retries,health_status,consecutive_failures,success_count,failure_count,cooldown_until
 		FROM model_routes WHERE model_id=$1 AND is_enabled=true ORDER BY priority,id`, modelID)
 	if err != nil {
 		return nil, err
@@ -820,8 +825,8 @@ func loadWorkerModelRoutes(ctx context.Context, pool *pgxpool.Pool, modelID int6
 	for rows.Next() {
 		var route workerModelRoute
 		var baseURL, apiKey, authType, apiKeyHeader string
-		var headersRaw, extraRaw, runtimeRaw, costRaw []byte
-		if err := rows.Scan(&route.ID, &route.Protocol, &route.UpstreamModel, &route.Endpoint, &baseURL, &apiKey, &authType, &apiKeyHeader, &headersRaw, &extraRaw, &runtimeRaw, &costRaw, &route.Priority, &route.Weight, &route.TimeoutSeconds, &route.MaxRetries, &route.HealthStatus, &route.ConsecutiveFailures, &route.SuccessCount, &route.FailureCount, &route.CooldownUntil); err != nil {
+		var headersRaw, extraRaw, runtimeRaw, costRaw, userPriceRaw []byte
+		if err := rows.Scan(&route.ID, &route.Protocol, &route.UpstreamModel, &route.Endpoint, &baseURL, &apiKey, &authType, &apiKeyHeader, &headersRaw, &extraRaw, &runtimeRaw, &costRaw, &userPriceRaw, &route.Priority, &route.Weight, &route.TimeoutSeconds, &route.MaxRetries, &route.HealthStatus, &route.ConsecutiveFailures, &route.SuccessCount, &route.FailureCount, &route.CooldownUntil); err != nil {
 			return nil, err
 		}
 		var headers map[string]interface{}
@@ -841,6 +846,7 @@ func loadWorkerModelRoutes(ctx context.Context, pool *pgxpool.Pool, modelID int6
 		_ = json.Unmarshal(runtimeRaw, &route.RuntimeRule)
 		route.MediaOverrides = route.RuntimeRule
 		_ = json.Unmarshal(costRaw, &route.CostRule)
+		_ = json.Unmarshal(userPriceRaw, &route.UserPriceRule)
 		legacyExtraWithoutConnection := mergeWorkerMaps(legacyExtra, map[string]interface{}{})
 		delete(legacyExtraWithoutConnection, "connection")
 		// Preserve the non-credential part of the legacy connection block before it
