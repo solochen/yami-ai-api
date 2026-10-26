@@ -30,17 +30,30 @@ func TestBuildDigitalHumanPersona(t *testing.T) {
 }
 
 func TestDigitalHumanCost(t *testing.T) {
-	if got := digitalHumanCost("audio", 61, 0, 100, 3500, 1); math.Abs(got-101.666667) > 0.001 {
-		t.Fatalf("voice cost = %v", got)
+	// 上游成本：语音 61 秒 × 2.8125 元/分钟
+	if got := digitalHumanProviderCost("audio", 61, 0, 2.8125, 2.8125, 0.03125); math.Abs(got-2.859375) > 0.0001 {
+		t.Fatalf("voice provider cost = %v", got)
 	}
-	if got := digitalHumanCost("video", 90, 0, 100, 3500, 1); got != 5250 {
-		t.Fatalf("video cost = %v", got)
+	// 视频 90 秒 × 2.8125 元/分钟
+	if got := digitalHumanProviderCost("video", 90, 0, 2.8125, 2.8125, 0.03125); math.Abs(got-4.21875) > 0.0001 {
+		t.Fatalf("video provider cost = %v", got)
 	}
-	if got := digitalHumanCost("text", 0, 2.5, 100, 3500, 1); got != 2.5 {
-		t.Fatalf("text cost = %v", got)
+	// 文字会话：Vidu 积分 × 0.03125 元/积分
+	if got := digitalHumanProviderCost("text", 0, 414, 2.8125, 2.8125, 0.03125); math.Abs(got-12.9375) > 0.0001 {
+		t.Fatalf("text provider cost = %v", got)
 	}
-	if got := digitalHumanCost("audio", 0, 9, 100, 3500, 1); got != 0 {
+	if got := digitalHumanProviderCost("audio", 0, 9, 2.8125, 2.8125, 0.03125); got != 0 {
 		t.Fatalf("empty voice cost = %v", got)
+	}
+	// 售价 = 上游成本 ÷ (1 − 平台佣金率)，向上取整到 6 位小数
+	if got := digitalHumanUserCharge(2.8125, 3); math.Abs(got-2.899485) > 0.0001 {
+		t.Fatalf("user charge = %v", got)
+	}
+	if got := digitalHumanUserCharge(2.8125, 0); math.Abs(got-2.8125) > 0.0001 {
+		t.Fatalf("zero margin charge = %v", got)
+	}
+	if got := digitalHumanUserCharge(0, 3); got != 0 {
+		t.Fatalf("zero cost charge = %v", got)
 	}
 }
 

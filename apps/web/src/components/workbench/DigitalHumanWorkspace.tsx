@@ -594,7 +594,7 @@ export function DigitalHumanWorkspace() {
 
         <section className="relative flex min-h-0 flex-col">
           <div className="border-b border-gray-200 px-4 py-2 text-[11px] text-gray-500 dark:border-white/10">
-            {ts("文字按会话消耗计费，语音")} {prices.voice} {ts("算力/分钟，视频")} {prices.video} {ts("算力/分钟")}
+            {ts("文字按会话消耗计费，语音")} {prices.voice.toFixed(2)} {ts("算力/分钟，视频")} {prices.video.toFixed(2)} {ts("算力/分钟")}
           </div>
           <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {messages.map((message, index) => (
