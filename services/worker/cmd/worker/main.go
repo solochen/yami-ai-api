@@ -1201,6 +1201,10 @@ func workerRouteProviderCostBase(route workerModelRoute, input map[string]interf
 		if audioOutputTokens < 0 {
 			audioOutputTokens = 0
 		}
+		if promptTokens <= 0 {
+			// 上游未上报用量时回退到任务输入里的估算值（音频类为精确字符数）。
+			promptTokens = intAny(firstNonNil(input["_estimated_input_tokens"], input["estimated_input_tokens"]))
+		}
 		if promptTokens <= 0 && audioInputTokens > 0 {
 			promptTokens = audioInputTokens
 		}
@@ -1355,6 +1359,17 @@ func executeWorkerGenerationAttempt(ctx context.Context, pool *pgxpool.Pool, p I
 					input[key] = 1.0
 				}
 			}
+		}
+		if isTencentAudioAdapter(route.RuntimeRule) {
+			payload := buildTencentAudioPayload(p.ModelCode, upstreamModel, prompt, input)
+			endpoint = resolveModelEndpoint(endpoint, upstreamModel)
+			timeout := upstreamRequestTimeout(route.RuntimeRule, true)
+			if route.TimeoutSeconds > 0 {
+				timeout = time.Duration(route.TimeoutSeconds) * time.Second
+			}
+			body, status, err := postTencentAudioUpstream(ctx, route.Connection, endpoint, payload, timeout)
+			result.ResponseBody, result.StatusCode = body, status
+			return result, err
 		}
 		if isOpenRouterAudioAdapter(route.RuntimeRule) {
 			payload, payloadErr := buildOpenRouterAudioPayload(ctx, upstreamModel, p.ModelCode, prompt, input)

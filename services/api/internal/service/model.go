@@ -488,6 +488,14 @@ func tokenCostFromRule(rule map[string]interface{}, promptTokens, outputTokens, 
 }
 
 func estimatedTokenCounts(rule, params map[string]interface{}, promptTokens, outputTokens int) (int, int) {
+	// 按字符计费的模型（语音合成等）：上游按字符收费，这里直接用文本字符数，
+	// 与任务创建时注入的 _estimated_input_tokens 保持一致，避免预估与扣费口径不符。
+	if promptTokens <= 0 && strings.EqualFold(strings.TrimSpace(stringValue(rule["input_unit"])), "character") {
+		text := strings.TrimSpace(firstNonEmptyServiceString(stringValue(params["prompt"]), stringValue(params["user_prompt"])))
+		if runes := len([]rune(text)); runes > 0 {
+			promptTokens = runes
+		}
+	}
 	if promptTokens <= 0 {
 		promptTokens = firstPositiveIntValue(params, "_estimated_input_tokens", "estimated_input_tokens")
 		if promptTokens <= 0 {
@@ -2086,4 +2094,14 @@ func (s *ModelService) CountEnabled(ctx context.Context) (int, error) {
 
 func parseTime(t time.Time) string {
 	return t.Format(time.RFC3339)
+}
+
+
+func firstNonEmptyServiceString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

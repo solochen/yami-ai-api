@@ -246,6 +246,13 @@ func (s *TaskService) Create(ctx context.Context, userID int64, input CreateTask
 			return nil, err
 		}
 	} else if taskType == "audio" {
+		// 语音合成/音乐类上游按字符计费，这里注入精确字符数（rune 数），
+		// 预估与结算都按「每百万字符」折算，避免按 token 估算造成的偏差。
+		if _, exists := params["_estimated_input_tokens"]; !exists {
+			if runes := len([]rune(strings.TrimSpace(input.Prompt))); runes > 0 {
+				params["_estimated_input_tokens"] = runes
+			}
+		}
 		if err := validateAudioTaskParams(model, params); err != nil {
 			return nil, err
 		}
