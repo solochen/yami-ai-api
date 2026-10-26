@@ -62,7 +62,7 @@ func TestProductPriceTotal(t *testing.T) {
 	if got := productBudgetLimit(1000); got != 1_000_000 {
 		t.Fatalf("product budget limit = %v, want 1 CNY rate scaled to credits", got)
 	}
-	if got := productBudgetLimit(0); got != 1_000_000 {
+	if got := productBudgetLimit(0); got != 1000*DefaultPaymentComputeRate {
 		t.Fatalf("product budget fallback = %v, want default rate", got)
 	}
 }

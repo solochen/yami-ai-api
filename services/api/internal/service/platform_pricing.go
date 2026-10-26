@@ -106,6 +106,10 @@ func (s *ModelService) RouteBillingEstimate(
 	complete := true
 	var best float64
 	hasPricedRoute := false
+	// 预估阶段通常还没有真实 token 用量（聊天流程会把估算值写进 params），
+	// 沿用旧计费路径的估算链补出 token 数，否则按 0 用量算出的 0 成本会被
+	// 当成「线路未配置成本」而在 block 策略下直接报错。
+	promptTokens, outputTokens = estimatedTokenCounts(model.PriceRule, params, promptTokens, outputTokens)
 	for i := range routes {
 		route := &routes[i]
 		availability := routeCostAvailabilityFor(route)
