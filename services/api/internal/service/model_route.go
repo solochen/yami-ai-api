@@ -868,7 +868,17 @@ func routeAudioTokenCounts(params map[string]interface{}) (int, int) {
 	return input, output
 }
 
+// EstimateRouteProviderCostWithTokenDetails 计算该线路的上游成本，并按
+// cost_rule 声明的时段倍率（峰谷计价）放大。
 func EstimateRouteProviderCostWithTokenDetails(route *ModelRoute, params map[string]interface{}, promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens int) float64 {
+	cost := estimateRouteProviderCostBase(route, params, promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens)
+	if cost <= 0 || route == nil {
+		return cost
+	}
+	return cost * routeCostTimeMultiplier(route.CostRule, time.Now())
+}
+
+func estimateRouteProviderCostBase(route *ModelRoute, params map[string]interface{}, promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens int) float64 {
 	if route == nil {
 		return 0
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/starai/api/internal/billing"
 )
@@ -54,9 +55,12 @@ func (s *ModelService) publicPriceRule(
 	rule := copyMap(selected.CostRule)
 	billingType := strings.ToLower(strings.TrimSpace(stringValue(rule["billing_type"])))
 	price := map[string]interface{}{"billing_type": billingType}
+	// 峰谷计价的上游（如腾讯云 DeepSeek）在不同时段价格不同，前台展示按当前
+	// 时刻的时段价换算，与实际扣费口径一致。
+	timeMultiplier := routeCostTimeMultiplier(rule, time.Now())
 	convert := func(key, outputKey string) {
 		if raw, exists := rule[key]; exists {
-			cost := floatValue(raw)
+			cost := floatValue(raw) * timeMultiplier
 			charge, err := billing.CalculateCharge(cost, cfg.GrossMarginPercent)
 			if err == nil {
 				price[outputKey] = charge.UserCharge
@@ -90,7 +94,7 @@ func (s *ModelService) publicPriceRule(
 			if rawMap, ok := rule[tier.costKey].(map[string]interface{}); ok {
 				converted := map[string]interface{}{}
 				for key, raw := range rawMap {
-					charge, err := billing.CalculateCharge(floatValue(raw), cfg.GrossMarginPercent)
+					charge, err := billing.CalculateCharge(floatValue(raw)*timeMultiplier, cfg.GrossMarginPercent)
 					if err == nil {
 						converted[key] = charge.UserCharge
 					}
@@ -114,7 +118,7 @@ func (s *ModelService) publicPriceRule(
 			nested, ok := raw.(map[string]interface{})
 			if !ok {
 				if key == "excess_image_price" || key == "fallback_cost" {
-					charge, err := billing.CalculateCharge(floatValue(raw), cfg.GrossMarginPercent)
+					charge, err := billing.CalculateCharge(floatValue(raw)*timeMultiplier, cfg.GrossMarginPercent)
 					if err == nil {
 						price[key] = charge.UserCharge
 					}
@@ -126,14 +130,14 @@ func (s *ModelService) publicPriceRule(
 				if inner, ok := value.(map[string]interface{}); ok {
 					row := map[string]interface{}{}
 					for innerKey, innerValue := range inner {
-						charge, err := billing.CalculateCharge(floatValue(innerValue), cfg.GrossMarginPercent)
+						charge, err := billing.CalculateCharge(floatValue(innerValue)*timeMultiplier, cfg.GrossMarginPercent)
 						if err == nil {
 							row[innerKey] = charge.UserCharge
 						}
 					}
 					converted[resolution] = row
 				} else {
-					charge, err := billing.CalculateCharge(floatValue(value), cfg.GrossMarginPercent)
+					charge, err := billing.CalculateCharge(floatValue(value)*timeMultiplier, cfg.GrossMarginPercent)
 					if err == nil {
 						converted[resolution] = charge.UserCharge
 					}

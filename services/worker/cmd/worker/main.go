@@ -1132,7 +1132,17 @@ func updateWorkerRouteAttemptProviderCostForProject(ctx context.Context, pool *p
 		)`, providerCost, projectID, requestID, routeID, nonEmptyWorker(source, "missing_route_cost"), complete)
 }
 
+// workerRouteProviderCost 计算线路的上游成本，并按 cost_rule 声明的时段倍率
+// （峰谷计价，如腾讯云 DeepSeek）放大。
 func workerRouteProviderCost(route workerModelRoute, input map[string]interface{}, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens int) float64 {
+	cost := workerRouteProviderCostBase(route, input, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens)
+	if cost <= 0 {
+		return cost
+	}
+	return cost * workerRouteCostTimeMultiplier(route.CostRule, time.Now())
+}
+
+func workerRouteProviderCostBase(route workerModelRoute, input map[string]interface{}, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens int) float64 {
 	typeName := strings.ToLower(strings.TrimSpace(fmt.Sprint(route.CostRule["billing_type"])))
 	value := func(key string) float64 { return floatAny(route.CostRule[key]) }
 	hasPositive := func(keys ...string) bool {

@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,8 +16,8 @@ import (
 
 const (
 	defaultGrossMarginPercent = 3.0
-	defaultPaymentComputeRate = 1000.0
-	defaultUSDToComputeRate   = 7200.0
+	defaultPaymentComputeRate = 1.0
+	defaultUSDToComputeRate   = 7.2
 )
 
 var errWorkerProviderCostMissing = errors.New("upstream provider cost is missing")
@@ -627,4 +629,83 @@ func workerCeilMicrocredits(value float64) int64 {
 		return 0
 	}
 	return int64(math.Ceil(value*1_000_000 - 1e-9))
+}
+
+// workerRouteCostTimeMultiplier 返回线路成本在当前时刻的时段倍数。
+//
+// 与 API 侧 routeCostTimeMultiplier 同一套约定：cost_rule 里配置
+// peak_multiplier（倍数）、peak_ranges（["09:00-12:00", ...]，北京时间）、
+// peak_weekdays_only（是否仅工作日，默认 true）。未配置或不在时段内返回 1。
+// 容器通常跑在 UTC，这里用固定 +08:00 偏移，避免依赖镜像内的 tzdata。
+func workerRouteCostTimeMultiplier(rule map[string]interface{}, now time.Time) float64 {
+	if rule == nil {
+		return 1
+	}
+	multiplier := floatAny(rule["peak_multiplier"])
+	if multiplier <= 0 || multiplier == 1 {
+		return 1
+	}
+	windows := workerClockRanges(rule["peak_ranges"])
+	if len(windows) == 0 {
+		return 1
+	}
+	local := now.In(time.FixedZone("CST", 8*60*60))
+	weekdaysOnly := true
+	if flag, ok := rule["peak_weekdays_only"].(bool); ok {
+		weekdaysOnly = flag
+	}
+	if weekdaysOnly && (local.Weekday() == time.Saturday || local.Weekday() == time.Sunday) {
+		return 1
+	}
+	minutes := local.Hour()*60 + local.Minute()
+	for _, window := range windows {
+		if minutes >= window[0] && minutes < window[1] {
+			return multiplier
+		}
+	}
+	return 1
+}
+
+func workerClockRanges(raw interface{}) [][2]int {
+	items, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+	windows := make([][2]int, 0, len(items))
+	for _, item := range items {
+		start, end, ok := workerParseClockRange(fmt.Sprint(item))
+		if ok {
+			windows = append(windows, [2]int{start, end})
+		}
+	}
+	return windows
+}
+
+func workerParseClockRange(raw string) (int, int, bool) {
+	parts := strings.Split(strings.TrimSpace(raw), "-")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	start, okStart := workerParseClockMinutes(parts[0])
+	end, okEnd := workerParseClockMinutes(parts[1])
+	if !okStart || !okEnd || end <= start {
+		return 0, 0, false
+	}
+	return start, end, true
+}
+
+func workerParseClockMinutes(raw string) (int, bool) {
+	parts := strings.Split(strings.TrimSpace(raw), ":")
+	if len(parts) != 2 {
+		return 0, false
+	}
+	hour, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil || hour < 0 || hour > 24 {
+		return 0, false
+	}
+	minute, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err != nil || minute < 0 || minute > 59 {
+		return 0, false
+	}
+	return hour*60 + minute, true
 }
