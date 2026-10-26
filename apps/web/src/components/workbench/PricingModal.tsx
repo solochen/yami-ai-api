@@ -28,6 +28,21 @@ function formatPerM(perM: number) {
   return perM.toFixed(6);
 }
 
+/**
+ * Dynamic Seedance/MiniMax rules keep their published source prices in CNY.
+ * The billing engine converts them using points_per_cny and platform_multiplier.
+ */
+function dynamicCreditMultiplier(price: any): number {
+  const pointsPerCNY = num(price?.points_per_cny);
+  const platformMultiplier = num(price?.platform_multiplier);
+  return (pointsPerCNY !== null && pointsPerCNY > 0 ? pointsPerCNY : 1)
+    * (platformMultiplier !== null && platformMultiplier > 0 ? platformMultiplier : 1);
+}
+
+function scaledDynamicPrice(value: number | null, multiplier: number): number | null {
+  return value === null ? null : value * multiplier;
+}
+
 const TOKEN_PRICE_ROWS: { key: string; label: string; required?: boolean }[] = [
   { key: "input_price", label: "输入价格（Prompt）", required: true },
   { key: "output_price", label: "输出价格（Completion）", required: true },
@@ -100,17 +115,17 @@ export function PricingModal({
   const price = active?.price_rule as any;
   const billingType = (price?.billing_type || "") as string;
   const unitPrice = num(price?.unit_price);
-  const currency = typeof price?.currency === "string" && price.currency ? price.currency : "";
   const surchargePerM = num(price?.surcharge_per_m);
   const isSeedanceDynamic = billingType === "dynamic" && price?.strategy === "seedance_2_tokens";
   const isMiniMaxH3Dynamic = billingType === "dynamic" && price?.strategy === "minimax_h3_seconds";
-  const minimaxH3Rate = num(price?.rates_per_second?.["2k"]);
+  const dynamicMultiplier = dynamicCreditMultiplier(price);
+  const minimaxH3Rate = scaledDynamicPrice(num(price?.rates_per_second?.["2k"]), dynamicMultiplier);
   const minimaxH3FreeImages = num(price?.free_reference_images);
-  const minimaxH3ExcessImagePrice = num(price?.excess_image_price);
+  const minimaxH3ExcessImagePrice = scaledDynamicPrice(num(price?.excess_image_price), dynamicMultiplier);
   const seedanceRates = ["480p", "720p", "1080p", "4k"].map((resolution) => ({
     resolution,
-    withoutVideo: num(price?.rates_per_m_tokens?.[resolution]?.without_video),
-    withVideo: num(price?.rates_per_m_tokens?.[resolution]?.with_video),
+    withoutVideo: scaledDynamicPrice(num(price?.rates_per_m_tokens?.[resolution]?.without_video), dynamicMultiplier),
+    withVideo: scaledDynamicPrice(num(price?.rates_per_m_tokens?.[resolution]?.with_video), dynamicMultiplier),
   }));
   const tokenRows = TOKEN_PRICE_ROWS.map((row) => ({
     ...row,
@@ -333,7 +348,7 @@ export function PricingModal({
                       <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/10 dark:bg-white/5">
                         <div className="text-xs text-gray-400">2K 输出与参考视频</div>
                         <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
-                          {minimaxH3Rate === null ? "--" : `${minimaxH3Rate.toFixed(2)} 元`}
+                          {minimaxH3Rate === null ? "--" : `${minimaxH3Rate.toFixed(2)} 算力`}
                         </div>
                         <div className="mt-1 text-xs text-gray-400">/ 秒</div>
                       </div>
@@ -347,7 +362,7 @@ export function PricingModal({
                       <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/10 dark:bg-white/5">
                         <div className="text-xs text-gray-400">超额参考图片</div>
                         <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
-                          {minimaxH3ExcessImagePrice === null ? "--" : `${minimaxH3ExcessImagePrice.toFixed(2)} 元`}
+                          {minimaxH3ExcessImagePrice === null ? "--" : `${minimaxH3ExcessImagePrice.toFixed(2)} 算力`}
                         </div>
                         <div className="mt-1 text-xs text-gray-400">/ 张</div>
                       </div>
@@ -360,11 +375,11 @@ export function PricingModal({
                           <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                             <div>
                               <div className="text-gray-400">不含视频输入</div>
-                              <div className="mt-0.5 font-medium text-gray-700 dark:text-gray-200">{row.withoutVideo ?? "--"} 元 / 1M Tokens</div>
+                              <div className="mt-0.5 font-medium text-gray-700 dark:text-gray-200">{row.withoutVideo ?? "--"} 算力 / 1M Tokens</div>
                             </div>
                             <div>
                               <div className="text-gray-400">包含视频输入</div>
-                              <div className="mt-0.5 font-medium text-gray-700 dark:text-gray-200">{row.withVideo ?? "--"} 元 / 1M Tokens</div>
+                              <div className="mt-0.5 font-medium text-gray-700 dark:text-gray-200">{row.withVideo ?? "--"} 算力 / 1M Tokens</div>
                             </div>
                           </div>
                         </div>
@@ -376,7 +391,7 @@ export function PricingModal({
                         <div key={row.key} className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/10 dark:bg-white/5">
                           <div className="text-xs text-gray-400">{row.label}</div>
                           <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
-                            {row.value === null ? "--" : `${currency}${formatPerM(row.value)}`}
+                            {row.value === null ? "--" : formatPerM(row.value)}
                           </div>
                           <div className="mt-1 text-xs text-gray-400">/ 1M Tokens</div>
                         </div>

@@ -16,7 +16,7 @@ const account: Record<string, string> = {
   "recharge.securePaymentNotice": "주문 생성 후 안전한 결제 페이지로 이동합니다. 결제 확인 후 크레딧이 반영됩니다.",
   "recharge.noPackages": "현재 이용 가능한 온라인 충전 상품이 없습니다. 관리자에게 문의하세요.",
   "recharge.creditsReceived": "{amount} 크레딧 받기",
-  "recharge.cardPlaceholder": "충전 코드를 입력하세요. 예: STARAI-DEMO-1000",
+  "recharge.cardPlaceholder": "충전 코드를 입력하세요. 예: ORBIT-E-DEMO-1000",
   "recharge.redeeming": "교환 중...",
   "recharge.redeemNow": "지금 교환",
   "homeCard.multi_view.title": "다양한 관점",

@@ -62,14 +62,21 @@ Test-Case "Payment order blocked" {
     }
 }
 
-# 6. Card recharge
-Test-Case "Card recharge" {
+Test-Case "Recharge configuration" {
+    $config = Invoke-RestMethod "$API/api/payment/config"
+    if ([double]$config.data.payment_compute_rate -ne 1000 -or $config.data.payment_currency -ne "CNY" -or -not $config.data.recharge_shop_enabled -or $config.data.recharge_shop_url -ne "https://catfk.com/shop/yardai") {
+        throw "recharge configuration does not match the required CNY rate and shop URL"
+    }
+}
+
+# 6. Historical fixed test cards are intentionally absent after the recharge-rate reset.
+Test-Case "Historical card is unavailable" {
     $body = @{ code = "STARAI-DEMO-1000" } | ConvertTo-Json
     try {
         Invoke-RestMethod "$API/api/recharge/card" -Method POST -Body $body -ContentType "application/json" -Headers $headers
-        throw "card should be used already"
+        throw "historical card unexpectedly remained redeemable"
     } catch {
-        # expected if already used
+        if ($_.Exception.Response.StatusCode -ne 400) { throw $_ }
     }
 }
 
@@ -214,10 +221,13 @@ Test-Case "Operator RBAC blocks system configuration" {
 # 20. Concurrent redemption of one card must credit exactly once
 Test-Case "Card redemption is concurrency safe" {
     $before = (Invoke-RestMethod "$API/api/wallet" -Headers $headers).data.compute_balance
-    $batchBody = @{ name = "integration-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"; type = "compute"; value = 7; quantity = 1 } | ConvertTo-Json
+    $batchBody = @{ name = "integration-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"; type = "compute"; face_value_cny = 1; quantity = 1 } | ConvertTo-Json
     $batch = Invoke-RestMethod "$API/admin/api/card-batches" -Method POST -Body $batchBody -ContentType "application/json" -Headers $adminHeaders
     $cardCode = $batch.data.codes[0]
     if (-not $cardCode) { throw "card batch returned no code" }
+    if ([double]$batch.data.batch.compute_rate -ne 1000 -or [double]$batch.data.batch.compute_credits -ne 1000) {
+        throw "card batch did not snapshot the configured 1 CNY = 1000 compute rate"
+    }
     $jobs = 1..2 | ForEach-Object {
         Start-Job -ScriptBlock {
             param($ApiUrl, $Bearer, $Code)
@@ -235,7 +245,7 @@ Test-Case "Card redemption is concurrency safe" {
     $jobs | Remove-Job -Force
     if (@($results | Where-Object { $_ -eq "success" }).Count -ne 1) { throw "card redemption did not have exactly one winner: $results" }
     $after = (Invoke-RestMethod "$API/api/wallet" -Headers $headers).data.compute_balance
-    if ([math]::Abs(([double]$after - [double]$before) - 7) -gt 0.0001) { throw "wallet credited an unexpected amount" }
+    if ([math]::Abs(([double]$after - [double]$before) - 1000) -gt 0.0001) { throw "wallet credited an unexpected amount" }
 }
 
 # 21. Comic project/style lifecycle

@@ -9,6 +9,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  showCardRecharge?: boolean;
 }
 
 type PaymentPackage = { public_id: string; name: string; amount: number; badge?: string; effective_compute_credits: number; credits_mode: "manual" | "formula" };
@@ -28,9 +29,9 @@ function moneyLabel(amount: number, currency?: string) {
   return `${value} ${currency || ""}`.trim();
 }
 
-export function RechargeModal({ open, onClose, onSuccess }: Props) {
+export function RechargeModal({ open, onClose, onSuccess, showCardRecharge = true }: Props) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<"online" | "card">("card");
+  const [tab, setTab] = useState<"online" | "card">(showCardRecharge ? "card" : "online");
   const [code, setCode] = useState("");
   const [packageId, setPackageId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -57,12 +58,12 @@ export function RechargeModal({ open, onClose, onSuccess }: Props) {
     api<PaymentConfig>("/api/payment/config")
       .then((c) => {
         setConfig(c);
-        setTab(c.payment_enabled ? "online" : "card");
+        setTab(c.payment_enabled || !showCardRecharge ? "online" : "card");
         setChannel((current) => c.payment_channels?.includes(current) ? current : c.payment_channels?.[0] || "");
         setPackageId((current) => c.payment_packages?.some((item) => item.public_id === current) ? current : c.payment_packages?.[0]?.public_id || "");
       })
       .catch(() => setConfig(null));
-  }, [open]);
+  }, [open, showCardRecharge]);
 
   useEffect(() => {
     if (!open || !wechatOrderNo) return;
@@ -151,7 +152,7 @@ export function RechargeModal({ open, onClose, onSuccess }: Props) {
           <div className="w-full p-5 sm:p-8">
             <Dialog.Title className="mb-4 text-lg font-bold text-gray-950 dark:text-gray-100">{t("recharge.title")}</Dialog.Title>
 
-            <div className="mb-4 flex gap-2 rounded-xl bg-gray-100 p-1 dark:bg-white/5">
+            {showCardRecharge && <div className="mb-4 flex gap-2 rounded-xl bg-gray-100 p-1 dark:bg-white/5">
               <button
                 onClick={() => setTab("online")}
                 disabled={!config?.payment_enabled}
@@ -173,7 +174,7 @@ export function RechargeModal({ open, onClose, onSuccess }: Props) {
               >
                 {t("recharge.card")}
               </button>
-            </div>
+            </div>}
 
             {tab === "online" ? (
               <div className="space-y-4">

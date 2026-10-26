@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -70,17 +71,17 @@ func (s *AdminService) Dashboard(ctx context.Context) (*DashboardStats, error) {
 	s.db.QueryRow(ctx, `SELECT COUNT(*) FROM tasks WHERE status='failed'`).Scan(&stats.FailedTasks)
 	s.db.QueryRow(ctx, `SELECT COUNT(*) FROM models WHERE is_enabled=true`).Scan(&stats.ActiveModels)
 	s.db.QueryRow(ctx, `SELECT COALESCE(SUM(amount),0) FROM orders WHERE status='paid'`).Scan(&stats.OnlineRevenue)
-	s.db.QueryRow(ctx, `SELECT COALESCE(SUM(amount),0) FROM wallet_transactions WHERE direction='in' AND type='card_recharge'`).Scan(&stats.CardRechargeAmount)
-	s.db.QueryRow(ctx, `SELECT COALESCE(SUM(amount),0) FROM wallet_transactions WHERE direction='out'`).Scan(&stats.TotalConsumption)
-	s.db.QueryRow(ctx, `SELECT COALESCE(SUM(amount),0) FROM wallet_transactions WHERE direction='out' AND created_at >= CURRENT_DATE`).Scan(&stats.ConsumptionToday)
-	stats.TotalRevenue = stats.OnlineRevenue + stats.CardRechargeAmount
+	s.db.QueryRow(ctx, `SELECT COALESCE(SUM(face_value_cny),0) FROM recharge_cards WHERE status='used'`).Scan(&stats.CardRechargeAmount)
+	s.db.QueryRow(ctx, `SELECT COALESCE(SUM(user_charge_compute),0) FROM billing_settlements WHERE status='settled'`).Scan(&stats.TotalConsumption)
+	s.db.QueryRow(ctx, `SELECT COALESCE(SUM(user_charge_compute),0) FROM billing_settlements WHERE status='settled' AND created_at >= CURRENT_DATE`).Scan(&stats.ConsumptionToday)
+	stats.TotalRevenue = stats.OnlineRevenue
 	s.db.QueryRow(ctx, `SELECT COUNT(*) FROM api_tokens WHERE status='active'`).Scan(&stats.ApiTokens)
 	s.db.QueryRow(ctx, `SELECT COUNT(*) FROM ai_call_logs`).Scan(&stats.ApiCalls)
 	s.db.QueryRow(ctx, `SELECT COUNT(*) FROM ai_call_logs WHERE created_at >= CURRENT_DATE`).Scan(&stats.ApiCallsToday)
-	s.db.QueryRow(ctx, `SELECT COALESCE(SUM(cost),0) FROM ai_call_logs`).Scan(&stats.ApiCost)
+	s.db.QueryRow(ctx, `SELECT COALESCE(SUM(provider_cost_compute),0) FROM billing_settlements WHERE status='settled'`).Scan(&stats.ApiCost)
 	s.db.QueryRow(ctx, `SELECT COUNT(*) FROM recharge_cards WHERE status='unused'`).Scan(&stats.AvailableCards)
 	s.db.QueryRow(ctx, `SELECT COUNT(*) FROM recharge_cards WHERE status='used'`).Scan(&stats.UsedCards)
-	s.db.QueryRow(ctx, `SELECT COALESCE(SUM(value),0) FROM recharge_cards`).Scan(&stats.TotalCardFaceValue)
+	s.db.QueryRow(ctx, `SELECT COALESCE(SUM(face_value_cny),0) FROM recharge_cards`).Scan(&stats.TotalCardFaceValue)
 	s.db.QueryRow(ctx, `SELECT COALESCE(SUM(compute_balance),0) FROM wallets`).Scan(&stats.WalletBalanceTotal)
 	s.db.QueryRow(ctx, `SELECT COUNT(*) FROM gallery_items WHERE status='approved'`).Scan(&stats.PublishedWorks)
 	s.db.QueryRow(ctx, `SELECT COUNT(*) FROM announcements WHERE is_published=true`).Scan(&stats.PublishedAnnouncements)
@@ -1403,72 +1404,106 @@ func scanAdminWithdrawal(row scanner) (*WithdrawalAdminDTO, error) {
 }
 
 type CardBatchInput struct {
-	Name     string  `json:"name"`
-	Type     string  `json:"type"`
-	Value    float64 `json:"value"`
-	Quantity int     `json:"quantity"`
+	Name         string  `json:"name"`
+	Type         string  `json:"type"`
+	FaceValueCNY float64 `json:"face_value_cny"`
+	Value        float64 `json:"value"` // Deprecated request alias for face_value_cny.
+	Quantity     int     `json:"quantity"`
 }
 
 type CardBatchDTO struct {
-	ID        int64   `json:"id"`
-	Name      string  `json:"name"`
-	Type      string  `json:"type"`
-	Value     float64 `json:"value"`
-	Quantity  int     `json:"quantity"`
-	CreatedAt string  `json:"created_at"`
+	ID             int64   `json:"id"`
+	Name           string  `json:"name"`
+	Type           string  `json:"type"`
+	Value          float64 `json:"value"` // Compatibility alias for face_value_cny.
+	FaceValueCNY   float64 `json:"face_value_cny"`
+	ComputeCredits float64 `json:"compute_credits"`
+	ComputeRate    float64 `json:"compute_rate"`
+	Quantity       int     `json:"quantity"`
+	CreatedAt      string  `json:"created_at"`
 }
 
 func (s *AdminService) CreateCardBatch(ctx context.Context, adminID int64, input CardBatchInput) (*CardBatchDTO, []string, error) {
 	if input.Quantity < 1 || input.Quantity > 1000 {
 		return nil, nil, fmt.Errorf("数量须在 1-1000 之间")
 	}
-	if input.Type == "" {
-		input.Type = "compute"
+	input.Name = strings.TrimSpace(input.Name)
+	if input.Name == "" || len([]rune(input.Name)) > 128 {
+		return nil, nil, fmt.Errorf("批次名称不能为空且不能超过 128 个字符")
 	}
+	if input.Type != "" && input.Type != "compute" {
+		return nil, nil, fmt.Errorf("当前仅支持算力卡密")
+	}
+	input.Type = "compute"
+	faceValue := input.FaceValueCNY
+	if faceValue == 0 {
+		faceValue = input.Value
+	}
+	if !validPositiveNumber(faceValue) || faceValue < 0.01 || faceValue > 1_000_000 {
+		return nil, nil, fmt.Errorf("人民币面值需在 0.01 至 1000000 元之间")
+	}
+	faceValue = math.Round(faceValue*100) / 100
+	rate := paymentComputeRate(ctx, s.db)
+	credits := roundCredits(faceValue * rate)
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Rollback(ctx)
 	var batchID int64
-	err := s.db.QueryRow(ctx, `
-		INSERT INTO recharge_card_batches (name, type, value, quantity, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-		input.Name, input.Type, input.Value, input.Quantity, adminID).Scan(&batchID)
+	err = tx.QueryRow(ctx, `
+		INSERT INTO recharge_card_batches (name, type, value, face_value_cny, compute_credits, compute_rate, quantity, created_by)
+		VALUES ($1,$2,$3,$3,$4,$5,$6,$7) RETURNING id`,
+		input.Name, input.Type, faceValue, credits, rate, input.Quantity, adminID).Scan(&batchID)
 	if err != nil {
 		return nil, nil, err
 	}
 	var codes []string
 	for i := 0; i < input.Quantity; i++ {
-		code := generateCardCode()
+		code, err := generateCardCode()
+		if err != nil {
+			return nil, nil, fmt.Errorf("生成卡密失败: %w", err)
+		}
 		hash := util.HashCardCode(code)
 		cipher, err := util.EncryptCardCode(code, s.cardCipherKey)
 		if err != nil {
 			return nil, nil, fmt.Errorf("加密卡密失败: %w", err)
 		}
-		_, err = s.db.Exec(ctx,
-			`INSERT INTO recharge_cards (batch_id, code_hash, code_cipher, type, value, status) VALUES ($1,$2,$3,$4,$5,'unused')`,
-			batchID, hash, cipher, input.Type, input.Value)
+		_, err = tx.Exec(ctx,
+			`INSERT INTO recharge_cards (batch_id, code_hash, code_cipher, type, value, face_value_cny, compute_credits, compute_rate, status)
+			 VALUES ($1,$2,$3,$4,$5,$6,$5,$7,'unused')`,
+			batchID, hash, cipher, input.Type, credits, faceValue, rate)
 		if err != nil {
 			return nil, nil, err
 		}
 		codes = append(codes, code)
 	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, nil, err
+	}
 	now := time.Now().Format(time.RFC3339)
-	return &CardBatchDTO{ID: batchID, Name: input.Name, Type: input.Type, Value: input.Value, Quantity: input.Quantity, CreatedAt: now}, codes, nil
+	return &CardBatchDTO{ID: batchID, Name: input.Name, Type: input.Type, Value: faceValue, FaceValueCNY: faceValue, ComputeCredits: credits, ComputeRate: rate, Quantity: input.Quantity, CreatedAt: now}, codes, nil
 }
 
-func generateCardCode() string {
+func generateCardCode() (string, error) {
 	b := make([]byte, 8)
-	rand.Read(b)
-	return fmt.Sprintf("STARAI-%s", hex.EncodeToString(b)[:12])
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("ORBIT-E-%s", hex.EncodeToString(b)[:12]), nil
 }
 
 func (s *AdminService) ListCardBatches(ctx context.Context) ([]CardBatchDTO, error) {
-	rows, err := s.db.Query(ctx, `SELECT id, name, type, value, quantity, created_at FROM recharge_card_batches ORDER BY created_at DESC`)
+	rows, err := s.db.Query(ctx, `SELECT id, name, type, COALESCE(face_value_cny,value), COALESCE(face_value_cny,value), COALESCE(compute_credits,value), COALESCE(compute_rate,1), quantity, created_at FROM recharge_card_batches ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CardBatchDTO
+	items := []CardBatchDTO{}
 	for rows.Next() {
 		var b CardBatchDTO
 		var created time.Time
-		rows.Scan(&b.ID, &b.Name, &b.Type, &b.Value, &b.Quantity, &created)
+		rows.Scan(&b.ID, &b.Name, &b.Type, &b.Value, &b.FaceValueCNY, &b.ComputeCredits, &b.ComputeRate, &b.Quantity, &created)
 		b.CreatedAt = created.Format(time.RFC3339)
 		items = append(items, b)
 	}
@@ -1509,7 +1544,9 @@ func (s *AdminService) GetRawSystemConfigs(ctx context.Context) (map[string]inte
 }
 
 // GetPublicSystemConfigs leaves the large per-locale translation catalog out
-// of the base response. Translations are read separately for one locale.
+// of the base response, and also strips secrets and billing internals that
+// must never reach the browser. Translations are read separately for one
+// locale.
 func (s *AdminService) GetPublicSystemConfigs(ctx context.Context) (map[string]interface{}, error) {
 	rows, err := s.db.Query(ctx, `SELECT key,value FROM system_configs WHERE key<>'ui_translation_overrides'`)
 	if err != nil {
@@ -1523,11 +1560,26 @@ func (s *AdminService) GetPublicSystemConfigs(ctx context.Context) (map[string]i
 		if err := rows.Scan(&key, &raw); err != nil {
 			return nil, err
 		}
+		if isPublicConfigExcluded(key) {
+			continue
+		}
 		var value interface{}
 		_ = json.Unmarshal(raw, &value)
 		result[key] = value
 	}
 	return result, rows.Err()
+}
+
+func isPublicConfigExcluded(key string) bool {
+	if isSensitiveConfigKey(key) {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "platform_gross_margin_percent", "missing_cost_policy", "billing_rounding_mode":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *AdminService) GetUITranslationOverrides(ctx context.Context, locale string) ([]map[string]interface{}, error) {
@@ -1568,6 +1620,17 @@ func (s *AdminService) UpdateSystemConfig(ctx context.Context, key string, value
 	_, err := s.db.Exec(ctx, `
 		INSERT INTO system_configs (key, value, updated_at) VALUES ($1,$2,now())
 		ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=now()`, key, data)
+	if err != nil {
+		return err
+	}
+	if key == "platform_gross_margin_percent" {
+		number, ok := value.(float64)
+		if ok && number >= 0 && number < 100 && !math.IsNaN(number) && !math.IsInf(number, 0) {
+			_, err = s.db.Exec(ctx,
+				`UPDATE platform_billing_accounts SET gross_margin_percent=$1, updated_at=now() WHERE id=1`,
+				number)
+		}
+	}
 	return err
 }
 
@@ -1851,18 +1914,21 @@ func (s *AdminService) ListAICallLogs(ctx context.Context, page, pageSize int) (
 }
 
 type CardDTO struct {
-	ID        int64   `json:"id"`
-	Code      string  `json:"code"`
-	Value     float64 `json:"value"`
-	Status    string  `json:"status"`
-	UsedBy    *int64  `json:"used_by,omitempty"`
-	UsedAt    *string `json:"used_at,omitempty"`
-	CreatedAt string  `json:"created_at"`
+	ID             int64   `json:"id"`
+	Code           string  `json:"code"`
+	Value          float64 `json:"value"` // Compatibility alias for compute_credits.
+	FaceValueCNY   float64 `json:"face_value_cny"`
+	ComputeCredits float64 `json:"compute_credits"`
+	ComputeRate    float64 `json:"compute_rate"`
+	Status         string  `json:"status"`
+	UsedBy         *int64  `json:"used_by,omitempty"`
+	UsedAt         *string `json:"used_at,omitempty"`
+	CreatedAt      string  `json:"created_at"`
 }
 
 func (s *AdminService) ListBatchCards(ctx context.Context, batchID int64) ([]CardDTO, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT id, code_cipher, value, status, used_by, used_at, created_at FROM recharge_cards WHERE batch_id=$1 ORDER BY id`, batchID)
+		`SELECT id, code_cipher, COALESCE(compute_credits,value), COALESCE(face_value_cny,0), COALESCE(compute_credits,value), COALESCE(compute_rate,1), status, used_by, used_at, created_at FROM recharge_cards WHERE batch_id=$1 ORDER BY id`, batchID)
 	if err != nil {
 		return nil, err
 	}
@@ -1873,7 +1939,7 @@ func (s *AdminService) ListBatchCards(ctx context.Context, batchID int64) ([]Car
 		var cipher *string
 		var usedAt *time.Time
 		var created time.Time
-		if err := rows.Scan(&c.ID, &cipher, &c.Value, &c.Status, &c.UsedBy, &usedAt, &created); err != nil {
+		if err := rows.Scan(&c.ID, &cipher, &c.Value, &c.FaceValueCNY, &c.ComputeCredits, &c.ComputeRate, &c.Status, &c.UsedBy, &usedAt, &created); err != nil {
 			return nil, err
 		}
 		c.CreatedAt = created.Format(time.RFC3339)

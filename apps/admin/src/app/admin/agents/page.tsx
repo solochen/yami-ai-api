@@ -913,7 +913,7 @@ function makeEmptyForm(): FormState {
     default_count: 1,
     candidate_count: 3,
     creative_scenes: defaultScenes("image"),
-    unit_price: 0.1,
+    unit_price: 100,
     placeholder: preset.placeholder,
     help: preset.help,
     canvas_templates: DEFAULT_CANVAS_TEMPLATES.map((item) => ({ ...item })),
@@ -1692,7 +1692,7 @@ export default function AgentsAdminPage() {
                 {form.generation_type !== "creative_agent" && !isVideoUtilityType(form.generation_type) && <Field label="默认生成数量"><input type="number" min={1} max={50} className="admin-input" value={form.default_count} onChange={(e) => setForm({ ...form, default_count: Math.max(1, Number(e.target.value) || 1) })} /></Field>}
                 {form.generation_type !== "creative_agent" && !isVideoUtilityType(form.generation_type) && <Field label="AI方案数量"><input type="number" min={1} max={5} className="admin-input" value={form.candidate_count} onChange={(e) => setForm({ ...form, candidate_count: Math.min(5, Math.max(1, Number(e.target.value) || 3)) })} /></Field>}
                 {form.code === "viral_video_breakdown" && <Field label="最大视频时长（秒）"><input type="number" min={1} max={3600} className="admin-input" value={form.max_input_duration_sec} onChange={(e) => setForm({ ...form, max_input_duration_sec: Math.max(1, Math.min(3600, Number(e.target.value) || 600)) })} /><p className="mt-1 text-xs text-gray-500">超过此时长会拒绝分析。提交时按这个秒数冻结，完成后按实际秒数结算。</p></Field>}
-                {form.generation_type !== "creative_agent" && <Field label={form.code === "extract_product_images" ? "提取成功收费（算力）" : form.code === "viral_video_breakdown" ? "每秒算力" : "工作流收费"}><input type="number" min={0} step="0.01" className="admin-input" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: Number(e.target.value) || 0 })} />{form.code === "viral_video_breakdown" && <p className="mt-1 text-xs text-gray-500">分析模型同时负责整段理解、逐帧看图和剧本。填 0 表示不按秒扣费。</p>}</Field>}
+                {form.generation_type !== "creative_agent" && <Field label={form.code === "extract_product_images" ? "提取成功收费（算力）" : form.code === "viral_video_breakdown" ? "每秒算力" : "工作流收费（算力）"}><input type="number" min={0} step="0.01" className="admin-input" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: Number(e.target.value) || 0 })} />{form.code === "viral_video_breakdown" && <p className="mt-1 text-xs text-gray-500">分析模型同时负责整段理解、逐帧看图和剧本。填 0 表示不按秒扣费。</p>}</Field>}
                 {form.code === "extract_product_images" && <p className="self-end text-[11px] leading-5 text-gray-400">提取成功后按这个金额扣除算力。提取失败会退回冻结，不扣费。填 0 表示免费。</p>}
                 {form.code === "product_refine" && <p className="self-end text-[11px] leading-5 text-gray-400">预计费用 = 工作流收费 + 生成数量 × 所选图片模型的后台单价；自动修正不重复增加预计费用。</p>}
                 {form.generation_type === "creative_agent" && <p className="md:col-span-2 rounded-xl bg-gray-50 px-3 py-2 text-[11px] leading-5 text-gray-500">通用智能体不额外收取固定工作流费用，主聊天分析和最终图片或视频分别按所配置模型的实际计费规则结算。</p>}

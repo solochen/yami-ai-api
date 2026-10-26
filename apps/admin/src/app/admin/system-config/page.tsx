@@ -76,7 +76,11 @@ const BASE_ITEMS: ConfigItem[] = [
   { key: "wechat_cert_serial", label: "微信商户证书序列号", type: "text" },
   { key: "wechat_api_v3_secret", label: "微信 APIv3 密钥", type: "password", hint: "32 位密钥。保存后只显示脱敏值。" },
   { key: "wechat_private_key", label: "微信商户私钥", type: "textarea", hint: "apiclient_key.pem 的内容。保存后只显示脱敏值。" },
-  { key: "payment_compute_rate", label: "默认算力兑换倍率", type: "number", hint: "未在套餐中指定到账算力时使用：支付金额 × 此倍率。1 算力≈1元人民币时，USD 可设置约 7.2；更换收款币种后请同步调整。" },
+  { key: "payment_compute_rate", label: "人民币充值倍率", type: "number", min: 0.000001, step: 1, hint: "在线充值和新生成卡密统一使用：人民币金额 × 此倍率。当前 1 元 = 1 算力。已生成卡密使用生成时的到账快照，不受后续倍率调整影响。" },
+  { key: "platform_gross_margin_percent", label: "平台销售佣金率（%）", type: "number", min: 0, step: 0.01, hint: "对外售价 = 上游成本 ÷ (1 − 佣金率)，例如 3 表示成本 970 时向用户收 1000。0 表示按上游成本平价销售。" },
+  { key: "recharge_shop_enabled", label: "启用内嵌卡密店铺", type: "checkbox", hint: "开启后充值页面展示外部卡密店铺。" },
+  { key: "recharge_shop_url", label: "卡密店铺地址", type: "text", hint: "必须是 https://catfk.com 下的完整地址，例如 https://catfk.com/shop/yardai。后续可直接替换店铺路径。" },
+  { key: "model_usd_to_compute_rate", label: "上游美元价格折算倍率", type: "number", min: 0.000001, step: 0.1, hint: "按“美元 × 7.2 × 1000”换算为算力，默认 7200。与人民币充值倍率独立；仅用于美元定价模型的初始化、展示与成本核算。" },
   { key: "payment_product_name", label: "支付商品名称", type: "text", hint: "显示在 Stripe / PayPal 收银台，例如 Orbit-E AI Credits。" },
   { key: "payment_success_url", label: "支付成功返回地址", type: "text", hint: "必须是完整 http(s) 地址，可使用 {order_no}，例如 https://example.com/app/wallet?payment=success&order={order_no}" },
   { key: "payment_cancel_url", label: "取消支付返回地址", type: "text", hint: "必须是完整 http(s) 地址，例如 https://example.com/app/wallet?payment=cancel" },
@@ -350,9 +354,9 @@ export default function SystemConfigPage() {
         vidu_api_key: "",
         vidu_api_host: "api.vidu.cn",
         vidu_public_base_url: "",
-        vidu_voice_price_per_minute: 100,
-        vidu_video_price_per_minute: 3500,
-        vidu_text_credit_rate: 1,
+        vidu_voice_price_per_minute: 2.8125,
+        vidu_video_price_per_minute: 2.8125,
+        vidu_text_credit_rate: 0.03125,
         web_search_provider: "tavily",
         web_search_api_key: "",
         web_search_exa_api_key: "",
@@ -1442,14 +1446,14 @@ export default function SystemConfigPage() {
 
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm shadow-gray-950/5">
           <div className="mb-1 text-sm font-semibold text-gray-900">实时数字人</div>
-          <p className="mb-5 text-xs leading-relaxed text-gray-400">密钥只保存在服务端。公网地址必须能被 Vidu 访问，角色知识库才会在通话中被引用。语音和视频按 Vidu 实际计费秒数折算成每分钟价格扣费。</p>
+          <p className="mb-5 text-xs leading-relaxed text-gray-400">密钥只保存在服务端。公网地址必须能被 Vidu 访问，角色知识库才会在通话中被引用。下面的价格填 <span className="font-medium text-gray-500">Vidu 官方成本价</span>，对用户的售价由「平台销售佣金率」自动推导：售价 = 成本 ÷ (1 − 佣金率)，按 Vidu 实际计费秒数结算。</p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {renderItem({ key: "vidu_api_key", label: "Vidu API Key", type: "password", hint: "格式 Token 后面的密钥。保存后只显示脱敏值。" })}
             {renderItem({ key: "vidu_api_host", label: "Vidu 接口域名", type: "text", hint: "国内站 api.vidu.cn。密钥需来自 platform.vidu.cn，不要带 https://。" })}
             {renderItem({ key: "vidu_public_base_url", label: "本站公网地址", type: "text", hint: "例如 https://api.example.com。Vidu 用它回调知识库检索。" })}
-            {renderItem({ key: "vidu_voice_price_per_minute", label: "语音通话价格（算力/分钟）", type: "number", min: 0 })}
-            {renderItem({ key: "vidu_video_price_per_minute", label: "视频通话价格（算力/分钟）", type: "number", min: 0 })}
-            {renderItem({ key: "vidu_text_credit_rate", label: "文字会话换算", type: "number", min: 0, hint: "Vidu 返回的 credits_cost 乘以这个倍数，记成算力。" })}
+            {renderItem({ key: "vidu_voice_price_per_minute", label: "语音成本价（元/分钟）", type: "number", min: 0, hint: "Vidu 官方价：实时版 1.5 积分/秒 × 0.03125 元 = 2.8125 元/分钟。纯语音会话在 Vidu 侧同为 audio 会话。" })}
+            {renderItem({ key: "vidu_video_price_per_minute", label: "视频成本价（元/分钟）", type: "number", min: 0, hint: "同上，默认 2.8125 元/分钟。用户实际扣费已含平台佣金率。" })}
+            {renderItem({ key: "vidu_text_credit_rate", label: "积分折算率（元/积分）", type: "number", min: 0, hint: "Vidu 返回的 credits_cost × 此系数 = 上游成本，默认 0.03125 元/积分。" })}
           </div>
         </section>
 
@@ -1519,7 +1523,7 @@ export default function SystemConfigPage() {
             {renderItem({ key: `${lipPrefix}api_key`, label: lipWaveSpeed ? "WaveSpeed API Key" : "Sync API Key", type: "password", hint: "密钥加密保存；已保存的掩码保持原密钥，清空会删除密钥。认证由所选服务自动设置。" })}
             {!lipWaveSpeed && renderItem({ key: "sync_model", label: "上游模型", type: "text", hint: "默认 sync-3，请填写账户可调用的 Sync 模型名称。" })}
             {renderItem({ key: `${lipPrefix}unit_price`, label: "每秒售价（算力）", type: "number", min: 0, step: 0.001, hint: lipWaveSpeed ? "可设为0，对用户免费；平台仍需支付商业 API 费用。" : "按处理秒数计费，0 表示用户免费；上游仍可能收费。" })}
-            {renderItem({ key: `${lipPrefix}unit_cost`, label: "每秒上游成本（平台成本单位）", type: "number", min: 0, step: 0.001, hint: "用于成本统计，按实际服务商价格换算填写。" })}
+            {renderItem({ key: `${lipPrefix}unit_cost`, label: "每秒上游成本（算力）", type: "number", min: 0, step: 0.001, hint: "用于成本统计，按实际服务商价格折算为算力填写。" })}
             {renderItem({ key: "sync_timeout_sec", label: "任务超时（秒）", type: "number", min: 60, step: 1, hint: "允许60–7200秒，默认1800秒。" })}
           </div>
           {lipWaveSpeed && <p className="mt-4 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">WaveSpeed 官方文档标注最低 $0.09（不足3秒按3秒，时长向上取整）；实际价格以服务商账单为准。每秒成本为平台估算，短镜头最低收费可能使实际成本更高。切换前请等待在途任务完成。</p>}

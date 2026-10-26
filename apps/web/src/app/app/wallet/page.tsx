@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { RechargeModal } from "@/components/RechargeModal";
+import Link from "next/link";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { CashTransaction, ReferralChild, ReferralSummary, Wallet, WalletTransaction, WithdrawalRequest } from "@starai/shared-types";
 
@@ -34,7 +34,6 @@ export default function WalletPage() {
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
-  const [showRecharge, setShowRecharge] = useState(false);
   const [tab, setTab] = useState<Tab>("compute");
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [childrenOpen, setChildrenOpen] = useState(false);
@@ -155,9 +154,9 @@ export default function WalletPage() {
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold">{ts("钱包")}</h1>
         <div className="flex gap-2">
-          <button onClick={() => setShowRecharge(true)} className="rounded-xl bg-primary px-5 py-2 text-sm font-semibold text-dark hover:bg-primary/90">
+          <Link href="/app/recharge" className="rounded-xl bg-primary px-5 py-2 text-sm font-semibold text-dark hover:bg-primary/90">
             {ts("充值算力")}
-          </button>
+          </Link>
           <button onClick={() => setWithdrawOpen(true)} className="rounded-xl border border-gray-200 bg-white px-5 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
             {ts("申请提现")}
           </button>
@@ -312,7 +311,6 @@ export default function WalletPage() {
         </div>
       )}
 
-      <RechargeModal open={showRecharge} onClose={() => setShowRecharge(false)} onSuccess={load} />
     </div>
   );
 }

@@ -217,10 +217,10 @@ func TestWorkerTokenReservationUsesRequestedMaxTokens(t *testing.T) {
 }
 
 func TestIncrementalWorkflowChargeDoesNotDoubleChargeSettledCost(t *testing.T) {
-	if got := incrementalChargeAmount(1.25, 0.4); math.Abs(got-0.85) > 0.000000001 {
+	if got, _ := incrementalChargeAmount(1.25, 0.4); math.Abs(got-0.85) > 0.000000001 {
 		t.Fatalf("incremental charge = %v, want 0.85", got)
 	}
-	if got := incrementalChargeAmount(0.4, 0.4); got != 0 {
+	if got, _ := incrementalChargeAmount(0.4, 0.4); got != 0 {
 		t.Fatalf("incremental charge = %v, want 0", got)
 	}
 }

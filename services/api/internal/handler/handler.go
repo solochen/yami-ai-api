@@ -269,6 +269,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		{
 			superAdminOnly := middleware.RequireAdminRole("super_admin")
 			adm.GET("/dashboard", h.AdminDashboard)
+			adm.GET("/finance", h.AdminFinance)
 			adm.GET("/admin-accounts", h.AdminListAdminAccounts)
 			adm.POST("/admin-accounts", h.AdminCreateAdminAccount)
 			adm.PATCH("/admin-accounts/:id", h.AdminUpdateAdminAccount)
@@ -931,8 +932,11 @@ func (h *Handler) EstimateModel(c *gin.Context) {
 		if len(summaryCodes) > 0 {
 			codes = append(codes, summaryCodes[0])
 		}
-		cost := h.chat.EstimateModelsCost(c.Request.Context(), codes, req.Params)
-		cost += h.models.EstimateCost(m, req.Params, 0, 0)
+		cost, estimateErr := h.chat.EstimateModelsBilling(c.Request.Context(), codes, req.Params)
+		if estimateErr != nil {
+			util.BadRequest(c, estimateErr.Error())
+			return
+		}
 		if cost <= 0 {
 			util.BadRequest(c, "multi-collab channel has no priced models")
 			return
@@ -944,7 +948,11 @@ func (h *Handler) EstimateModel(c *gin.Context) {
 		util.OK(c, map[string]interface{}{"estimated_cost": cost, "channel_key": resolvedChannelKey, "model_codes": codes, "answer_model_codes": answerCodes, "summary_model_codes": summaryCodes})
 		return
 	}
-	cost := h.models.EstimateCost(m, req.Params, 0, 0)
+	cost, _, err := h.models.RouteBillingEstimate(c.Request.Context(), m, req.Params, 0, 0)
+	if err != nil {
+		util.BadRequest(c, err.Error())
+		return
+	}
 	util.OK(c, map[string]float64{"estimated_cost": cost})
 }
 
@@ -1047,6 +1055,15 @@ func (h *Handler) RedeemCard(c *gin.Context) {
 		util.BadRequest(c, "参数错误")
 		return
 	}
+	cfg, err := h.wallet.GetPaymentConfig(c.Request.Context())
+	if err != nil {
+		util.InternalError(c, err.Error())
+		return
+	}
+	if enabled, ok := cfg["card_recharge_enabled"].(bool); !ok || !enabled {
+		util.Forbidden(c, "卡密充值未开启")
+		return
+	}
 	userID := c.GetInt64("user_id")
 	value, err := h.wallet.RedeemCardAtomic(c.Request.Context(), userID, req.Code)
 	if err != nil {
@@ -1074,17 +1091,16 @@ func (h *Handler) PaymentConfig(c *gin.Context) {
 	channels := []string{}
 	if providerErr == nil {
 		channels = providerCfg.ReadyChannels()
+		cfg["payment_currency"] = providerCfg.Currency
 	}
 	allowMockPayment := mockPaymentAllowed(h.cfg.AppEnv)
 	if len(channels) > 0 {
 		cfg["payment_channels"] = channels
 		cfg["payment_provider"] = channels[0]
-		cfg["payment_currency"] = providerCfg.Currency
 		cfg["payment_mock_mode"] = false
 	} else if allowMockPayment && providerErr == nil && !providerCfg.RealPaymentRequested() {
 		cfg["payment_channels"] = []string{}
 		cfg["payment_provider"] = "mock"
-		cfg["payment_currency"] = providerCfg.Currency
 		cfg["payment_mock_mode"] = true
 	} else {
 		cfg["payment_enabled"] = false
@@ -2234,6 +2250,10 @@ func (h *Handler) chatMultiStream(c *gin.Context, userID int64, input service.Co
 		if failChatBalance(c, err) {
 			return
 		}
+		if errors.Is(err, billing.ErrProviderCostMissing) {
+			util.BadRequest(c, err.Error())
+			return
+		}
 		util.InternalError(c, err.Error())
 		return
 	}
@@ -2266,13 +2286,8 @@ func (h *Handler) chatMultiStream(c *gin.Context, userID int64, input service.Co
 
 	results := make([]modelOut, 0, len(modelCodes))
 	var combined string
-	var actualCost float64
-	var collaborationCost float64
-	if collaborationModel, modelErr := h.models.GetFullByCode(c.Request.Context(), input.ModelCode); modelErr == nil && collaborationModel.Category == "multi_collab" {
-		collaborationCost = h.models.EstimateCost(collaborationModel, input.Params, 0, 0)
-	}
+	settlementItems := make([]billing.SettlementItem, 0, len(modelCodes)+1)
 	var promptTokens, completionTokens, totalTokens int
-	successfulModels := 0
 
 	for idx, code := range modelCodes {
 		model, err := h.models.GetFullByCode(c.Request.Context(), code)
@@ -2302,11 +2317,12 @@ func (h *Handler) chatMultiStream(c *gin.Context, userID int64, input service.Co
 		if v, ok := input.Params["temperature"].(float64); ok {
 			temperature = runtime.Float64Ptr(v)
 		}
-		resp, err := h.runtime.ChatCompletionWithConfig(ctx, model.NewAPIEndpoint, runtime.ChatRequest{
+		requestIDForModel := requestID + "-" + strconv.Itoa(idx+1)
+		resp, selectedRoute, err := h.chat.CompleteWithFailover(ctx, requestIDForModel, model, runtime.ChatRequest{
 			Model:       model.NewAPIModel,
 			Messages:    input.Messages,
 			Temperature: temperature,
-		}, model.NewAPIExtraParams)
+		}, input.Params)
 		cancel()
 		if err != nil {
 			pe, ok := err.(*runtime.PlatformError)
@@ -2335,8 +2351,34 @@ func (h *Handler) chatMultiStream(c *gin.Context, userID int64, input service.Co
 			content = resp.Choices[0].Message.Content
 		}
 		if resp != nil {
-			successfulModels++
-			actualCost += h.models.EstimateCostWithTokenDetails(model, input.Params, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.CachedInputTokens(), resp.Usage.CacheCreationInputTokens)
+			charge, costComplete, _, chargeErr := h.models.RouteProviderCharge(
+				c.Request.Context(), model, selectedRoute, input.Params,
+				resp.Usage.PromptTokens, resp.Usage.CompletionTokens,
+				resp.Usage.CachedInputTokens(), resp.Usage.CacheCreationInputTokens,
+			)
+			if chargeErr != nil || !costComplete {
+				message := "上游成本不完整，已停止多模型结算"
+				if chargeErr != nil {
+					message = chargeErr.Error()
+				}
+				h.chat.SaveMultiMessages(context.Background(), input.ConversationID, userID, input.Messages, results, combined)
+				_ = h.chat.UnfreezeStream(context.Background(), userID, requestID, estimated)
+				c.Writer.Write([]byte(runtime.FormatSSE("mm_error", map[string]interface{}{"request_id": requestID, "message": message})))
+				flusher.Flush()
+				return
+			}
+			if selectedRoute != nil {
+				h.models.UpdateSuccessfulRouteAttemptCost(context.Background(), requestIDForModel, selectedRoute.ID, charge.ProviderCost)
+			}
+			settlementItems = append(settlementItems, billing.SettlementItem{
+				ModelID: serviceModelIDPointer(model.ID), RouteID: serviceRouteIDPointer(selectedRoute),
+				RefType: "chat_model", RefID: requestIDForModel,
+				Source: "route_cost", ProviderCost: charge.ProviderCost,
+				UserCharge: charge.UserCharge, Commission: charge.Commission,
+				PromptTokens: resp.Usage.PromptTokens, CompletionTokens: resp.Usage.CompletionTokens,
+				CachedTokens: resp.Usage.CachedInputTokens(),
+				Metadata:     map[string]interface{}{"model_code": model.Code},
+			})
 			promptTokens += resp.Usage.PromptTokens
 			completionTokens += resp.Usage.CompletionTokens
 			totalTokens += resp.Usage.TotalTokens
@@ -2359,15 +2401,18 @@ func (h *Handler) chatMultiStream(c *gin.Context, userID int64, input service.Co
 		})))
 		flusher.Flush()
 	}
-	if successfulModels > 0 {
-		actualCost += collaborationCost
-	}
-
 	summary := strings.TrimSpace(combined)
 	if len(summaryModelCodes) > 0 && summary != "" {
-		if summaryText, cost, pt, ct, tt := h.runSummaryModel(c.Request.Context(), summaryModelCodes[0], input.Messages, results, timeoutSec, input.Params); summaryText != "" {
+		summaryText, item, pt, ct, tt, summaryErr := h.runSummaryModel(c.Request.Context(), requestID+"-summary", summaryModelCodes[0], input.Messages, results, timeoutSec, input.Params)
+		if summaryErr != nil {
+			_ = h.chat.UnfreezeStream(context.Background(), userID, requestID, estimated)
+			c.Writer.Write([]byte(runtime.FormatSSE("mm_error", map[string]interface{}{"request_id": requestID, "message": "总结模型结算失败，请重试"})))
+			flusher.Flush()
+			return
+		}
+		if summaryText != "" {
 			summary = summaryText
-			actualCost += cost
+			settlementItems = append(settlementItems, item)
 			promptTokens += pt
 			completionTokens += ct
 			totalTokens += tt
@@ -2384,7 +2429,8 @@ func (h *Handler) chatMultiStream(c *gin.Context, userID int64, input service.Co
 	if convID != "" && len(input.Messages) > 0 {
 		h.chat.SaveMultiMessages(context.Background(), convID, userID, input.Messages, results, summary)
 	}
-	if err := h.chat.FinalizeMultiChat(context.Background(), userID, requestID, input.ModelCode, estimated, actualCost, promptTokens, completionTokens, totalTokens); err != nil {
+	actualCost, err := h.chat.FinalizeMultiChat(context.Background(), userID, requestID, input.ModelCode, estimated, settlementItems, promptTokens, completionTokens, totalTokens)
+	if err != nil {
 		c.Writer.Write([]byte(runtime.FormatSSE("mm_error", map[string]interface{}{"request_id": requestID, "message": "费用结算失败，请联系客服核对账单"})))
 		flusher.Flush()
 		return
@@ -2408,10 +2454,10 @@ func ptrString(p *string) string {
 	return *p
 }
 
-func (h *Handler) runSummaryModel(ctx context.Context, modelCode string, inputMessages []runtime.ChatMessage, results interface{}, timeoutSec int, params map[string]interface{}) (string, float64, int, int, int) {
+func (h *Handler) runSummaryModel(ctx context.Context, requestID, modelCode string, inputMessages []runtime.ChatMessage, results interface{}, timeoutSec int, params map[string]interface{}) (string, billing.SettlementItem, int, int, int, error) {
 	model, err := h.models.GetFullByCode(ctx, modelCode)
 	if err != nil {
-		return "", 0, 0, 0, 0
+		return "", billing.SettlementItem{}, 0, 0, 0, err
 	}
 	raw, _ := json.Marshal(results)
 	userQuestion := ""
@@ -2427,16 +2473,49 @@ func (h *Handler) runSummaryModel(ctx context.Context, modelCode string, inputMe
 	}
 	reqCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
 	defer cancel()
-	resp, err := h.runtime.ChatCompletionWithConfig(reqCtx, model.NewAPIEndpoint, runtime.ChatRequest{
+	resp, selectedRoute, err := h.chat.CompleteWithFailover(reqCtx, requestID, model, runtime.ChatRequest{
 		Model:       model.NewAPIModel,
 		Messages:    messages,
 		Temperature: runtime.Float64Ptr(0.3),
-	}, model.NewAPIExtraParams)
+	}, params)
 	if err != nil || resp == nil || len(resp.Choices) == 0 {
-		return "", 0, 0, 0, 0
+		return "", billing.SettlementItem{}, 0, 0, 0, err
 	}
-	cost := h.models.EstimateCostWithTokenDetails(model, params, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.CachedInputTokens(), resp.Usage.CacheCreationInputTokens)
-	return strings.TrimSpace(resp.Choices[0].Message.Content), cost, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens
+	charge, costComplete, _, chargeErr := h.models.RouteProviderCharge(
+		ctx, model, selectedRoute, params,
+		resp.Usage.PromptTokens, resp.Usage.CompletionTokens,
+		resp.Usage.CachedInputTokens(), resp.Usage.CacheCreationInputTokens,
+	)
+	if chargeErr != nil || !costComplete {
+		return "", billing.SettlementItem{}, 0, 0, 0, chargeErr
+	}
+	if selectedRoute != nil {
+		h.models.UpdateSuccessfulRouteAttemptCost(context.Background(), requestID, selectedRoute.ID, charge.ProviderCost)
+	}
+	item := billing.SettlementItem{
+		ModelID: serviceModelIDPointer(model.ID), RouteID: serviceRouteIDPointer(selectedRoute),
+		RefType: "chat_model", RefID: requestID, Source: "route_cost",
+		ProviderCost: charge.ProviderCost, UserCharge: charge.UserCharge, Commission: charge.Commission,
+		PromptTokens: resp.Usage.PromptTokens, CompletionTokens: resp.Usage.CompletionTokens,
+		CachedTokens: resp.Usage.CachedInputTokens(),
+		Metadata:     map[string]interface{}{"model_code": model.Code, "role": "summary"},
+	}
+	return strings.TrimSpace(resp.Choices[0].Message.Content), item, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens, nil
+}
+
+func serviceModelIDPointer(id int64) *int64 {
+	if id <= 0 {
+		return nil
+	}
+	return &id
+}
+
+func serviceRouteIDPointer(route *service.ModelRoute) *int64 {
+	if route == nil || route.ID <= 0 {
+		return nil
+	}
+	id := route.ID
+	return &id
 }
 
 func failChatBalance(c *gin.Context, err error) bool {
@@ -5828,6 +5907,15 @@ func (h *Handler) AdminDashboard(c *gin.Context) {
 	util.OK(c, stats)
 }
 
+func (h *Handler) AdminFinance(c *gin.Context) {
+	summary, err := h.billing.FinancialSummary(c.Request.Context())
+	if err != nil {
+		util.InternalError(c, err.Error())
+		return
+	}
+	util.OK(c, summary)
+}
+
 func requireSuperAdmin(c *gin.Context) bool {
 	if c.GetString("admin_role") != "super_admin" {
 		util.Fail(c, 403, 403, "仅超级管理员可操作")
@@ -6741,6 +6829,17 @@ func (h *Handler) AdminUpdateConfig(c *gin.Context) {
 			return
 		}
 	}
+	if _, hasRate := req["payment_compute_rate"]; hasRate || req["recharge_shop_enabled"] != nil || req["recharge_shop_url"] != nil {
+		current, err := h.admin.GetRawSystemConfigs(c.Request.Context())
+		if err != nil {
+			util.InternalError(c, err.Error())
+			return
+		}
+		if err := service.ValidateRechargeConfig(mergeConfigValues(current, req)); err != nil {
+			util.BadRequest(c, err.Error())
+			return
+		}
+	}
 	if hasConfigPrefix(req, "web_search_") {
 		current, err := h.admin.GetRawSystemConfigs(c.Request.Context())
 		if err != nil {
@@ -6949,6 +7048,9 @@ func (h *Handler) GetPublicSystemConfigs(c *gin.Context) {
 		"terms_content":                   cfg["terms_content"],
 		"web_search_unit_price":           webSearchConfig.UnitPrice,
 		"payment_compute_rate":            cfg["payment_compute_rate"],
+		"model_usd_to_compute_rate":       cfg["model_usd_to_compute_rate"],
+		"recharge_shop_enabled":           cfg["recharge_shop_enabled"],
+		"recharge_shop_url":               cfg["recharge_shop_url"],
 		"privacy_title":                   cfg["privacy_title"],
 		"privacy_content":                 cfg["privacy_content"],
 		"image_captcha_enabled":           cfg["image_captcha_enabled"],

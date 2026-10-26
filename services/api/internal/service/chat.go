@@ -165,7 +165,10 @@ func (s *ChatService) Completion(ctx context.Context, userID int64, input Comple
 	}
 
 	prepareChatBillingParams(&input)
-	estimated := s.models.EstimateCost(model, input.Params, 0, 0)
+	estimated, _, err := s.models.RouteBillingEstimate(ctx, model, input.Params, 0, 0)
+	if err != nil {
+		return nil, err
+	}
 	requestID := util.NewRequestID()
 
 	if err := s.billing.Freeze(ctx, userID, estimated, "chat", requestID); err != nil {
@@ -205,12 +208,27 @@ func (s *ChatService) Completion(ctx context.Context, userID int64, input Comple
 		reasoningContent = resp.Choices[0].Message.ReasoningContent
 	}
 	usage := normalizedChatUsage(resp.Usage, input, content)
-	actualCost := s.models.EstimateCostWithTokenDetails(model, input.Params, usage.PromptTokens, usage.CompletionTokens, usage.CachedInputTokens(), usage.CacheCreationInputTokens)
-	providerCost := EstimateRouteProviderCostWithTokenDetails(selectedRoute, input.Params, usage.PromptTokens, usage.CompletionTokens, usage.CachedInputTokens(), usage.CacheCreationInputTokens)
+	charge, costComplete, pricingCfg, err := s.models.RouteProviderCharge(ctx, model, selectedRoute, input.Params, usage.PromptTokens, usage.CompletionTokens, usage.CachedInputTokens(), usage.CacheCreationInputTokens)
+	if err != nil {
+		s.logCall(ctx, requestID, userID, model.ID, nil, usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, 0, "billing_failed", err, duration)
+		return nil, fmt.Errorf("对话结算失败: %w", err)
+	}
+	actualCost := charge.UserCharge
+	providerCost := charge.ProviderCost
 	if selectedRoute != nil {
 		s.models.UpdateSuccessfulRouteAttemptCost(ctx, requestID, selectedRoute.ID, providerCost)
 	}
-	if err := s.billing.Charge(ctx, userID, estimated, actualCost, "chat", requestID, "chat_usage", chatBillingLabel(input.BillingLabel, "对话消费")); err != nil {
+	settlement := billing.Settlement{
+		UserID: userID, ModelID: modelIDPointer(model.ID), RouteID: routeIDPointer(routeID(selectedRoute)),
+		RefType: "chat", RefID: requestID, ProviderCost: providerCost, UserCharge: actualCost,
+		Commission: charge.Commission, CostSource: routeCostSource(selectedRoute), CostComplete: costComplete,
+		Config: pricingCfg, Key: "chat:" + requestID + ":chat_usage",
+		Metadata: settlementMetadata(map[string]interface{}{
+			"prompt_tokens": usage.PromptTokens, "completion_tokens": usage.CompletionTokens,
+			"cached_input_tokens": usage.CachedInputTokens(), "cache_creation_input_tokens": usage.CacheCreationInputTokens,
+		}),
+	}
+	if err := s.billing.ChargeWithSettlement(ctx, userID, estimated, settlement, "chat_usage", chatBillingLabel(input.BillingLabel, "对话消费"), nil); err != nil {
 		s.logCall(ctx, requestID, userID, model.ID, nil, usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, 0, "billing_failed", err, duration)
 		return nil, fmt.Errorf("对话结算失败: %w", err)
 	}
@@ -245,7 +263,10 @@ func (s *ChatService) CompletionStream(ctx context.Context, userID int64, input 
 	}
 
 	prepareChatBillingParams(&input)
-	estimated := s.models.EstimateCost(model, input.Params, 0, 0)
+	estimated, _, err := s.models.RouteBillingEstimate(ctx, model, input.Params, 0, 0)
+	if err != nil {
+		return "", nil, 0, err
+	}
 	requestID := util.NewRequestID()
 	if err := s.billing.Freeze(ctx, userID, estimated, "chat", requestID); err != nil {
 		if errors.Is(err, billing.ErrInsufficientBalance) {
@@ -297,7 +318,10 @@ func (s *ChatService) CompletionStreamRaw(ctx context.Context, userID int64, mod
 		return "", nil, 0, err
 	}
 	prepareChatBillingParams(&input)
-	estimated := s.models.EstimateCost(model, input.Params, 0, 0)
+	estimated, _, err := s.models.RouteBillingEstimate(ctx, model, input.Params, 0, 0)
+	if err != nil {
+		return "", nil, 0, err
+	}
 	requestID := util.NewRequestID()
 	if err := s.billing.Freeze(ctx, userID, estimated, "chat", requestID); err != nil {
 		if errors.Is(err, billing.ErrInsufficientBalance) {
@@ -549,8 +573,11 @@ func waitRouteRetry(ctx context.Context, retry int) bool {
 const maxRouteAttemptsPerRequest = 8
 
 func (s *ChatService) modelRuntimeRoutes(ctx context.Context, model *ModelFull) ([]ModelRoute, error) {
-	routes, err := s.models.RuntimeRoutes(ctx, model)
+	routes, err := s.models.EnabledRoutesWithCost(ctx, model)
 	if err != nil {
+		if errors.Is(err, billing.ErrProviderCostMissing) {
+			return nil, err
+		}
 		return nil, &runtime.PlatformError{Code: "MODEL_PROVIDER_ERROR", Message: "模型所有线路暂时不可用，请稍后重试"}
 	}
 	if len(routes) == 0 {
@@ -623,6 +650,10 @@ routeLoop:
 		lastErr = &runtime.PlatformError{Code: "MODEL_PROVIDER_ERROR", Message: "模型线路正在恢复探测，请稍后重试"}
 	}
 	return nil, nil, lastErr
+}
+
+func (s *ChatService) CompleteWithFailover(ctx context.Context, requestID string, model *ModelFull, req runtime.ChatRequest, params map[string]interface{}) (*runtime.ChatResponse, *ModelRoute, error) {
+	return s.chatCompletionWithFailover(ctx, requestID, model, req, params)
 }
 
 func (s *ChatService) chatCompletionStreamWithFailover(ctx context.Context, requestID string, model *ModelFull, req runtime.ChatRequest, params map[string]interface{}) (<-chan runtime.StreamChunk, *ModelRoute, error) {
@@ -710,13 +741,27 @@ func (s *ChatService) FinalizeStream(ctx context.Context, userID int64, requestI
 		normalized = *usage
 	}
 	normalized = normalizedChatUsage(normalized, input, fullContent)
-	actualCost := s.models.EstimateCostWithTokenDetails(model, input.Params, normalized.PromptTokens, normalized.CompletionTokens, normalized.CachedInputTokens(), normalized.CacheCreationInputTokens)
 	selectedRoute, _ := s.models.SuccessfulRouteForRequest(ctx, requestID)
-	providerCost := EstimateRouteProviderCostWithTokenDetails(selectedRoute, input.Params, normalized.PromptTokens, normalized.CompletionTokens, normalized.CachedInputTokens(), normalized.CacheCreationInputTokens)
+	charge, costComplete, pricingCfg, err := s.models.RouteProviderCharge(ctx, model, selectedRoute, input.Params, normalized.PromptTokens, normalized.CompletionTokens, normalized.CachedInputTokens(), normalized.CacheCreationInputTokens)
+	if err != nil {
+		return "", fmt.Errorf("对话结算失败: %w", err)
+	}
+	actualCost := charge.UserCharge
+	providerCost := charge.ProviderCost
 	if selectedRoute != nil {
 		s.models.UpdateSuccessfulRouteAttemptCost(ctx, requestID, selectedRoute.ID, providerCost)
 	}
-	if err := s.billing.Charge(ctx, userID, estimated, actualCost, "chat", requestID, "chat_usage", chatBillingLabel(input.BillingLabel, "对话消费")); err != nil {
+	settlement := billing.Settlement{
+		ModelID: modelIDPointer(model.ID), RouteID: routeIDPointer(routeID(selectedRoute)),
+		RefType: "chat", RefID: requestID, ProviderCost: providerCost, UserCharge: actualCost,
+		Commission: charge.Commission, CostSource: routeCostSource(selectedRoute), CostComplete: costComplete,
+		Config: pricingCfg, Key: "chat:" + requestID + ":chat_usage",
+		Metadata: settlementMetadata(map[string]interface{}{
+			"prompt_tokens": normalized.PromptTokens, "completion_tokens": normalized.CompletionTokens,
+			"cached_input_tokens": normalized.CachedInputTokens(), "cache_creation_input_tokens": normalized.CacheCreationInputTokens,
+		}),
+	}
+	if err := s.billing.ChargeWithSettlement(ctx, userID, estimated, settlement, "chat_usage", chatBillingLabel(input.BillingLabel, "对话消费"), nil); err != nil {
 		s.logCall(ctx, requestID, userID, model.ID, nil, normalized.PromptTokens, normalized.CompletionTokens, normalized.TotalTokens, 0, "billing_failed", err, 0)
 		return "", fmt.Errorf("对话结算失败: %w", err)
 	}
@@ -747,18 +792,6 @@ func (s *ChatService) UnfreezeStream(ctx context.Context, userID int64, requestI
 	return s.billing.Unfreeze(ctx, userID, estimated, "chat", requestID)
 }
 
-func (s *ChatService) EstimateModelsCost(ctx context.Context, modelCodes []string, params map[string]interface{}) float64 {
-	total := 0.0
-	for _, code := range modelCodes {
-		model, err := s.models.GetFullByCode(ctx, code)
-		if err != nil {
-			continue
-		}
-		total += s.models.EstimateCost(model, params, 0, 0)
-	}
-	return total
-}
-
 func (s *ChatService) BeginMultiChat(ctx context.Context, userID int64, input CompletionInput, modelCodes []string) (requestID string, estimated float64, err error) {
 	prepareChatBillingParams(&input)
 	requestID = util.NewRequestID()
@@ -767,11 +800,14 @@ func (s *ChatService) BeginMultiChat(ctx context.Context, userID int64, input Co
 		if mErr != nil {
 			return "", 0, mErr
 		}
-		estimated = s.models.EstimateCost(model, input.Params, 0, 0)
+		estimated, _, err = s.models.RouteBillingEstimate(ctx, model, input.Params, 0, 0)
+		if err != nil {
+			return "", 0, err
+		}
 	} else {
-		estimated = s.EstimateModelsCost(ctx, modelCodes, input.Params)
-		if collaborationModel, modelErr := s.models.GetFullByCode(ctx, input.ModelCode); modelErr == nil && collaborationModel.Category == "multi_collab" {
-			estimated += s.models.EstimateCost(collaborationModel, input.Params, 0, 0)
+		estimated, err = s.EstimateModelsBilling(ctx, modelCodes, input.Params)
+		if err != nil {
+			return "", 0, err
 		}
 	}
 	if freezeErr := s.billing.Freeze(ctx, userID, estimated, "chat", requestID); freezeErr != nil {
@@ -783,17 +819,64 @@ func (s *ChatService) BeginMultiChat(ctx context.Context, userID int64, input Co
 	return requestID, estimated, nil
 }
 
-func (s *ChatService) FinalizeMultiChat(ctx context.Context, userID int64, requestID string, modelCode string, estimated, actualCost float64, promptTokens, completionTokens, totalTokens int) error {
+func (s *ChatService) FinalizeMultiChat(ctx context.Context, userID int64, requestID string, modelCode string, estimated float64, items []billing.SettlementItem, promptTokens, completionTokens, totalTokens int) (float64, error) {
 	model, err := s.models.GetFullByCode(ctx, modelCode)
 	if err != nil {
-		return s.billing.Unfreeze(ctx, userID, estimated, "chat", requestID)
+		return 0, s.billing.Unfreeze(ctx, userID, estimated, "chat", requestID)
 	}
-	if err := s.billing.Charge(ctx, userID, estimated, actualCost, "chat", requestID, "chat_usage", "多模型协作消费"); err != nil {
+	cfg, err := s.models.BillingPricingConfig(ctx)
+	if err != nil {
+		return 0, err
+	}
+	providerCost, actualCost, commission := 0.0, 0.0, 0.0
+	for _, item := range items {
+		providerCost += item.ProviderCost
+		actualCost += item.UserCharge
+		commission += item.Commission
+	}
+	providerCost = numericMicros(providerCost)
+	actualCost = numericMicros(actualCost)
+	commission = numericMicros(actualCost - providerCost)
+	settlement := billing.Settlement{
+		ModelID: modelIDPointer(model.ID), RefType: "chat", RefID: requestID,
+		ProviderCost: providerCost, UserCharge: actualCost, Commission: commission,
+		CostSource: "multi_model_routes", CostComplete: true, Config: cfg,
+		Items: items, Key: "chat:" + requestID + ":chat_usage",
+		Metadata: settlementMetadata(map[string]interface{}{
+			"prompt_tokens": promptTokens, "completion_tokens": completionTokens,
+			"total_tokens": totalTokens, "aggregation": "multi_model_chat",
+		}),
+	}
+	if err := s.billing.ChargeWithSettlement(ctx, userID, estimated, settlement, "chat_usage", "多模型协作消费", nil); err != nil {
 		s.logCall(ctx, requestID, userID, model.ID, nil, promptTokens, completionTokens, totalTokens, 0, "billing_failed", err, 0)
-		return err
+		return actualCost, err
 	}
-	s.logCall(ctx, requestID, userID, model.ID, nil, promptTokens, completionTokens, totalTokens, actualCost, "success", nil, 0)
-	return nil
+	s.logCallWithRoute(ctx, requestID, userID, model.ID, 0, nil, promptTokens, completionTokens, totalTokens, actualCost, providerCost, "success", nil, 0)
+	return actualCost, nil
+}
+
+func (s *ChatService) EstimateModelsBilling(ctx context.Context, modelCodes []string, params map[string]interface{}) (float64, error) {
+	total := 0.0
+	for _, code := range modelCodes {
+		model, err := s.models.GetFullByCode(ctx, code)
+		if err != nil {
+			return 0, err
+		}
+		estimate, _, err := s.models.RouteBillingEstimate(ctx, model, params, 0, 0)
+		if err != nil {
+			return 0, err
+		}
+		total += estimate
+	}
+	return total, nil
+}
+
+func routeCostSource(route *ModelRoute) string {
+	availability := routeCostAvailabilityFor(route)
+	if availability.Source == "" {
+		return "route_cost"
+	}
+	return availability.Source
 }
 
 func prepareChatBillingParams(input *CompletionInput) {

@@ -4,9 +4,8 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bot, ChevronLeft, Compass, FileText, Home, LayoutGrid, Menu, Search, Settings, WalletCards, Wrench, X } from "lucide-react";
+import { Bot, ChevronLeft, Compass, CreditCard, FileText, Home, LayoutGrid, Menu, Search, Settings, WalletCards, Wrench, X } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
-import { RechargeModal } from "./RechargeModal";
 import { api, apiCached, apiForLocaleCached } from "@/lib/api";
 import type { Model, User, Wallet } from "@starai/shared-types";
 import { clsx } from "clsx";
@@ -47,6 +46,7 @@ const SUBPAGE_LINKS = [
   { href: "/app", label: "工作台", shortLabel: "工作", icon: Home },
   { href: "/app/works", label: "我的作品", shortLabel: "作品", icon: LayoutGrid },
   { href: "/app/wallet", label: "钱包", shortLabel: "钱包", icon: WalletCards },
+  { href: "/app/recharge", label: "充值", shortLabel: "充值", icon: CreditCard },
   { href: "/app/gallery", label: "灵感广场", shortLabel: "灵感", icon: Compass },
   { href: "/app/settings", label: "设置", shortLabel: "设置", icon: Settings },
   { href: "/app/pricing", label: "价格查询", shortLabel: "价格", icon: Bot },
@@ -100,6 +100,7 @@ const MOBILE_SUBPAGE_LINKS = [
   { href: "/app", label: "工作台", icon: Home },
   { href: "/app/works", label: "我的作品", icon: LayoutGrid },
   { href: "/app/wallet", label: "钱包", icon: WalletCards },
+  { href: "/app/recharge", label: "充值", icon: CreditCard },
   { href: "/app/gallery", label: "灵感广场", icon: Compass },
   { href: "/app/settings", label: "设置", icon: Settings },
   { href: "/app/pricing", label: "价格查询", icon: Bot },
@@ -182,7 +183,6 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
   const [bootstrapUser, setBootstrapUser] = useState<User | null>(initialUser || null);
   const user = storedUser || bootstrapUser;
   const [wallet, setWallet] = useState<Wallet | null>(initialWallet || null);
-  const [showRecharge, setShowRecharge] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isMobile = useIsMobile();
@@ -253,6 +253,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
         "/app": t("nav.workspace"),
         "/app/works": t("nav.works"),
         "/app/wallet": t("nav.wallet"),
+        "/app/recharge": t("menu.recharge"),
         "/app/gallery": t("nav.gallery"),
         "/app/settings": t("nav.settings"),
         "/app/pricing": t("nav.pricing"),
@@ -262,6 +263,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
         "/app": t("nav.short.workspace"),
         "/app/works": t("nav.short.works"),
         "/app/wallet": t("nav.short.wallet"),
+        "/app/recharge": t("menu.recharge"),
         "/app/gallery": t("nav.short.gallery"),
         "/app/settings": t("nav.short.settings"),
         "/app/pricing": t("nav.short.pricing"),
@@ -948,7 +950,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
               </div>
             </Link>
             <button
-              onClick={() => setShowRecharge(true)}
+              onClick={() => router.push("/app/recharge")}
               className="px-2.5 py-1.5 rounded-xl bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/15 transition shrink-0"
             >
               {t("common.recharge")}
@@ -974,14 +976,14 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
       <Link href="/app/wallet" className="text-xs text-primary font-medium shrink-0 tabular-nums">
         {wallet?.compute_balance?.toFixed(0) ?? "0"}
       </Link>
-      <WorkbenchTopActions onRecharge={() => setShowRecharge(true)} />
+      <WorkbenchTopActions onRecharge={() => router.push("/app/recharge")} />
     </div>
   );
 
   const renderDesktopQuickActions = () => (
     <div className="pointer-events-none absolute right-5 top-4 z-40 hidden items-center gap-2 lg:flex">
       <div className="pointer-events-auto">
-        <WorkbenchTopActions onRecharge={() => setShowRecharge(true)} />
+        <WorkbenchTopActions onRecharge={() => router.push("/app/recharge")} />
       </div>
     </div>
   );
@@ -1094,7 +1096,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
             {!hideSubpageRail && (
               <div className="pointer-events-none fixed right-5 top-4 z-40 hidden items-center gap-2 lg:flex">
                 <div className="pointer-events-auto">
-                  <WorkbenchTopActions onRecharge={() => setShowRecharge(true)} />
+                  <WorkbenchTopActions onRecharge={() => router.push("/app/recharge")} />
                 </div>
               </div>
             )}
@@ -1102,11 +1104,6 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
           </main>
         </div>
         <Drawer />
-        <RechargeModal
-          open={showRecharge}
-          onClose={() => setShowRecharge(false)}
-          onSuccess={() => api<Wallet>("/api/wallet").then(setWallet)}
-        />
       </div>
     );
   }
@@ -1148,7 +1145,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
         {!hideMobileTopBar && renderMobileTopBar(sectionTitle)}
         {showDesktopHeader && (
           <div className="mcdl-app-desktop-header relative z-40 hidden lg:flex shrink-0 items-center justify-end gap-2 px-5 py-3 bg-white border-b border-gray-100 dark:bg-gray-900 dark:border-white/10">
-            <WorkbenchTopActions onRecharge={() => setShowRecharge(true)} />
+            <WorkbenchTopActions onRecharge={() => router.push("/app/recharge")} />
           </div>
         )}
         {(section === "agents" || section === "gallery") && renderDesktopQuickActions()}
@@ -1165,7 +1162,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                   key={GENERAL_CREATIVE_AGENT_CODE}
                   onOpenModelPicker={isMobile ? () => setActiveModelCode(undefined) : undefined}
                   onOpenNav={isMobile ? () => setDrawerOpen(true) : undefined}
-                  onRecharge={() => setShowRecharge(true)}
+                  onRecharge={() => router.push("/app/recharge")}
                   walletBalance={wallet?.compute_balance}
                 />
               ) : activeModel ? (
@@ -1175,7 +1172,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                   initialPrompt={modelPrompt}
                   onOpenModelPicker={isMobile ? () => setActiveModelCode(undefined) : undefined}
                   onOpenNav={isMobile ? () => setDrawerOpen(true) : undefined}
-                  onRecharge={() => setShowRecharge(true)}
+                  onRecharge={() => router.push("/app/recharge")}
                 />
               ) : (
                 <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">{t("common.selectModel")}</div>
@@ -1269,11 +1266,6 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
         )}
       </main>
 
-      <RechargeModal
-        open={showRecharge}
-        onClose={() => setShowRecharge(false)}
-        onSuccess={() => api<Wallet>("/api/wallet").then(setWallet)}
-      />
     </div>
   );
 }

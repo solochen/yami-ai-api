@@ -75,11 +75,12 @@ func configuredWorkExpiration(ctx context.Context, pool *pgxpool.Pool, fallbackD
 }
 
 type ImageTaskPayload struct {
-	TaskNo    string                 `json:"task_no"`
-	UserID    int64                  `json:"user_id"`
-	ModelID   int64                  `json:"model_id"`
-	ModelCode string                 `json:"model_code"`
-	Input     map[string]interface{} `json:"input"`
+	TaskNo            string                 `json:"task_no"`
+	UserID            int64                  `json:"user_id"`
+	ModelID           int64                  `json:"model_id"`
+	ModelCode         string                 `json:"model_code"`
+	WorkflowProjectID int64                  `json:"workflow_project_id,omitempty"`
+	Input             map[string]interface{} `json:"input"`
 }
 
 type WorkflowTaskPayload struct {
@@ -432,26 +433,46 @@ routeLoop:
 	var taskID int64
 	var estimated float64
 	pool.QueryRow(ctx, `SELECT id, estimated_cost FROM tasks WHERE task_no=$1`, p.TaskNo).Scan(&taskID, &estimated)
-	actualCost := estimated
 	billingInput := inputWithActualUpstreamUsage(p.Input, usage)
-	if usage.hasAny() {
-		actualCost = estimateModelCostByIDWorker(ctx, pool, p.ModelID, billingInput, usage.PromptTokens, usage.OutputTokens, 0, 0)
-	}
-	providerCost := workerRouteProviderCost(selected.Route, billingInput, usage.PromptTokens, usage.OutputTokens, 0, 0)
+	costSource := workerRouteCostSource(selected.Route)
+	providerCost, costComplete := workerProviderCostFromRoute(selected.Route, billingInput, usage.PromptTokens, usage.OutputTokens, 0, 0)
 	usd := usage.CostUSD
 	if usd <= 0 {
 		usd = upstreamUSDCost(respBody)
 	}
 	if usd > 0 {
 		if rate := modelUSDToComputeRate(ctx, pool, p.ModelID); rate > 0 {
-			converted := math.Round(usd*rate*1e6) / 1e6
-			actualCost = converted
-			providerCost = converted
+			providerCost = math.Round(usd*rate*1e6) / 1e6
 		} else {
 			providerCost = usd
 		}
+		costSource, costComplete = "upstream_reported", true
 	}
-	updateWorkerRouteAttemptProviderCost(ctx, pool, p.TaskNo, selected.Route.ID, providerCost)
+	charge, err := workerChargeRouteProviderCost(ctx, pool, providerCost, costSource)
+	if err != nil {
+		message := "上游未返回可核验成本，已停止扣费：" + err.Error()
+		_, _ = pool.Exec(ctx,
+			`UPDATE tasks SET status='failed',output=$1,actual_cost=0,provider_cost=$2,
+			 provider_cost_source='missing_route_cost',provider_cost_complete=false,
+			 error_code='BILLING_COST_MISSING',error_message=$3,finished_at=now(),updated_at=now()
+			 WHERE task_no=$4 AND status='running'`,
+			nil, providerCost, message, p.TaskNo,
+		)
+		if releaseErr := unfreezeBillingWithFinalize(ctx, pool, p.UserID, estimated, "task", p.TaskNo, nil); releaseErr != nil {
+			return fmt.Errorf("task %s cost rejected and reservation release failed: %w", p.TaskNo, releaseErr)
+		}
+		insertNotification(ctx, pool, p.UserID, "生成任务已停止", message+"，冻结算力已释放", "task")
+		return nil
+	}
+	actualCost := charge.UserCharge
+	if costSource == "complimentary" {
+		providerCost = 0
+	}
+	if p.WorkflowProjectID > 0 {
+		updateWorkerRouteAttemptProviderCostForProject(ctx, pool, p.WorkflowProjectID, p.TaskNo, selected.Route.ID, providerCost, costSource, costComplete)
+	} else {
+		updateWorkerRouteAttemptProviderCost(ctx, pool, p.TaskNo, selected.Route.ID, providerCost, costSource, costComplete)
+	}
 
 	var output, meta []byte
 	workType := "image"
@@ -615,15 +636,31 @@ routeLoop:
 		remark = label
 	}
 	if boolInput(p.Input, "_skip_billing") {
+		if costSource == "complimentary" {
+			providerCost, actualCost = 0, 0
+		}
 		if _, err := pool.Exec(ctx, `
-			UPDATE tasks SET status='succeeded', output=$1, actual_cost=$2, route_id=$3, provider_cost=$4, error_code=NULL, error_message=NULL, finished_at=now(), updated_at=now() WHERE task_no=$5 AND status='running'`,
-			output, actualCost, nullableRouteID(selected.Route.ID), providerCost, p.TaskNo); err != nil {
+			UPDATE tasks SET status='succeeded', output=$1, actual_cost=$2, route_id=$3, provider_cost=$4,
+				provider_cost_source=$6,provider_cost_complete=$7,
+				error_code=NULL, error_message=NULL, finished_at=now(), updated_at=now()
+			WHERE task_no=$5 AND status='running'`,
+			output, actualCost, nullableRouteID(selected.Route.ID), providerCost, p.TaskNo,
+			costSource, costComplete); err != nil {
 			return fmt.Errorf("task %s finalize: %w", p.TaskNo, err)
 		}
-	} else if err := chargeBillingWithFinalize(ctx, pool, p.UserID, estimated, actualCost, "task", p.TaskNo, txType, remark, func(tx pgx.Tx) error {
+	} else if err := chargeBillingWithSettlement(ctx, pool, p.UserID, estimated, workerSettlement{
+		ModelID: p.ModelID, RouteID: selected.Route.ID, RefType: "task", RefID: p.TaskNo,
+		ProviderCost: providerCost, UserCharge: actualCost, Commission: charge.Commission,
+		CostSource: costSource, CostComplete: costComplete,
+		Config: charge.Config, TxType: txType, Remark: remark,
+	}, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
-			UPDATE tasks SET status='succeeded', output=$1, actual_cost=$2, route_id=$3, provider_cost=$4, error_code=NULL, error_message=NULL, finished_at=now(), updated_at=now() WHERE task_no=$5 AND status='running'`,
-			output, actualCost, nullableRouteID(selected.Route.ID), providerCost, p.TaskNo)
+			UPDATE tasks SET status='succeeded', output=$1, actual_cost=$2, route_id=$3, provider_cost=$4,
+			provider_cost_source=$6,provider_cost_complete=$7,
+				error_code=NULL, error_message=NULL, finished_at=now(), updated_at=now()
+			WHERE task_no=$5 AND status='running'`,
+			output, actualCost, nullableRouteID(selected.Route.ID), providerCost, p.TaskNo,
+			costSource, costComplete)
 		if err != nil {
 			return err
 		}
@@ -720,6 +757,40 @@ type workerModelRoute struct {
 	// LegacyRequestTransform holds connection.request_transform recovered from the
 	// model's legacy extra_params before that block is stripped.
 	LegacyRequestTransform map[string]interface{}
+}
+
+func workerRouteCostAvailability(route workerModelRoute) (billable, complimentary bool) {
+	if len(route.CostRule) == 0 {
+		return false, false
+	}
+	if value, _ := route.CostRule["complimentary"].(bool); value {
+		return true, true
+	}
+	switch strings.ToLower(strings.TrimSpace(stringAny(route.CostRule["billing_type"]))) {
+	case "per_token":
+		for _, key := range []string{
+			"input_cost_per_m", "output_cost_per_m", "cache_read_cost_per_m",
+			"cache_write_cost_per_m", "audio_input_cost_per_m", "audio_output_cost_per_m",
+		} {
+			if floatAny(route.CostRule[key]) > 0 {
+				return true, false
+			}
+		}
+	case "per_image", "per_request", "per_second":
+		if floatAny(route.CostRule["unit_cost"]) > 0 {
+			return true, false
+		}
+		for _, key := range []string{"unit_cost_by_size", "unit_cost_by_resolution", "unit_cost_by_variant"} {
+			if values, ok := route.CostRule[key].(map[string]interface{}); ok {
+				for _, value := range values {
+					if floatAny(value) > 0 {
+						return true, false
+					}
+				}
+			}
+		}
+	}
+	return false, false
 }
 
 // workerRouteRequestTransform returns the effective request_transform for a
@@ -821,6 +892,20 @@ func loadWorkerModelRoutes(ctx context.Context, pool *pgxpool.Pool, modelID int6
 			protocol = "openai"
 		}
 		routes = append(routes, workerModelRoute{Protocol: protocol, UpstreamModel: legacyModel, Endpoint: legacyEndpoint, Connection: parseConnection(legacyExtra, fallbackBaseURL, fallbackToken), ExtraParams: legacyExtra, RuntimeRule: legacyRuntime, Weight: 100, TimeoutSeconds: 120})
+	}
+	pricingCfg := loadWorkerPricingConfig(ctx, pool)
+	if pricingCfg.MissingCostPolicy == "block" {
+		billable := make([]workerModelRoute, 0, len(routes))
+		for _, route := range routes {
+			ok, _ := workerRouteCostAvailability(route)
+			if ok {
+				billable = append(billable, route)
+			}
+		}
+		if len(billable) == 0 {
+			return nil, fmt.Errorf("%w: model %d has no enabled route with upstream cost", errWorkerProviderCostMissing, modelID)
+		}
+		routes = billable
 	}
 	for start := 0; start < len(routes); {
 		end := start + 1
@@ -1020,20 +1105,61 @@ func logWorkerRouteAttempt(ctx context.Context, pool *pgxpool.Pool, taskNo strin
 	_, _ = pool.Exec(ctx, `INSERT INTO model_route_attempts(request_id,model_id,route_id,attempt,status,status_code,latency_ms) VALUES($1,$2,$3,$4,$5,NULLIF($6,0),$7)`, taskNo, modelID, routeRef, attempt, status, statusCode, latencyMS)
 }
 
-func updateWorkerRouteAttemptProviderCost(ctx context.Context, pool *pgxpool.Pool, requestID string, routeID int64, providerCost float64) {
+func updateWorkerRouteAttemptProviderCost(ctx context.Context, pool *pgxpool.Pool, requestID string, routeID int64, providerCost float64, source string, complete bool) {
 	if strings.TrimSpace(requestID) == "" || routeID <= 0 || providerCost < 0 {
 		return
 	}
-	_, _ = pool.Exec(ctx, `UPDATE model_route_attempts SET provider_cost=$1 WHERE id=(
-		SELECT id FROM model_route_attempts WHERE request_id=$2 AND route_id=$3 AND status IN ('success','SUCCESS') ORDER BY attempt DESC,id DESC LIMIT 1
-	)`, providerCost, requestID, routeID)
+	_, _ = pool.Exec(ctx, `UPDATE model_route_attempts SET
+		provider_cost=$1,provider_cost_source=$4,provider_cost_complete=$5
+		WHERE id=(
+			SELECT id FROM model_route_attempts
+			WHERE request_id=$2 AND route_id=$3 AND status IN ('success','SUCCESS')
+			ORDER BY attempt DESC,id DESC LIMIT 1
+		)`, providerCost, requestID, routeID, nonEmptyWorker(source, "missing_route_cost"), complete)
+}
+
+func updateWorkerRouteAttemptProviderCostForProject(ctx context.Context, pool *pgxpool.Pool, projectID int64, requestID string, routeID int64, providerCost float64, source string, complete bool) {
+	if strings.TrimSpace(requestID) == "" || routeID <= 0 || providerCost < 0 {
+		return
+	}
+	_, _ = pool.Exec(ctx, `UPDATE model_route_attempts SET
+		provider_cost=$1,provider_cost_source=$5,
+		provider_cost_complete=$6,workflow_project_id=NULLIF($2,0)
+		WHERE id=(
+			SELECT id FROM model_route_attempts
+			WHERE request_id=$3 AND route_id=$4 AND status IN ('success','SUCCESS')
+			ORDER BY attempt DESC,id DESC LIMIT 1
+		)`, providerCost, projectID, requestID, routeID, nonEmptyWorker(source, "missing_route_cost"), complete)
 }
 
 func workerRouteProviderCost(route workerModelRoute, input map[string]interface{}, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens int) float64 {
 	typeName := strings.ToLower(strings.TrimSpace(fmt.Sprint(route.CostRule["billing_type"])))
 	value := func(key string) float64 { return floatAny(route.CostRule[key]) }
+	hasPositive := func(keys ...string) bool {
+		for _, key := range keys {
+			if value(key) > 0 {
+				return true
+			}
+		}
+		return false
+	}
+	hasPositiveMap := func(key string) bool {
+		values, ok := route.CostRule[key].(map[string]interface{})
+		if !ok {
+			return false
+		}
+		for _, raw := range values {
+			if floatAny(raw) > 0 {
+				return true
+			}
+		}
+		return false
+	}
 	switch typeName {
 	case "per_token":
+		if !hasPositive("input_cost_per_m", "output_cost_per_m", "cache_read_cost_per_m", "cache_write_cost_per_m", "audio_input_cost_per_m", "audio_output_cost_per_m") {
+			return 0
+		}
 		inputCost := value("input_cost_per_m")
 		audioInputCost := value("audio_input_cost_per_m")
 		audioOutputCost := value("audio_output_cost_per_m")
@@ -1079,6 +1205,9 @@ func workerRouteProviderCost(route workerModelRoute, input map[string]interface{
 		uncached := textPromptTokens - cacheReadTokens - cacheWriteTokens
 		return (float64(uncached)*inputCost + float64(cacheReadTokens)*cacheReadCost + float64(cacheWriteTokens)*cacheWriteCost + float64(textOutputTokens)*value("output_cost_per_m") + float64(audioInputTokens)*audioInputCost + float64(audioOutputTokens)*audioOutputCost) / 1_000_000
 	case "per_image", "per_request":
+		if value("unit_cost") <= 0 && !hasPositiveMap("unit_cost_by_size") && !hasPositiveMap("unit_cost_by_resolution") && !hasPositiveMap("unit_cost_by_variant") {
+			return 0
+		}
 		count := intAny(input["n"])
 		if count <= 0 {
 			count = intAny(input["count"])
@@ -1092,17 +1221,60 @@ func workerRouteProviderCost(route workerModelRoute, input map[string]interface{
 		}
 		return float64(count) * unitCost
 	case "per_second":
-		seconds := floatAny(input["_actual_output_seconds"])
-		if seconds <= 0 {
-			seconds = workerDurationSeconds(input)
+		if value("unit_cost") <= 0 && !hasPositiveMap("unit_cost_by_resolution") && !hasPositiveMap("unit_cost_by_variant") {
+			return 0
 		}
-		if seconds <= 0 {
-			seconds = 1
-		}
-		return seconds * value("unit_cost")
+		seconds := workerDurationSeconds(input)
+		return float64(workerBillingItemCount(input)) * seconds * workerPerSecondUnitCost(route.CostRule, input)
 	default:
+		if value("unit_cost") <= 0 {
+			return 0
+		}
 		return value("unit_cost")
 	}
+}
+
+func workerPerSecondUnitCost(rule, params map[string]interface{}) float64 {
+	resolution := strings.ToLower(strings.TrimSpace(stringAny(params["resolution"])))
+	if resolution != "" && resolution != "<nil>" {
+		if values, ok := rule["unit_cost_by_resolution"].(map[string]interface{}); ok {
+			for key, value := range values {
+				if strings.EqualFold(strings.TrimSpace(key), resolution) && floatAny(value) > 0 {
+					return floatAny(value)
+				}
+			}
+		}
+	}
+	unitCost := floatAny(rule["unit_cost"])
+	if unitCost > 0 {
+		return unitCost
+	}
+	if values, ok := rule["unit_cost_by_variant"].(map[string]interface{}); ok {
+		quality := strings.ToLower(strings.TrimSpace(stringAny(params["quality"])))
+		size := strings.ToLower(strings.TrimSpace(stringAny(params["image_size"])))
+		if size == "" || size == "<nil>" {
+			size = "1k"
+		}
+		if quality != "" && quality != "<nil>" {
+			for key, value := range values {
+				if strings.EqualFold(strings.TrimSpace(key), quality+"_"+size) {
+					return floatAny(value)
+				}
+			}
+		}
+	}
+	return 0
+}
+
+func workerBillingItemCount(params map[string]interface{}) float64 {
+	count := floatAny(params["count"])
+	if count <= 0 {
+		count = floatAny(params["n"])
+	}
+	if count <= 0 {
+		count = 1
+	}
+	return count
 }
 
 type workerGenerationAttemptResult struct {
@@ -1763,10 +1935,19 @@ func modelUSDToComputeRate(ctx context.Context, pool *pgxpool.Pool, modelID int6
 		return 0
 	}
 	rate := floatAny(rule["usd_to_compute"])
-	if rate < 0 {
-		return 0
+	if rate > 0 {
+		return rate
 	}
-	return rate
+	if err := pool.QueryRow(ctx, `SELECT value FROM system_configs WHERE key='model_usd_to_compute_rate'`).Scan(&raw); err == nil {
+		var value interface{}
+		if json.Unmarshal(raw, &value) == nil {
+			rate = floatAny(value)
+			if rate > 0 {
+				return rate
+			}
+		}
+	}
+	return 7200
 }
 
 func isOpenAIImagesAdapter(runtimeRule map[string]interface{}) bool {

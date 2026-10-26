@@ -15,6 +15,8 @@ interface GalleryPickItem {
   cover_url?: string;
   type?: string;
   is_featured: boolean;
+  is_paid: boolean;
+  price: number;
   like_count: number;
 }
 
@@ -156,9 +158,7 @@ function pill(active: boolean) {
 }
 
 function galleryPricing(item: GalleryPickItem) {
-  if (item.is_featured) return { paid: true, price: 1 };
-  if (item.like_count >= 10) return { paid: true, price: 0.5 };
-  return { paid: false, price: 0 };
+  return { paid: item.is_paid, price: item.price || 0 };
 }
 
 function AssetGridCard({

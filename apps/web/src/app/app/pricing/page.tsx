@@ -18,19 +18,25 @@ function fmt(v: number): string {
   return v >= 1000 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(4) : v.toFixed(6);
 }
 
+function dynamicCreditMultiplier(r: Record<string, unknown>): number {
+  const pointsPerCNY = Number(r.points_per_cny);
+  const platformMultiplier = Number(r.platform_multiplier);
+  return (Number.isFinite(pointsPerCNY) && pointsPerCNY > 0 ? pointsPerCNY : 1)
+    * (Number.isFinite(platformMultiplier) && platformMultiplier > 0 ? platformMultiplier : 1);
+}
+
 function priceText(m: Model, t: (key: string, vars?: Record<string, string | number>) => string): string {
   const r = m.price_rule as unknown as Record<string, unknown> | undefined;
   if (!r) return "-";
   switch (r.billing_type) {
     case "per_token": {
-      const cur = typeof r.currency === "string" ? r.currency : "";
       const parts: string[] = [];
       const input = perM(r, "input_price");
       const output = perM(r, "output_price");
       const cacheRead = perM(r, "cache_read_price");
-      if (input !== null) parts.push(t("pricing.inputPrice", { value: `${cur}${fmt(input)}` }));
-      if (output !== null) parts.push(t("pricing.outputPrice", { value: `${cur}${fmt(output)}` }));
-      if (cacheRead !== null) parts.push(t("pricing.cacheReadPrice", { value: `${cur}${fmt(cacheRead)}` }));
+      if (input !== null) parts.push(t("pricing.inputPrice", { value: `${fmt(input)} 算力` }));
+      if (output !== null) parts.push(t("pricing.outputPrice", { value: `${fmt(output)} 算力` }));
+      if (cacheRead !== null) parts.push(t("pricing.cacheReadPrice", { value: `${fmt(cacheRead)} 算力` }));
       return parts.length ? `${parts.join(" / ")} / 1M Tokens` : "-";
     }
     case "per_image":
@@ -40,13 +46,21 @@ function priceText(m: Model, t: (key: string, vars?: Record<string, string | num
     case "per_second":
       return t("pricing.computePerSecond", { value: Number(r.unit_price ?? 0) });
     case "dynamic": {
+      const multiplier = dynamicCreditMultiplier(r);
       if (r.strategy === "seedance_2_tokens") {
         const rates = (r.rates_per_m_tokens ?? {}) as Record<string, Record<string, unknown>>;
         const pair = (resolution: string) => {
           const row = rates[resolution] || {};
-          return `${Number(row.without_video ?? 0)}/${Number(row.with_video ?? 0)}`;
+          return `${fmt(Number(row.without_video ?? 0) * multiplier)}/${fmt(Number(row.with_video ?? 0) * multiplier)}`;
         };
-        return `480/720p ${pair("720p")} · 1080p ${pair("1080p")} · 4K ${pair("4k")} 元 / 1M Tokens（无/有视频输入）`;
+        return `480/720p ${pair("720p")} · 1080p ${pair("1080p")} · 4K ${pair("4k")} 算力 / 1M Tokens（无/有视频输入）`;
+      }
+      if (r.strategy === "minimax_h3_seconds") {
+        const rates = (r.rates_per_second ?? {}) as Record<string, unknown>;
+        const defaultResolution = String(r.default_resolution || "2k").toLowerCase();
+        const outputRate = Number(rates[defaultResolution] ?? 0) * multiplier;
+        const excessImagePrice = Number(r.excess_image_price ?? 0) * multiplier;
+        return `${defaultResolution.toUpperCase()} ${fmt(outputRate)} 算力 / 秒 · 超额图片 ${fmt(excessImagePrice)} 算力 / 张`;
       }
       return t("pricing.dynamicEstimate");
     }

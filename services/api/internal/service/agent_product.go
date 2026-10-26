@@ -79,6 +79,13 @@ func productBillingReservation(floorPrice, executionBudget float64) float64 {
 	return floorPrice
 }
 
+func productBudgetLimit(computeRate float64) float64 {
+	if !validPositiveNumber(computeRate) {
+		computeRate = DefaultPaymentComputeRate
+	}
+	return 1000 * computeRate
+}
+
 func (s *AgentService) productPricing(ctx context.Context, runtime, priceRule map[string]interface{}, count int, quality string) (map[string]interface{}, float64, error) {
 	workflowFee := floatValue(priceRule["unit_price"])
 	quality = firstNonEmptyProduct(quality, "high")
@@ -87,7 +94,7 @@ func (s *AgentService) productPricing(ctx context.Context, runtime, priceRule ma
 		return nil, 0, fmt.Errorf("商品精修工作流或图片模型价格配置不完整，请联系管理员")
 	}
 	total := productPriceTotal(workflowFee, imageUnitFee, count)
-	if total <= 0 || total > 1000 || math.IsNaN(total) || math.IsInf(total, 0) {
+	if limit := productBudgetLimit(paymentComputeRate(ctx, s.db)); total <= 0 || total > limit || math.IsNaN(total) || math.IsInf(total, 0) {
 		return nil, 0, fmt.Errorf("商品精修预计费用无效，请联系管理员")
 	}
 	return map[string]interface{}{"workflow_fee": workflowFee, "image_unit_fee": imageUnitFee}, total, nil
@@ -102,7 +109,7 @@ func (s *AgentService) productExecutionBudget(ctx context.Context, runtime map[s
 		reviewCalls++ // independent verification
 	}
 	budget := analysis*2 + float64(count*(repairs+1))*(image+review*reviewCalls)
-	if analysis <= 0 || review <= 0 || image <= 0 || budget <= 0 || budget > 1000 || math.IsNaN(budget) || math.IsInf(budget, 0) {
+	if limit := productBudgetLimit(paymentComputeRate(ctx, s.db)); analysis <= 0 || review <= 0 || image <= 0 || budget <= 0 || budget > limit || math.IsNaN(budget) || math.IsInf(budget, 0) {
 		return 0, fmt.Errorf("商品精修模型价格配置不完整，请联系管理员")
 	}
 	return budget, nil

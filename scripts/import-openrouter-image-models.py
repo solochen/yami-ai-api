@@ -3,21 +3,25 @@
 
 Capabilities and USD prices are read from
 https://openrouter.ai/api/v1/images/models and each model's endpoints
-document. User-facing 算力 uses the platform rate of 7.2 per USD
-(1 算力 ≈ 1 RMB). The OpenRouter key is copied from an existing route
+document. User-facing prices and route costs are stored as 算力 by applying
+MODEL_USD_TO_COMPUTE_RATE (default 7200). Raw USD values are retained for
+future renormalization. The OpenRouter key is copied from an existing route
 and is never printed.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import urllib.request
 from decimal import Decimal, ROUND_HALF_UP
 
 SOURCE_CODE = "deepseek-v4-pro-0813"
 CATALOG = "https://openrouter.ai/api/v1/images/models"
-USD_TO_COMPUTE = Decimal("7.2")
+USD_TO_COMPUTE = Decimal(os.getenv("MODEL_USD_TO_COMPUTE_RATE", "7.2"))
+if USD_TO_COMPUTE <= 0:
+    raise SystemExit("MODEL_USD_TO_COMPUTE_RATE must be greater than 0")
 UI_RATIOS = {
     "1:1", "16:9", "9:16", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5",
     "7:3", "3:7", "21:9", "9:21", "2:1", "1:2", "3:1", "1:3", "4:1", "1:4",
@@ -160,37 +164,63 @@ def main() -> None:
             defaults["quality"] = "auto" if "auto" in qualities else qualities[0]
         if "per_image" in price or "per_variant" in price:
             by_size = price.get("per_image") or {}
+            by_variant = price.get("per_variant") or {}
+            source_unit_usd = by_size.get(tiers[0]) if tiers and tiers[0] in by_size else (next(iter(by_size.values())) if by_size else by_variant["low_1k"])
             user_price: dict = {
                 "billing_type": "per_image",
-                "currency": "¥",
+                "currency": "CREDITS",
                 "usd_to_compute": float(USD_TO_COMPUTE),
-                "unit_price": money(next(iter(by_size.values())) if by_size else next(iter(price["per_variant"].values()))),
+                "source_currency": "USD",
+                "source_unit_usd": float(Decimal(source_unit_usd)),
+                "price_unit_normalized": True,
             }
             if by_size:
                 user_price["unit_price_by_size"] = {tier: money(amount) for tier, amount in by_size.items()}
                 user_price["unit_price"] = money(by_size[tiers[0]] if tiers and tiers[0] in by_size else next(iter(by_size.values())))
-            if price.get("per_variant"):
-                user_price["unit_price_by_variant"] = {key: money(amount) for key, amount in price["per_variant"].items()}
-                user_price["unit_price"] = money(price["per_variant"]["low_1k"])
-            source_usd = by_size.get(tiers[0]) if tiers and tiers and tiers[0] in by_size else (next(iter(by_size.values())) if by_size else price["per_variant"]["low_1k"])
-            cost_rule = {"billing_type": "per_image", "unit_cost": float(Decimal(source_usd))}
+                user_price["source_unit_usd_by_size"] = {tier: float(Decimal(amount)) for tier, amount in by_size.items()}
+            if by_variant:
+                user_price["unit_price_by_variant"] = {key: money(amount) for key, amount in by_variant.items()}
+                user_price["unit_price"] = money(by_variant["low_1k"])
+                user_price["source_unit_usd_by_variant"] = {key: float(Decimal(amount)) for key, amount in by_variant.items()}
+            user_price.setdefault("unit_price", money(source_unit_usd))
+            cost_rule = {
+                "billing_type": "per_image",
+                "currency": "CREDITS",
+                "usd_to_compute": float(USD_TO_COMPUTE),
+                "source_currency": "USD",
+                "source_unit_cost": float(Decimal(source_unit_usd)),
+                "price_unit_normalized": True,
+            }
             if by_size:
-                cost_rule["unit_cost_by_size"] = {tier: float(Decimal(amount)) for tier, amount in by_size.items()}
-            if price.get("per_variant"):
-                cost_rule["unit_cost_by_variant"] = {key: float(Decimal(amount)) for key, amount in price["per_variant"].items()}
+                cost_rule["unit_cost_by_size"] = {tier: money(amount) for tier, amount in by_size.items()}
+                cost_rule["source_unit_cost_by_size"] = {tier: float(Decimal(amount)) for tier, amount in by_size.items()}
+            if by_variant:
+                cost_rule["unit_cost_by_variant"] = {key: money(amount) for key, amount in by_variant.items()}
+                cost_rule["source_unit_cost_by_variant"] = {key: float(Decimal(amount)) for key, amount in by_variant.items()}
+            cost_rule.setdefault("unit_cost", money(source_unit_usd))
         else:
             user_price = {
                 "billing_type": "per_token",
-                "currency": "¥",
+                "currency": "CREDITS",
                 "usd_to_compute": float(USD_TO_COMPUTE),
                 "input_price_per_m": money(Decimal(price["input_token"]) * Decimal(1_000_000)),
                 "output_price_per_m": money(Decimal(price["output_token"]) * Decimal(1_000_000)),
                 "estimated_output_tokens": price["estimated_output_tokens"],
+                "source_currency": "USD",
+                "source_input_price_per_m": float(Decimal(price["input_token"]) * Decimal(1_000_000)),
+                "source_output_price_per_m": float(Decimal(price["output_token"]) * Decimal(1_000_000)),
+                "price_unit_normalized": True,
             }
             cost_rule = {
                 "billing_type": "per_token",
-                "input_cost_per_m": float(Decimal(price["input_token"]) * Decimal(1_000_000)),
-                "output_cost_per_m": float(Decimal(price["output_token"]) * Decimal(1_000_000)),
+                "currency": "CREDITS",
+                "usd_to_compute": float(USD_TO_COMPUTE),
+                "input_cost_per_m": money(Decimal(price["input_token"]) * Decimal(1_000_000)),
+                "output_cost_per_m": money(Decimal(price["output_token"]) * Decimal(1_000_000)),
+                "source_currency": "USD",
+                "source_input_cost_per_m": float(Decimal(price["input_token"]) * Decimal(1_000_000)),
+                "source_output_cost_per_m": float(Decimal(price["output_token"]) * Decimal(1_000_000)),
+                "price_unit_normalized": True,
             }
         vendor = "ByteDance" if model_id.startswith("bytedance") else "xAI" if model_id.startswith("x-ai") else model_id.split("/", 1)[0]
         tags = ["图片", vendor, name.split()[0]]

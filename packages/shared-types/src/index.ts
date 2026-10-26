@@ -197,6 +197,9 @@ export interface SystemConfig {
   daily_checkin_reward?: number;
   gallery_audit_required?: boolean;
   payment_compute_rate?: number;
+  model_usd_to_compute_rate?: number;
+  recharge_shop_enabled?: boolean;
+  recharge_shop_url?: string;
 }
 
 export interface GenerationLanguage {
@@ -1027,11 +1030,32 @@ export interface AdminDashboard {
   referral_reward_cash: number;
 }
 
+export interface FinancialSummary {
+  gross_margin_percent: number;
+  user_charge_compute: number;
+  provider_cost_compute: number;
+  commission_compute: number;
+  realized_margin_rate: number;
+  settlement_count: number;
+  incomplete_cost_count: number;
+  wallet_balance_compute: number;
+  frozen_compute: number;
+  unfulfilled_liability: number;
+  recharge_cash_paid: number;
+  cash_recharge_credits: number;
+  card_recharge_credits: number;
+  card_face_value_cny: number;
+  missing_route_cost_models: number;
+}
+
 export interface CardBatch {
   id: number;
   name: string;
   type: string;
   value: number;
+  face_value_cny: number;
+  compute_credits: number;
+  compute_rate: number;
   quantity: number;
   created_at: string;
 }

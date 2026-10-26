@@ -19,6 +19,12 @@ interface Card {
 
   value: number;
 
+  face_value_cny: number;
+
+  compute_credits: number;
+
+  compute_rate: number;
+
   status: string;
 
   used_by?: number | null;
@@ -90,7 +96,9 @@ export default function CardBatchesPage() {
 
   const [lastBatchName, setLastBatchName] = useState("");
 
-  const [form, setForm] = useState({ name: "", value: 100, quantity: 10 });
+  const [form, setForm] = useState({ name: "", face_value_cny: 10, quantity: 10 });
+
+  const [computeRate, setComputeRate] = useState(1000);
 
   const [creating, setCreating] = useState(false);
 
@@ -111,6 +119,13 @@ export default function CardBatchesPage() {
   useEffect(() => {
 
     load();
+
+    adminApi<Record<string, unknown>>("/system-configs")
+      .then((config) => {
+        const rate = Number(config.payment_compute_rate);
+        if (Number.isFinite(rate) && rate > 0) setComputeRate(rate);
+      })
+      .catch(() => undefined);
 
   }, []);
 
@@ -138,9 +153,9 @@ export default function CardBatchesPage() {
 
       setLastBatchName(form.name);
 
-      setMsg(`批次「${form.name}」已生成 ${res.codes?.length || 0} 张卡密，已加密保存，可随时在明细中查看`);
+      setMsg(`批次「${form.name}」已生成 ${res.codes?.length || 0} 张卡密：每张 ¥${res.batch.face_value_cny}，到账 ${res.batch.compute_credits} 算力`);
 
-      setForm({ name: "", value: 100, quantity: 10 });
+      setForm({ name: "", face_value_cny: 10, quantity: 10 });
 
       load();
 
@@ -228,13 +243,13 @@ export default function CardBatchesPage() {
 
     if (!detailBatch) return;
 
-    const header = "id,code,value,status,used_at,created_at\n";
+    const header = "id,code,face_value_cny,compute_credits,compute_rate,status,used_at,created_at\n";
 
     const rows = cards
 
       .map((c) =>
 
-        [c.id, c.code || "", c.value, c.status, c.used_at || "", c.created_at]
+        [c.id, c.code || "", c.face_value_cny, c.compute_credits, c.compute_rate, c.status, c.used_at || "", c.created_at]
 
           .map((v) => `"${String(v).replace(/"/g, '""')}"`)
 
@@ -307,7 +322,7 @@ export default function CardBatchesPage() {
 
         <div>
 
-          <label className="text-xs text-gray-500">面值</label>
+          <label className="text-xs text-gray-500">人民币面值（元）</label>
 
           <input
 
@@ -315,11 +330,25 @@ export default function CardBatchesPage() {
 
             className="block mt-1 px-3 py-2 border rounded-lg text-sm w-24"
 
-            value={form.value}
+            min={0.01}
 
-            onChange={(e) => setForm({ ...form, value: parseFloat(e.target.value) })}
+            max={1000000}
+
+            step={0.01}
+
+            required
+
+            value={form.face_value_cny}
+
+            onChange={(e) => setForm({ ...form, face_value_cny: Number(e.target.value) })}
 
           />
+
+        </div>
+
+        <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+
+          当前倍率 ¥1 = {computeRate} 算力；每张到账 {(form.face_value_cny * computeRate).toLocaleString()} 算力
 
         </div>
 
@@ -437,7 +466,9 @@ export default function CardBatchesPage() {
 
               <th className="text-left px-4 py-3">名称</th>
 
-              <th className="text-left px-4 py-3">面值</th>
+              <th className="text-left px-4 py-3">人民币面值</th>
+
+              <th className="text-left px-4 py-3">到账算力</th>
 
               <th className="text-left px-4 py-3">数量</th>
 
@@ -459,7 +490,9 @@ export default function CardBatchesPage() {
 
                 <td className="px-4 py-3">{b.name}</td>
 
-                <td className="px-4 py-3">{b.value}</td>
+                <td className="px-4 py-3">¥{b.face_value_cny}</td>
+
+                <td className="px-4 py-3">{b.compute_credits.toLocaleString()}（×{b.compute_rate}）</td>
 
                 <td className="px-4 py-3">{b.quantity}</td>
 
@@ -596,7 +629,9 @@ export default function CardBatchesPage() {
 
                     <th className="text-left px-6 py-2">卡密</th>
 
-                    <th className="text-left px-6 py-2">面值</th>
+                    <th className="text-left px-6 py-2">人民币面值</th>
+
+                    <th className="text-left px-6 py-2">到账算力</th>
 
                     <th className="text-left px-6 py-2">状态</th>
 
@@ -644,7 +679,9 @@ export default function CardBatchesPage() {
 
                       </td>
 
-                      <td className="px-6 py-2">{c.value}</td>
+                      <td className="px-6 py-2">¥{c.face_value_cny}</td>
+
+                      <td className="px-6 py-2">{c.compute_credits.toLocaleString()}（×{c.compute_rate}）</td>
 
                       <td className={`px-6 py-2 ${STATUS_CLASS[c.status] || ""}`}>
 
@@ -684,7 +721,7 @@ export default function CardBatchesPage() {
 
                     <tr>
 
-                      <td colSpan={5} className="text-center text-gray-400 py-8">
+                      <td colSpan={6} className="text-center text-gray-400 py-8">
 
                         无符合条件的卡密
 

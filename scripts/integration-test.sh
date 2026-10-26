@@ -69,6 +69,30 @@ payment_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 -X POST 
 [[ "$payment_status" == "403" ]] || fail "Payment-disabled guard expected HTTP 403, got $payment_status"
 pass "Payment-disabled guard"
 
+payment_config="$(curl -sSf --max-time 15 "$API/api/payment/config")" || fail "Payment configuration request"
+require_json "$payment_config" '.data.payment_compute_rate == 1000 and .data.payment_currency == "CNY" and .data.recharge_shop_enabled == true and .data.recharge_shop_url == "https://catfk.com/shop/yardai"' "Recharge configuration"
+pass "Recharge configuration"
+
+before_balance="$(curl -sSf --max-time 15 "$API/api/wallet" "${AUTH[@]}" | jq -r '.data.compute_balance')"
+batch_name="integration-$(date +%s)-$$"
+batch="$(curl -sSf --max-time 15 -X POST "$API/admin/api/card-batches" \
+  "${ADMIN_AUTH[@]}" -H "Content-Type: application/json" \
+  -d "{\"name\":\"$batch_name\",\"type\":\"compute\",\"face_value_cny\":1,\"quantity\":1}")" || fail "Create test recharge card"
+require_json "$batch" '.data.batch.face_value_cny == 1 and .data.batch.compute_rate == 1000 and .data.batch.compute_credits == 1000' "Recharge card rate snapshot"
+card_code="$(printf '%s' "$batch" | jq -r '.data.codes[0] // empty')"
+[[ -n "$card_code" ]] || fail "Recharge card code missing"
+redeemed="$(curl -sSf --max-time 15 -X POST "$API/api/recharge/card" \
+  "${AUTH[@]}" -H "Content-Type: application/json" \
+  -d "{\"code\":\"$card_code\"}")" || fail "Redeem test recharge card"
+require_json "$redeemed" '.data.credited == 1000' "Recharge card credited amount"
+after_balance="$(curl -sSf --max-time 15 "$API/api/wallet" "${AUTH[@]}" | jq -r '.data.compute_balance')"
+awk -v before="$before_balance" -v after="$after_balance" 'BEGIN { diff=after-before-1000; if (diff < 0) diff=-diff; exit(diff > 0.000001) }' || fail "Wallet balance did not increase by 1000"
+replay_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 -X POST "$API/api/recharge/card" \
+  "${AUTH[@]}" -H "Content-Type: application/json" \
+  -d "{\"code\":\"$card_code\"}")"
+[[ "$replay_status" == "400" ]] || fail "Redeemed card replay expected HTTP 400, got $replay_status"
+pass "Recharge card generation and one-time redemption"
+
 dashboard="$(curl -sSf --max-time 15 "$API/admin/api/dashboard" "${ADMIN_AUTH[@]}")" || fail "Admin dashboard request"
 require_json "$dashboard" '.data | type == "object"' "Admin dashboard payload"
 pass "Admin dashboard"

@@ -91,7 +91,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 | --- | --- |
 | 管理员 | `admin@starai.local` / `admin123` |
 | 测试用户 | `demo@starai.local` / `demo123` |
-| 测试卡密 | `STARAI-DEMO-1000` |
+| 卡密测试 | 在管理后台按当前人民币充值倍率临时生成 |
 
 生产环境上线后必须修改默认账号密码和所有密钥。
 

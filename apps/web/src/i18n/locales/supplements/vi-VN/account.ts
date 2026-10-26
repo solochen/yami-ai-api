@@ -16,7 +16,7 @@ const account: Record<string, string> = {
   "recharge.securePaymentNotice": "Sau khi tạo đơn, bạn sẽ được chuyển đến trang thanh toán bảo mật. Tín dụng được cộng sau khi xác nhận thanh toán.",
   "recharge.noPackages": "Hiện không có gói nạp tiền trực tuyến. Vui lòng liên hệ quản trị viên.",
   "recharge.creditsReceived": "Nhận {amount} tín dụng",
-  "recharge.cardPlaceholder": "Nhập mã nạp tiền, ví dụ STARAI-DEMO-1000",
+  "recharge.cardPlaceholder": "Nhập mã nạp tiền, ví dụ ORBIT-E-DEMO-1000",
   "recharge.redeeming": "Đang đổi...",
   "recharge.redeemNow": "Đổi ngay",
   "homeCard.multi_view.title": "Nhiều góc nhìn",

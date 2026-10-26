@@ -4,21 +4,26 @@
 Capabilities and USD rates come from
 https://openrouter.ai/api/v1/videos/models. Models that require an existing
 video or a voice track are skipped, because the model workspace cannot supply
-those inputs. User-facing 算力 uses 7.2 per USD. The final charge follows
-OpenRouter usage.cost when the job completes. The API key is copied from an
-existing route and is never printed.
+those inputs. User-facing prices and route costs are stored as 算力 by applying
+MODEL_USD_TO_COMPUTE_RATE (default 7200). Raw USD values are retained for
+future renormalization. The final charge follows OpenRouter usage.cost when the
+job completes. The API key is copied from an existing route and is never
+printed.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import urllib.request
 from decimal import Decimal, ROUND_HALF_UP
 
 SOURCE_CODE = "deepseek-v4-pro-0813"
 CATALOG = "https://openrouter.ai/api/v1/videos/models"
-USD_TO_COMPUTE = Decimal("7.2")
+USD_TO_COMPUTE = Decimal(os.getenv("MODEL_USD_TO_COMPUTE_RATE", "7.2"))
+if USD_TO_COMPUTE <= 0:
+    raise SystemExit("MODEL_USD_TO_COMPUTE_RATE must be greater than 0")
 RES_ALIASES = {
     "480p": ["480p"],
     "720p": ["720p"],
@@ -196,13 +201,15 @@ def main() -> None:
         default_duration = prefer(durations, [5, 4, 6, 8])
         default_resolution = prefer(resolutions, ["720p", "768p", "1080p", "480p", "2K", "1K", "4K"])
         default_ratio = prefer(ratios, ["16:9", "1:1", "9:16"])
-        by_resolution = {}
+        source_usd_by_resolution = {}
+        credits_by_resolution = {}
         for resolution in resolutions:
             rate = rate_for(model.get("pricing_skus") or {}, resolution, sizes, default_ratio)
             if rate is None or rate <= 0 or rate > Decimal(20):
                 raise SystemExit(f"{model_id} {resolution} price {rate} is missing or implausible")
-            by_resolution[resolution] = money(rate * USD_TO_COMPUTE)
-        unit = by_resolution[default_resolution]
+            source_usd_by_resolution[resolution] = money(rate)
+            credits_by_resolution[resolution] = money(rate * USD_TO_COMPUTE)
+        unit = credits_by_resolution[default_resolution]
         code = model_id.split("/", 1)[1].replace(".", "-")
         name = model["name"].split(": ", 1)[-1]
         schema = {
@@ -257,16 +264,30 @@ def main() -> None:
         defaults = {"duration": default_duration, "resolution": default_resolution, "aspect_ratio": default_ratio}
         user_price = {
             "billing_type": "per_second",
-            "currency": "¥",
+            "currency": "CREDITS",
             "usd_to_compute": float(USD_TO_COMPUTE),
-            "unit_price": unit,
-            "unit_price_by_resolution": by_resolution,
+            "source_currency": "USD",
+            "source_unit_usd": source_usd_by_resolution[default_resolution],
+            "source_unit_usd_by_resolution": source_usd_by_resolution,
+            "price_unit_normalized": True,
         }
         cost_rule = {
             "billing_type": "per_second",
-            "unit_cost": float((Decimal(str(unit)) / USD_TO_COMPUTE).quantize(Decimal("0.000001"))),
-            "unit_cost_by_resolution": {key: float((Decimal(str(value)) / USD_TO_COMPUTE).quantize(Decimal("0.000001"))) for key, value in by_resolution.items()},
+            "currency": "CREDITS",
+            "usd_to_compute": float(USD_TO_COMPUTE),
+            "source_currency": "USD",
+            "source_unit_cost": source_usd_by_resolution[default_resolution],
+            "source_unit_cost_by_resolution": source_usd_by_resolution,
+            "price_unit_normalized": True,
         }
+        user_price.update({
+            "unit_price": unit,
+            "unit_price_by_resolution": credits_by_resolution,
+        })
+        cost_rule.update({
+            "unit_cost": unit,
+            "unit_cost_by_resolution": credits_by_resolution,
+        })
         vendor = model_id.split("/", 1)[0]
         print(f"{code:28} {default_resolution:6} {unit} 算力/秒")
         statements.append(f"""

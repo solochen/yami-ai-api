@@ -16,7 +16,7 @@ const account: Record<string, string> = {
   "recharge.securePaymentNotice": "注文作成後、安全な決済画面へ移動します。決済確認後にクレジットが反映されます。",
   "recharge.noPackages": "現在利用できるオンラインチャージプランはありません。管理者へお問い合わせください。",
   "recharge.creditsReceived": "{amount} クレジットを受け取る",
-  "recharge.cardPlaceholder": "チャージコードを入力（例：STARAI-DEMO-1000）",
+  "recharge.cardPlaceholder": "チャージコードを入力（例：ORBIT-E-DEMO-1000）",
   "recharge.redeeming": "交換中...",
   "recharge.redeemNow": "今すぐ交換",
   "homeCard.multi_view.title": "多角的な視点",

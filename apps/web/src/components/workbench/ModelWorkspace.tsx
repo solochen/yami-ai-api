@@ -65,6 +65,10 @@ interface Message {
 const MAX_CHAT_INPUT_CHARS = 12000;
 const INDEX_DOT_COLORS = ["bg-sky-500", "bg-primary", "bg-violet-500", "bg-amber-500"];
 
+function isInsufficientBalanceError(message: string) {
+  return /账户?余额不足|算力不足|insufficient balance/i.test(message);
+}
+
 function textLength(value: string) {
   return Array.from(value).length;
 }
@@ -1055,14 +1059,14 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
       ? videoConfig.reference_images?.max ?? 4
       : videoConfig.max_reference_images ?? 1;
   const surchargeUsd = referenceImageSurchargeUsd(model.runtime_rule);
-  const [computeRate, setComputeRate] = useState(7.2);
+  const [modelUsdToComputeRate, setModelUsdToComputeRate] = useState(7.2);
   useEffect(() => {
     if (surchargeUsd <= 0) return;
     let cancelled = false;
-    api<{ payment_compute_rate?: number }>("/api/system-configs/public", { cache: "no-store" })
+    api<{ model_usd_to_compute_rate?: number }>("/api/system-configs/public", { cache: "no-store" })
       .then((cfg) => {
-        const rate = Number(cfg?.payment_compute_rate);
-        if (!cancelled && Number.isFinite(rate) && rate > 0) setComputeRate(rate);
+        const rate = Number(cfg?.model_usd_to_compute_rate);
+        if (!cancelled && Number.isFinite(rate) && rate > 0) setModelUsdToComputeRate(rate);
       })
       .catch(() => undefined);
     return () => {
@@ -1072,7 +1076,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
   const promptPlaceholder = isChat
     ? t("workspace.placeholder.chat")
     : isVideo
-    ? (videoConfig.prompt_hint ? applyReferenceImageSurcharge(ts(videoConfig.prompt_hint), surchargeUsd, computeRate) : t("workspace.placeholder.video"))
+    ? (videoConfig.prompt_hint ? applyReferenceImageSurcharge(ts(videoConfig.prompt_hint), surchargeUsd, modelUsdToComputeRate) : t("workspace.placeholder.video"))
     : isAudio
     ? (audioConfig.prompt_hint ? ts(audioConfig.prompt_hint) : t("workspace.placeholder.audio"))
     : t("workspace.placeholder.image");
@@ -2369,8 +2373,13 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                   </div>
                 ))}
                 {chatError && (
-                  <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {chatError}
+                  <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    <span>{chatError}</span>
+                    {isInsufficientBalanceError(chatError) ? (
+                      <Link href="/app/recharge" className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-dark">
+                        {ts("立即充值")}
+                      </Link>
+                    ) : null}
                   </div>
                 )}
               </>
@@ -2431,6 +2440,11 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                     ) : null}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-gray-400">
+                    {isFailedStatus(taskStatus) && isInsufficientBalanceError(taskError) ? (
+                      <Link href="/app/recharge" className="rounded-lg bg-primary px-3 py-1.5 font-semibold text-dark">
+                        {ts("立即充值")}
+                      </Link>
+                    ) : null}
                     {isSucceededStatus(taskStatus) && isImage && taskImages.length > 0 && (
                       <span>{taskImages.length} {ts(UI_TEXT.imageUnit)}</span>
                     )}
@@ -2530,7 +2544,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                       </div>
                       <InputToolbarMeta
                         onPricing={() => setPricingOpen(true)}
-                        costHint={estimatedCost != null ? `Est. ${estimatedCost.toFixed(2)}/run` : null}
+                        costHint={estimatedCost != null ? `预计 ${estimatedCost.toFixed(2)} 算力` : null}
                       />
                     </div>
                     {maxRefImages > 0 ? (
@@ -2684,7 +2698,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                       </div>
                       <InputToolbarMeta
                         onPricing={() => setPricingOpen(true)}
-                        costHint={estimatedCost != null ? `Est. ${estimatedCost.toFixed(2)}/run` : null}
+                        costHint={estimatedCost != null ? `预计 ${estimatedCost.toFixed(2)} 算力` : null}
                       />
                     </div>
                     {!isEnhancedVideoMaterial && (
@@ -2733,7 +2747,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                         audioConfig.billing_hint === "per_token"
                           ? undefined
                           : estimatedCost != null
-                            ? `Est. ${estimatedCost.toFixed(2)}/run`
+                            ? `预计 ${estimatedCost.toFixed(2)} 算力`
                             : null
                       }
                     />

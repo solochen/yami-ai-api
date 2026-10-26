@@ -86,8 +86,8 @@ function canonicalTemplateVideoSize(value: unknown, fallback = "1280x720") {
 const buildMiniMaxH3PriceRule = (variant: MiniMaxH3Variant = "standard") => ({
   billing_type: "dynamic",
   strategy: "minimax_h3_seconds",
-  currency: "CNY",
-  points_per_cny: 1,
+  currency: "CREDITS",
+  points_per_cny: 1000,
   platform_multiplier: 1,
   default_resolution: variant === "max" ? "768P" : "2K",
   default_input_video_seconds: 4,
@@ -100,14 +100,14 @@ const buildMiniMaxH3PriceRule = (variant: MiniMaxH3Variant = "standard") => ({
   input_materials_billable: true,
   free_reference_images: variant === "max" ? 0 : 5,
   excess_image_price: variant === "max" ? 0.5 : 0.2,
-  fallback_cost: variant === "max" ? 2.5 : 4,
+  fallback_cost: variant === "max" ? 2500 : 4000,
 });
 
 const MODEL_BILLING_TYPES = ["per_request", "per_second", "per_token", "per_image", "dynamic"] as const;
 type ModelBillingType = (typeof MODEL_BILLING_TYPES)[number];
 
 function switchedPriceRule(current: Record<string, any>, billingType: ModelBillingType, dynamicDefault?: Record<string, any>) {
-  const currency = current.currency || "¥";
+  const currency = "CREDITS";
   if (billingType === "dynamic") return { ...(dynamicDefault || { fallback_cost: Number(current.fallback_cost ?? 1) || 1 }), billing_type: "dynamic", currency };
   if (billingType === "per_token") {
     return {
@@ -149,7 +149,7 @@ const SEEDANCE_VARIANTS: Record<
       "720p": { without_video: 46, with_video: 28 },
       "1080p": { without_video: 51, with_video: 31 },
     },
-    fallbackCost: 4.97,
+    fallbackCost: 4970,
   },
   fast: {
     label: "Fast",
@@ -161,7 +161,7 @@ const SEEDANCE_VARIANTS: Record<
       "480p": { without_video: 37, with_video: 22 },
       "720p": { without_video: 37, with_video: 22 },
     },
-    fallbackCost: 4,
+    fallbackCost: 4000,
   },
   mini: {
     label: "Mini",
@@ -173,7 +173,7 @@ const SEEDANCE_VARIANTS: Record<
       "480p": { without_video: 23, with_video: 14 },
       "720p": { without_video: 23, with_video: 14 },
     },
-    fallbackCost: 2.48,
+    fallbackCost: 2480,
   },
 };
 
@@ -201,8 +201,8 @@ const buildSeedancePriceRule = (variant: SeedanceVariant) => {
   return {
     billing_type: "dynamic",
     strategy: "seedance_2_tokens",
-    currency: "¥",
-    points_per_cny: 1,
+    currency: "CREDITS",
+    points_per_cny: 1000,
     platform_multiplier: 1,
     default_resolution: "720p",
     default_input_video_seconds: 4,
@@ -600,7 +600,7 @@ const emptyForm: FormState = {
     2
   ),
   price_rule:
-    '{"billing_type":"per_token","currency":"¥","input_price_per_m":2,"output_price_per_m":8,"cache_read_price_per_m":0.2}',
+    '{"billing_type":"per_token","currency":"CREDITS","input_price_per_m":2000,"output_price_per_m":8000,"cache_read_price_per_m":200}',
   runtime_rule: '{"capabilities":{"web_search":false,"deep_think":false}}',
 };
 
@@ -621,7 +621,7 @@ export default function ModelsPage() {
   const [languageSaving, setLanguageSaving] = useState(false);
   const [audioTemplateKey, setAudioTemplateKey] = useState("");
   const [videoTemplateKey, setVideoTemplateKey] = useState("");
-  const [paymentComputeRate, setPaymentComputeRate] = useState(7.2);
+  const [modelUsdToComputeRate, setModelUsdToComputeRate] = useState(7200);
   const [testingModelId, setTestingModelId] = useState<number | null>(null);
   const [connectionTests, setConnectionTests] = useState<Record<number, ModelConnectionTest>>({});
   const [upstreamModels, setUpstreamModels] = useState<UpstreamModel[]>([]);
@@ -700,8 +700,8 @@ export default function ModelsPage() {
     loadChannelPresets();
     adminApi<Record<string, unknown>>("/system-configs")
       .then((cfg) => {
-        const rate = Number(cfg.payment_compute_rate);
-        if (Number.isFinite(rate) && rate > 0) setPaymentComputeRate(rate);
+        const rate = Number(cfg.model_usd_to_compute_rate);
+        if (Number.isFinite(rate) && rate > 0) setModelUsdToComputeRate(rate);
       })
       .catch(() => {});
   }, []);
@@ -978,7 +978,7 @@ export default function ModelsPage() {
     new_api_endpoint: "",
     input_schema: "{}",
     new_api_extra_params: "{}",
-    price_rule: JSON.stringify({ billing_type: "per_token", currency: "¥", input_price_per_m: 0, output_price_per_m: 0 }, null, 2),
+    price_rule: JSON.stringify({ billing_type: "per_token", currency: "CREDITS", input_price_per_m: 0, output_price_per_m: 0 }, null, 2),
     runtime_rule: JSON.stringify(
       { ...safeParseJson(prev.runtime_rule, {}), capabilities: { web_search: false, deep_think: false } },
       null,
@@ -1186,7 +1186,7 @@ export default function ModelsPage() {
           upstream: { ...upstream, adapter: "openai_images", edit_endpoint: "/v1/images/edits" },
           capabilities: { ...(rr.capabilities || {}), reference_images: true, web_search: false, deep_think: false },
         }, null, 2),
-        price_rule: JSON.stringify({ billing_type: "per_image", currency: "¥", unit_price: 0.01 }, null, 2),
+        price_rule: JSON.stringify({ billing_type: "per_image", currency: "CREDITS", unit_price: 10 }, null, 2),
       };
     }
     const isBanana = preset.key === "banana_async";
@@ -1239,7 +1239,7 @@ export default function ModelsPage() {
         poll_interval_sec: isAsync ? 5 : null,
         poll_timeout_sec: isAsync ? 3600 : null,
       }),
-      price_rule: JSON.stringify({ billing_type: "per_image", currency: "¥", unit_price: 0.01, unit_price_by_size: { "1K": 0.01, "2K": 0.01, "4K": 0.01 } }, null, 2),
+      price_rule: JSON.stringify({ billing_type: "per_image", currency: "CREDITS", unit_price: 10, unit_price_by_size: { "1K": 10, "2K": 10, "4K": 10 } }, null, 2),
     };
   };
 
@@ -1274,7 +1274,7 @@ export default function ModelsPage() {
       upstream: { adapter: "aliyun_qwen_image_v3", map: { prompt: "input.prompt" }, request_timeout_sec: 300 },
       capabilities: { web_search: false, deep_think: false },
     }, null, 2),
-    price_rule: JSON.stringify({ billing_type: "per_image", currency: "¥", unit_price: 0.01 }, null, 2),
+    price_rule: JSON.stringify({ billing_type: "per_image", currency: "CREDITS", unit_price: 10 }, null, 2),
   });
 
   const VIDEO_PROFILES = [
@@ -1596,7 +1596,7 @@ export default function ModelsPage() {
       2
     ),
     default_params: JSON.stringify({ voice_id: "Chinese (Mandarin)_Warm_Bestie", emotion: "auto", speed: 1, format: "mp3" }, null, 2),
-    price_rule: JSON.stringify({ billing_type: "per_token", currency: "¥", input_price_per_m: 2, output_price_per_m: 4 }, null, 2),
+    price_rule: JSON.stringify({ billing_type: "per_token", currency: "CREDITS", input_price_per_m: 2000, output_price_per_m: 4000 }, null, 2),
   });
 
   const applyAudioYunwuMinimaxSpeechStandard = (prev: FormState): FormState => ({
@@ -1711,7 +1711,7 @@ export default function ModelsPage() {
       2
     ),
     default_params: JSON.stringify({ count: 1, voice_id: "male-qn-qingse", emotion: "auto", speed: 1.15, format: "mp3" }, null, 2),
-    price_rule: JSON.stringify({ billing_type: "per_token", currency: "¥", input_price_per_m: 2, output_price_per_m: 4 }, null, 2),
+    price_rule: JSON.stringify({ billing_type: "per_token", currency: "CREDITS", input_price_per_m: 2000, output_price_per_m: 4000 }, null, 2),
   });
 
   const applyAudioMinimaxOfficialSpeechStandard = (prev: FormState): FormState => {
@@ -1935,7 +1935,7 @@ export default function ModelsPage() {
       2
     ),
     default_params: JSON.stringify({ format: "mp3", sample_rate: 44100, bitrate: 256000 }, null, 2),
-    price_rule: JSON.stringify({ billing_type: "per_request", currency: "¥", unit_price: 1 }, null, 2),
+    price_rule: JSON.stringify({ billing_type: "per_request", currency: "CREDITS", unit_price: 1 }, null, 2),
   });
 
   const applyAudioMinimaxOfficialMusicStandard = (prev: FormState): FormState => ({
@@ -2080,7 +2080,7 @@ export default function ModelsPage() {
       null,
       2
     ),
-    price_rule: JSON.stringify({ billing_type: "per_request", currency: "¥", unit_price: 1 }, null, 2),
+    price_rule: JSON.stringify({ billing_type: "per_request", currency: "CREDITS", unit_price: 1 }, null, 2),
   });
 
   const aliyunAudioConnection = (extra: string) => setConnection(extra, {
@@ -2125,7 +2125,7 @@ export default function ModelsPage() {
         },
       }, null, 2),
       default_params: JSON.stringify({ voice, format: "wav", sample_rate: 24000 }, null, 2),
-      price_rule: JSON.stringify({ billing_type: "per_token", currency: "¥", input_price_per_m: 2, output_price_per_m: 4 }, null, 2),
+      price_rule: JSON.stringify({ billing_type: "per_token", currency: "CREDITS", input_price_per_m: 2000, output_price_per_m: 4000 }, null, 2),
     };
   };
 
@@ -2158,7 +2158,7 @@ export default function ModelsPage() {
       },
     }, null, 2),
     default_params: JSON.stringify({ gender: "female", is_instrumental: false, format: "mp3", enable_aigc_watermark: false }, null, 2),
-    price_rule: JSON.stringify({ billing_type: "per_request", currency: "¥", unit_price: 1 }, null, 2),
+    price_rule: JSON.stringify({ billing_type: "per_request", currency: "CREDITS", unit_price: 1 }, null, 2),
   });
 
   const openRouterAudioConnection = (extra: string) => setConnection(extra, {
@@ -2212,7 +2212,7 @@ export default function ModelsPage() {
         },
       }, null, 2),
       default_params: JSON.stringify({ format: "mp3", temperature: 1, top_p: 1 }, null, 2),
-      price_rule: JSON.stringify({ billing_type: "per_request", unit_price: (pro ? 0.08 : 0.04) * paymentComputeRate, usd_to_compute: paymentComputeRate, source_currency: "USD", source_unit_usd: pro ? 0.08 : 0.04 }, null, 2),
+      price_rule: JSON.stringify({ billing_type: "per_request", unit_price: (pro ? 0.08 : 0.04) * modelUsdToComputeRate, usd_to_compute: modelUsdToComputeRate, source_currency: "USD", source_unit_usd: pro ? 0.08 : 0.04 }, null, 2),
     };
   };
 
@@ -2248,8 +2248,8 @@ export default function ModelsPage() {
     }, null, 2),
     default_params: JSON.stringify({ voice: "alloy", format: "mp3", temperature: 0.8, top_p: 1, max_tokens: 1024 }, null, 2),
     price_rule: JSON.stringify(mini
-      ? { billing_type: "per_token", input_price_per_m: 0.6 * paymentComputeRate, output_price_per_m: 2.4 * paymentComputeRate, audio_input_price_per_m: 0.6 * paymentComputeRate, audio_output_price_per_m: 2.4 * paymentComputeRate, estimated_input_tokens: 300, estimated_output_tokens: 1500, estimated_audio_output_tokens: 1500, usd_to_compute: paymentComputeRate, source_currency: "USD", source_input_price_per_m: 0.6, source_output_price_per_m: 2.4, source_audio_input_price_per_m: 0.6, source_audio_output_price_per_m: 2.4 }
-      : { billing_type: "per_token", input_price_per_m: 2.5 * paymentComputeRate, output_price_per_m: 10 * paymentComputeRate, audio_input_price_per_m: 32 * paymentComputeRate, audio_output_price_per_m: 64 * paymentComputeRate, estimated_input_tokens: 300, estimated_output_tokens: 1500, estimated_audio_output_tokens: 1500, usd_to_compute: paymentComputeRate, source_currency: "USD", source_input_price_per_m: 2.5, source_output_price_per_m: 10, source_audio_input_price_per_m: 32, source_audio_output_price_per_m: 64 }, null, 2),
+      ? { billing_type: "per_token", input_price_per_m: 0.6 * modelUsdToComputeRate, output_price_per_m: 2.4 * modelUsdToComputeRate, audio_input_price_per_m: 0.6 * modelUsdToComputeRate, audio_output_price_per_m: 2.4 * modelUsdToComputeRate, estimated_input_tokens: 300, estimated_output_tokens: 1500, estimated_audio_output_tokens: 1500, usd_to_compute: modelUsdToComputeRate, source_currency: "USD", source_input_price_per_m: 0.6, source_output_price_per_m: 2.4, source_audio_input_price_per_m: 0.6, source_audio_output_price_per_m: 2.4 }
+      : { billing_type: "per_token", input_price_per_m: 2.5 * modelUsdToComputeRate, output_price_per_m: 10 * modelUsdToComputeRate, audio_input_price_per_m: 32 * modelUsdToComputeRate, audio_output_price_per_m: 64 * modelUsdToComputeRate, estimated_input_tokens: 300, estimated_output_tokens: 1500, estimated_audio_output_tokens: 1500, usd_to_compute: modelUsdToComputeRate, source_currency: "USD", source_input_price_per_m: 2.5, source_output_price_per_m: 10, source_audio_input_price_per_m: 32, source_audio_output_price_per_m: 64 }, null, 2),
   });
 
   const applyVideoStandard = (prev: FormState): FormState => ({
@@ -2292,7 +2292,7 @@ export default function ModelsPage() {
       2
     ),
     default_params: JSON.stringify({ count: 1, duration: "4s", orientation: "portrait" }, null, 2),
-    price_rule: JSON.stringify({ billing_type: "per_second", unit_price: 0.08 }, null, 2),
+      price_rule: JSON.stringify({ billing_type: "per_second", currency: "CREDITS", unit_price: 80 }, null, 2),
   });
 
   const aliyunVideoConnection = (extra: string) => setConnection(extra, {
@@ -2340,7 +2340,7 @@ export default function ModelsPage() {
       upstream: { adapter: "aliyun_video_generation", poll_path: "/api/v1/tasks/{id}", poll_interval_sec: 15, poll_timeout_sec: 1800, request_timeout_sec: 120 },
       capabilities: { web_search: false, deep_think: false },
     }, null, 2),
-    price_rule: JSON.stringify({ billing_type: "per_second", currency: "¥", unit_price: 0.1 }, null, 2),
+    price_rule: JSON.stringify({ billing_type: "per_second", currency: "CREDITS", unit_price: 100 }, null, 2),
   });
 
   const applyAliyunWan3Video = (prev: FormState): FormState => ({
@@ -2373,7 +2373,7 @@ export default function ModelsPage() {
       upstream: { adapter: "aliyun_video_generation", poll_path: "/api/v1/tasks/{id}", poll_interval_sec: 15, poll_timeout_sec: 1800, request_timeout_sec: 120 },
       capabilities: { web_search: false, deep_think: false },
     }, null, 2),
-    price_rule: JSON.stringify({ billing_type: "per_second", currency: "¥", unit_price: 0.1 }, null, 2),
+    price_rule: JSON.stringify({ billing_type: "per_second", currency: "CREDITS", unit_price: 100 }, null, 2),
   });
 
   const applyVeoReferenceV1 = (prev: FormState): FormState => ({
@@ -2476,7 +2476,7 @@ export default function ModelsPage() {
       null,
       2
     ),
-    price_rule: JSON.stringify({ billing_type: "per_request", currency: "¥", unit_price: 1 }, null, 2),
+    price_rule: JSON.stringify({ billing_type: "per_request", currency: "CREDITS", unit_price: 1 }, null, 2),
   });
 
   const applyVeoFramePairV1 = (prev: FormState): FormState => ({
@@ -2554,7 +2554,7 @@ export default function ModelsPage() {
       null,
       2
     ),
-    price_rule: JSON.stringify({ billing_type: "per_request", currency: "¥", unit_price: 1 }, null, 2),
+    price_rule: JSON.stringify({ billing_type: "per_request", currency: "CREDITS", unit_price: 1 }, null, 2),
   });
 
   const applyOmniReferenceV1 = (prev: FormState): FormState => ({
@@ -2648,7 +2648,7 @@ export default function ModelsPage() {
       null,
       2
     ),
-    price_rule: JSON.stringify({ billing_type: "per_request", currency: "¥", unit_price: 1 }, null, 2),
+    price_rule: JSON.stringify({ billing_type: "per_request", currency: "CREDITS", unit_price: 1 }, null, 2),
   });
 
   const applyVolcengineSeedance2 = (prev: FormState, variant: SeedanceVariant): FormState => {
@@ -4666,7 +4666,7 @@ export default function ModelsPage() {
                                         price_rule: JSON.stringify({
                                           ...current,
                                           billing_type: "per_image",
-                                          currency: current.currency || "¥",
+                                          currency: "CREDITS",
                                           unit_price: tier === "1K" ? price : Number(current.unit_price ?? price),
                                           unit_price_by_size: { ...(current.unit_price_by_size || {}), [tier]: price },
                                         }, null, 2),
@@ -4889,7 +4889,7 @@ export default function ModelsPage() {
                     )}
                     <label className="w-28 text-xs text-gray-500">
                       币种
-                      <input className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm" value={String(currentPriceRule.currency || "POINT")} onChange={(e) => setVideoPriceValue("currency", e.target.value)} />
+                      <input className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm" value="CREDITS" readOnly />
                     </label>
                   </div>
                   <div className="mt-2 text-[11px] leading-5 text-gray-500">
@@ -4918,7 +4918,7 @@ export default function ModelsPage() {
                           {seedanceVariantConfig.resolutions.map((resolution) => <option key={resolution} value={resolution}>{resolution}</option>)}
                         </select>
                       </label>
-                      <SeedancePriceInput label="算力点/元" value={Number(seedancePriceRule.points_per_cny ?? 1)} step={0.01} onChange={(value) => setSeedanceScalar("points_per_cny", value)} />
+                      <SeedancePriceInput label="算力 / 元" value={Number(seedancePriceRule.points_per_cny ?? 1)} step={1} onChange={(value) => setSeedanceScalar("points_per_cny", value)} />
                       <SeedancePriceInput label="平台倍率" value={Number(seedancePriceRule.platform_multiplier ?? 1)} step={0.01} onChange={(value) => setSeedanceScalar("platform_multiplier", value)} />
                       <SeedancePriceInput label="默认输入视频秒数" value={Number(seedancePriceRule.default_input_video_seconds ?? 4)} step={0.1} onChange={(value) => setSeedanceScalar("default_input_video_seconds", value)} />
                       <SeedancePriceInput label="估价兜底算力" value={Number(seedancePriceRule.fallback_cost ?? 0)} step={0.01} onChange={(value) => setSeedanceScalar("fallback_cost", value)} />
@@ -4929,8 +4929,8 @@ export default function ModelsPage() {
                           <tr>
                             <th className="px-3 py-2 text-left">分辨率</th>
                             <th className="px-3 py-2 text-left">输出 Token/秒</th>
-                            <th className="px-3 py-2 text-left">不含视频输入（元/1M Tokens）</th>
-                            <th className="px-3 py-2 text-left">含视频输入（元/1M Tokens）</th>
+                            <th className="px-3 py-2 text-left">不含视频输入（元 / 1M Tokens）</th>
+                            <th className="px-3 py-2 text-left">含视频输入（元 / 1M Tokens）</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -4952,7 +4952,7 @@ export default function ModelsPage() {
                       </table>
                     </div>
                     <div className="mt-3 text-[11px] text-gray-500">
-                      “含视频输入”不是 28 算力/秒；默认值 28 表示每百万输出 Token 的上游价格。平台最终换算为算力点并乘以平台倍率。
+                      表格内填写官方人民币源价；“含视频输入”不是 28 算力/秒。任务最终费用按 Token 用量、平台倍率和“算力 / 元”换算，前台展示与扣费均为换算后的算力。
                     </div>
                   </div>
                 )}
@@ -4974,11 +4974,11 @@ export default function ModelsPage() {
                         <SeedancePriceInput key={`input-${resolution}`} label={`${resolution.toUpperCase()} 输入视频（元/秒）`} value={Number(minimaxH3PriceRule.input_video_rates_per_second?.[resolution] ?? 0)} step={0.01} onChange={(value) => setMiniMaxH3Rate(resolution, value, "input_video_rates_per_second")} />
                       ))}
                       <SeedancePriceInput label="免费参考图片数" value={Number(minimaxH3PriceRule.free_reference_images ?? (miniMaxH3Variant === "max" ? 0 : 5))} step={1} onChange={(value) => setMiniMaxH3PriceValue("free_reference_images", value)} />
-                      <SeedancePriceInput label="超额图片（元/张）" value={Number(minimaxH3PriceRule.excess_image_price ?? (miniMaxH3Variant === "max" ? 0.5 : 0.2))} step={0.01} onChange={(value) => setMiniMaxH3PriceValue("excess_image_price", value)} />
+                      <SeedancePriceInput label="超额图片（元/张，扣费前 ×1000）" value={Number(minimaxH3PriceRule.excess_image_price ?? (miniMaxH3Variant === "max" ? 0.5 : 0.2))} step={0.01} onChange={(value) => setMiniMaxH3PriceValue("excess_image_price", value)} />
                       <SeedancePriceInput label="默认参考视频秒数" value={Number(minimaxH3PriceRule.default_input_video_seconds ?? 4)} step={0.1} onChange={(value) => setMiniMaxH3PriceValue("default_input_video_seconds", value)} />
-                      <SeedancePriceInput label="算力点/元" value={Number(minimaxH3PriceRule.points_per_cny ?? 1)} step={0.01} onChange={(value) => setMiniMaxH3PriceValue("points_per_cny", value)} />
+                      <SeedancePriceInput label="算力 / 元" value={Number(minimaxH3PriceRule.points_per_cny ?? 1)} step={1} onChange={(value) => setMiniMaxH3PriceValue("points_per_cny", value)} />
                       <SeedancePriceInput label="平台倍率" value={Number(minimaxH3PriceRule.platform_multiplier ?? 1)} step={0.01} onChange={(value) => setMiniMaxH3PriceValue("platform_multiplier", value)} />
-                      <SeedancePriceInput label="估价兜底算力" value={Number(minimaxH3PriceRule.fallback_cost ?? (miniMaxH3Variant === "max" ? 2.5 : 4))} step={0.01} onChange={(value) => setMiniMaxH3PriceValue("fallback_cost", value)} />
+                      <SeedancePriceInput label="估价兜底算力" value={Number(minimaxH3PriceRule.fallback_cost ?? (miniMaxH3Variant === "max" ? 2500 : 4000))} step={0.01} onChange={(value) => setMiniMaxH3PriceValue("fallback_cost", value)} />
                     </div>
                     <div className="mt-3 text-[11px] leading-5 text-gray-500">
                       任务完成后优先使用上游返回的实际输出秒数、输入视频秒数和输入图片数量结算；上游未返回 usage 时才使用提交参数估算。
@@ -5354,15 +5354,15 @@ export default function ModelsPage() {
                               ? {
                                   ...price,
                                   billing_type: "per_request",
-                                  currency: price.currency || "¥",
+                                  currency: "CREDITS",
                                   unit_price: Number(price.unit_price ?? 0.01) || 0.01,
                                 }
                               : {
                                   ...price,
                                   billing_type: "per_token",
-                                  currency: price.currency || "¥",
-                                  input_price_per_m: Number(price.input_price_per_m ?? (inputPrice > 0 ? inputPrice * 1_000_000 : 2)) || 0,
-                                  output_price_per_m: Number(price.output_price_per_m ?? (outputPrice > 0 ? outputPrice * 1_000_000 : 4)) || 0,
+                                  currency: "CREDITS",
+                                  input_price_per_m: Number(price.input_price_per_m ?? (inputPrice > 0 ? inputPrice * 1_000_000 : 2000)) || 0,
+                                  output_price_per_m: Number(price.output_price_per_m ?? (outputPrice > 0 ? outputPrice * 1_000_000 : 4000)) || 0,
                                 };
                           delete (nextPrice as Record<string, unknown>).input_price;
                           delete (nextPrice as Record<string, unknown>).output_price;
@@ -5710,7 +5710,7 @@ export default function ModelsPage() {
               <div className="mt-1 text-[11px] text-gray-400 leading-relaxed">
                 按 token 计费可直接填「每 1M Tokens」价格：
                 <code className="block mt-0.5 text-gray-500">
-                  {`{"billing_type":"per_token","currency":"¥","input_price_per_m":12.75,"output_price_per_m":63.75,"cache_read_price_per_m":1.275,"surcharge_per_m":1}`}
+                  {`{"billing_type":"per_token","currency":"CREDITS","input_price_per_m":12750,"output_price_per_m":63750,"cache_read_price_per_m":1275,"surcharge_per_m":1000}`}
                 </code>
                 可选字段：cache_write_price_per_m（缓存写入）、surcharge_per_m（平台附加费，每 1M tokens 在真实费用上加收，如填 1 表示每百万 token 加收 1）。也兼容旧的 per-token 字段（input_price / output_price，单 token 价格）。
               </div>

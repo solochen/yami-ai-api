@@ -129,6 +129,22 @@ func productBudgetAllows(spent, next, budget float64) bool {
 	return !math.IsNaN(spent+next+budget) && !math.IsInf(spent+next+budget, 0) && spent >= 0 && next > 0 && budget > 0 && spent+next <= budget+0.000001
 }
 
+func productBudgetLimit(computeRate float64) float64 {
+	if computeRate <= 0 || math.IsNaN(computeRate) || math.IsInf(computeRate, 0) {
+		computeRate = 1000
+	}
+	return 1000 * computeRate
+}
+
+func loadProductBudgetLimit(ctx context.Context, pool *pgxpool.Pool) float64 {
+	var raw []byte
+	var rate float64
+	if err := pool.QueryRow(ctx, `SELECT value FROM system_configs WHERE key='payment_compute_rate'`).Scan(&raw); err == nil {
+		_ = json.Unmarshal(raw, &rate)
+	}
+	return productBudgetLimit(rate)
+}
+
 func productSpent(ctx context.Context, pool *pgxpool.Pool, id int64) (float64, error) {
 	var cost float64
 	err := pool.QueryRow(ctx, `SELECT
@@ -315,7 +331,7 @@ func productGenerate(ctx context.Context, pool *pgxpool.Pool, baseURL, token str
 		if !productBudgetAllows(spent, forecast, budget) {
 			return nil, fmt.Errorf("剩余预算不足以生成下一张图片")
 		}
-		_, err = pool.Exec(ctx, `INSERT INTO tasks(task_no,user_id,model_id,type,status,input,estimated_cost) VALUES($1,$2,$3,'image','pending',$4,$5)`, taskNo, p.UserID, modelID, mustJSON(inputs), forecast)
+		_, err = pool.Exec(ctx, `INSERT INTO tasks(task_no,user_id,model_id,type,status,input,estimated_cost,workflow_project_id) VALUES($1,$2,$3,'image','pending',$4,$5,$6)`, taskNo, p.UserID, modelID, mustJSON(inputs), forecast, p.ProjectID)
 		if err != nil {
 			return nil, err
 		}
@@ -334,7 +350,10 @@ func productGenerate(ctx context.Context, pool *pgxpool.Pool, baseURL, token str
 		if projectState != "running" {
 			return nil, fmt.Errorf("工作流已停止，未提交图片编辑")
 		}
-		if err := processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{TaskNo: taskNo, UserID: p.UserID, ModelID: modelID, ModelCode: modelCode, Input: inputs}); err != nil {
+		if err := processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{
+			TaskNo: taskNo, UserID: p.UserID, ModelID: modelID, ModelCode: modelCode,
+			WorkflowProjectID: p.ProjectID, Input: inputs,
+		}); err != nil {
 			return nil, err
 		}
 	}
@@ -358,12 +377,12 @@ func productGenerate(ctx context.Context, pool *pgxpool.Pool, baseURL, token str
 }
 
 func finishProductWorkflow(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPayload, publicID string, reserved, _ float64, outputs map[string]interface{}, message string) error {
-	spent, err := productSpent(ctx, pool, p.ProjectID)
+	chargeResult, err := workflowSettlementCharge(ctx, pool, p.ProjectID)
 	if err != nil {
-		return err
+		return failWorkflowWithoutCost(ctx, pool, p, publicID, reserved, err.Error())
 	}
-	actual := productActualCharge(reserved, spent)
-	outputs["incurred_cost"], outputs["cost"], outputs["current_step"] = spent, actual, "result"
+	actual := chargeResult.UserCharge
+	outputs["incurred_cost"], outputs["cost"], outputs["current_step"] = chargeResult.ProviderCost, actual, "result"
 	status := "succeeded"
 	qualityStatus := "passed"
 	if message != "" {
@@ -386,7 +405,7 @@ func finishProductWorkflow(ctx context.Context, pool *pgxpool.Pool, p WorkflowTa
 		}
 	}
 	outputs["product_results"] = savedResults
-	return chargeBillingWithFinalize(ctx, pool, p.UserID, reserved, incrementalWorkflowCharge(ctx, pool, p.ProjectID, actual), "workflow", publicID, "workflow_usage", "商品精修与验收", func(tx pgx.Tx) error {
+	return chargeWorkflowWithSettlement(ctx, pool, p.UserID, publicID, p.ProjectID, reserved, incrementalWorkflowCharge(ctx, pool, p.ProjectID, actual), chargeResult, "商品精修与验收", func(tx pgx.Tx) error {
 		var results []productShotResult
 		_ = json.Unmarshal(mustJSON(outputs["product_results"]), &results)
 		for i, r := range results {
@@ -452,7 +471,7 @@ func processProductWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL, to
 			break
 		}
 	}
-	if count < 1 || count > 6 || budget <= 0 || budget > 1000 {
+	if count < 1 || count > 6 || budget <= 0 || budget > loadProductBudgetLimit(ctx, pool) {
 		return finish("商品精修参数无效")
 	}
 	if localRepair && (count != 1 || repairIndex < 0 || !strings.EqualFold(aspectRatio, "auto")) {

@@ -1939,10 +1939,11 @@ func (s *AgentService) retryProject(ctx context.Context, userID int64, publicID 
 		estimated = s.estimateComicRemainingCost(ctx, runtimeCfg, inputs, work)
 		// A prior settlement failure may leave real usage unpaid. It is not a
 		// second generation charge, but still needs a reservation for finalization.
-		_, unsettled, err := accruedWorkflowCostDB(ctx, s.db, projectID)
+		_, settled, err := s.accruedWorkflowCost(ctx, projectID)
 		if err != nil {
 			return err
 		}
+		unsettled := settled
 		estimated += unsettled
 		inputs["_resume_remaining"] = work
 		inputs["_resume_unsettled_cost"] = unsettled
@@ -2163,6 +2164,10 @@ func (s *AgentService) CancelProject(ctx context.Context, userID int64, publicID
 	if err != nil {
 		return err
 	}
+	breakdown, err := s.accruedWorkflowBreakdown(ctx, projectID)
+	if err != nil {
+		return err
+	}
 	finalize := func(tx pgx.Tx) error {
 		var lockAvailable bool
 		if err := tx.QueryRow(ctx, `SELECT pg_try_advisory_xact_lock($1)`, projectID).Scan(&lockAvailable); err != nil {
@@ -2184,66 +2189,67 @@ func (s *AgentService) CancelProject(ctx context.Context, userID int64, publicID
 		return nil
 	}
 	if chargeCost > 0 {
-		return s.billing.ChargeWithFinalize(ctx, userID, estimated, chargeCost, "workflow", publicID, "workflow_usage", "工作流取消前已完成步骤", finalize)
+		return s.billing.ChargeWithSettlement(ctx, userID, estimated, billing.Settlement{
+			RefType: "workflow", RefID: publicID,
+			ProviderCost: breakdown.ProviderCost, UserCharge: chargeCost, Commission: breakdown.Commission,
+			CostSource: "workflow_actual", CostComplete: breakdown.Charge.CostComplete,
+			Config: breakdown.Charge.Config, Key: fmt.Sprintf("workflow:%s:workflow_usage:%.6f", publicID, cumulativeCost-chargeCost),
+		}, "workflow_usage", "工作流取消前已完成步骤", finalize)
 	}
 	return s.billing.UnfreezeWithFinalize(ctx, userID, estimated, "workflow", publicID, finalize)
 }
 
 func (s *AgentService) accruedWorkflowCost(ctx context.Context, projectID int64) (float64, float64, error) {
-	return accruedWorkflowCostDB(ctx, s.db, projectID)
-}
-
-// queryRower 允许累计成本计算在 AgentService 与 OpsService 间复用。
-type queryRower interface {
-	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
-}
-
-func accruedWorkflowCostDB(ctx context.Context, db queryRower, projectID int64) (float64, float64, error) {
-	var raw, outputsRaw []byte
-	var nodeCost, settledCost float64
-	if err := db.QueryRow(ctx, `
-		SELECT COALESCE(w.price_rule, '{}'::jsonb),
-		       COALESCE((SELECT SUM(n.cost) FROM workflow_node_runs n WHERE n.project_id=p.id), 0),
-		       p.actual_cost,
-		       COALESCE(p.outputs, '{}'::jsonb)
-		FROM workflow_projects p
-		JOIN workflow_definitions w ON w.id=p.workflow_id
-		WHERE p.id=$1`, projectID).Scan(&raw, &nodeCost, &settledCost, &outputsRaw); err != nil {
+	var settledCost float64
+	if err := s.db.QueryRow(ctx, `SELECT actual_cost FROM workflow_projects WHERE id=$1`, projectID).Scan(&settledCost); err != nil {
 		return 0, 0, err
 	}
-	rule := map[string]interface{}{}
-	_ = json.Unmarshal(raw, &rule)
-	cumulativeCost := nodeCost
-	switch stringValue(rule["billing_type"]) {
-	case "per_request":
-		if unitPrice := floatValue(rule["unit_price"]); nodeCost > 0 && unitPrice > 0 {
-			cumulativeCost = unitPrice
-		}
-	case "per_chapter":
-		outputs := map[string]interface{}{}
-		_ = json.Unmarshal(outputsRaw, &outputs)
-		if chapterCost := chapterBasedCost(rule, floatValue(outputs["current_chapter"])); chapterCost > 0 {
-			cumulativeCost = chapterCost
-		}
-	default:
-		// model_actual/dynamic：已产生用量时收取 工作流费 + 大模型用量费；
-		// 用量取 min(上游真实成本, 按模型设定单价计算的售价)，与完成结算口径一致。
-		if nodeCost > 0 {
-			usage := nodeCost
-			if provider := workflowUpstreamProviderCostDB(ctx, db, projectID); provider > 0 && provider < usage {
-				usage = provider
-			}
-			cumulativeCost = usage + floatValue(rule["unit_price"])
-		}
+	charge, err := s.billing.WorkflowCharge(ctx, projectID)
+	if err != nil {
+		return 0, 0, err
 	}
-	if cumulativeCost < 0 {
-		cumulativeCost = 0
+	incremental := charge.UserCharge - settledCost
+	if incremental < 0 {
+		incremental = 0
 	}
-	chargeCost := cumulativeCost - settledCost
-	if chargeCost < 0 {
-		chargeCost = 0
+	return charge.UserCharge, incremental, nil
+}
+
+type accruedWorkflowBreakdown struct {
+	Charge       *billing.WorkflowCharge
+	ProviderCost float64
+	Commission   float64
+}
+
+func (s *AgentService) accruedWorkflowBreakdown(ctx context.Context, projectID int64) (accruedWorkflowBreakdown, error) {
+	var settledCost, settledProvider float64
+	if err := s.db.QueryRow(ctx, `SELECT COALESCE(actual_cost,0),COALESCE(provider_cost,0) FROM workflow_projects WHERE id=$1`, projectID).Scan(&settledCost, &settledProvider); err != nil {
+		return accruedWorkflowBreakdown{}, err
 	}
-	return cumulativeCost, chargeCost, nil
+	charge, err := s.billing.WorkflowCharge(ctx, projectID)
+	if err != nil {
+		return accruedWorkflowBreakdown{}, err
+	}
+	providerIncrement := numericMicros(charge.ProviderCost - settledProvider)
+	if providerIncrement < 0 {
+		providerIncrement = 0
+	}
+	incremental := charge.UserCharge - settledCost
+	if incremental < 0 {
+		incremental = 0
+	}
+	if providerIncrement > incremental {
+		providerIncrement = incremental
+	}
+	commission := numericMicros(incremental - providerIncrement)
+	if commission < 0 {
+		commission = 0
+	}
+	return accruedWorkflowBreakdown{
+		Charge:       charge,
+		ProviderCost: providerIncrement,
+		Commission:   commission,
+	}, nil
 }
 
 func pruneWorkflowOutputsForRetry(outputs map[string]interface{}, nodeID string) {
@@ -2558,35 +2564,6 @@ func chapterBasedCost(rule map[string]interface{}, chapters float64) float64 {
 		cost = 0
 	}
 	return cost
-}
-
-// workflowUpstreamProviderCost 汇总小说工坊项目 LLM 调用的上游真实成本，
-// 与 worker 端结算口径保持一致（每个 request_id 取最后一次成功调用）。
-func (s *AgentService) workflowUpstreamProviderCost(ctx context.Context, projectID int64) float64 {
-	return workflowUpstreamProviderCostDB(ctx, s.db, projectID)
-}
-
-func workflowUpstreamProviderCostDB(ctx context.Context, db queryRower, projectID int64) float64 {
-	var total float64
-	err := db.QueryRow(ctx, `
-		SELECT COALESCE(SUM(latest_cost), 0) FROM (
-			SELECT DISTINCT ON (request_id) provider_cost AS latest_cost
-			FROM model_route_attempts
-			WHERE status='SUCCESS' AND provider_cost IS NOT NULL
-			  AND (request_id = $1
-			       OR request_id LIKE $2
-			       OR request_id LIKE $3
-			       OR request_id LIKE $4)
-			ORDER BY request_id, id DESC
-		) t`,
-		fmt.Sprintf("novel_planning_%d", projectID),
-		fmt.Sprintf("novel_write_%d_ch%%", projectID),
-		fmt.Sprintf("novel_polish_%d_ch%%", projectID),
-		fmt.Sprintf("novel_archive_%d_ch%%", projectID)).Scan(&total)
-	if err != nil {
-		return 0
-	}
-	return total
 }
 
 func normalizeVideoRedrawAgentInput(in AgentUpsertInput) AgentUpsertInput {

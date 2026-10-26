@@ -872,6 +872,9 @@ func EstimateRouteProviderCostWithTokenDetails(route *ModelRoute, params map[str
 	if route == nil {
 		return 0
 	}
+	if params == nil {
+		params = map[string]interface{}{}
+	}
 	rule := route.CostRule
 	typeName := strings.ToLower(strings.TrimSpace(stringValue(rule["billing_type"])))
 	switch typeName {
@@ -925,14 +928,54 @@ func EstimateRouteProviderCostWithTokenDetails(route *ModelRoute, params map[str
 		}
 		return float64(count) * unitCost
 	case "per_second":
-		seconds := floatValue(params["duration"])
-		if seconds <= 0 {
-			seconds = 1
-		}
-		return seconds * floatValue(rule["unit_cost"])
+		return perSecondRouteProviderCost(rule, params)
 	default:
 		return floatValue(rule["unit_cost"])
 	}
+}
+
+func perSecondRouteProviderCost(rule, params map[string]interface{}) float64 {
+	seconds := floatValue(params["_actual_output_seconds"])
+	if seconds <= 0 {
+		seconds = parseDurationSeconds(params)
+	}
+	if seconds <= 0 {
+		return 0
+	}
+	unitCost := perSecondUnitCost(rule, params)
+	return seconds * billingItemCount(params) * unitCost
+}
+
+func perSecondUnitCost(rule, params map[string]interface{}) float64 {
+	resolution := strings.ToLower(strings.TrimSpace(stringValue(params["resolution"])))
+	if resolution != "" && resolution != "<nil>" {
+		if costs, ok := rule["unit_cost_by_resolution"].(map[string]interface{}); ok {
+			for key, value := range costs {
+				if strings.EqualFold(strings.TrimSpace(key), resolution) && floatValue(value) > 0 {
+					return floatValue(value)
+				}
+			}
+		}
+	}
+	unitCost := floatValue(rule["unit_cost"])
+	if unitCost <= 0 {
+		if variants, ok := rule["unit_cost_by_variant"].(map[string]interface{}); ok && len(variants) > 0 {
+			quality := strings.ToLower(strings.TrimSpace(stringValue(params["quality"])))
+			size := strings.ToLower(strings.TrimSpace(stringValue(params["image_size"])))
+			if size == "" || size == "<nil>" {
+				size = "1k"
+			}
+			if quality != "" && quality != "<nil>" {
+				for key, value := range variants {
+					if strings.EqualFold(strings.TrimSpace(key), quality+"_"+size) {
+						unitCost = floatValue(value)
+						break
+					}
+				}
+			}
+		}
+	}
+	return unitCost
 }
 
 func mergeRouteRuntimeRule(modelRule, routeRule map[string]interface{}) map[string]interface{} {

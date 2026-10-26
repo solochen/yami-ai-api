@@ -6,18 +6,24 @@ https://openrouter.ai/api/v1/models. Display copy is a Chinese summary of
 that official description only.
 
 The OpenRouter connection is copied from an existing model so the stored key
-is reused and never printed.
+is reused and never printed. User-facing prices and route costs are stored as
+算力 by applying MODEL_USD_TO_COMPUTE_RATE (default 7200); raw USD prices remain
+available for future renormalization.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import urllib.request
 from decimal import Decimal
 
 SOURCE_CODE = "deepseek-v4-pro-0813"
 CATALOG = "https://openrouter.ai/api/v1/models"
+USD_TO_COMPUTE = Decimal(os.getenv("MODEL_USD_TO_COMPUTE_RATE", "7.2"))
+if USD_TO_COMPUTE <= 0:
+    raise SystemExit("MODEL_USD_TO_COMPUTE_RATE must be greater than 0")
 
 # Chinese summaries stay inside the official OpenRouter description.
 COPY = {
@@ -45,11 +51,16 @@ COPY = {
 }
 
 
-def per_million(value: str | None) -> float | None:
+def per_million(value: str | None) -> Decimal | None:
     if not value:
         return None
-    amount = (Decimal(value) * Decimal(1_000_000)).normalize()
-    return float(amount)
+    return Decimal(value) * Decimal(1_000_000)
+
+
+def credit(value: Decimal | None) -> float | None:
+    if value is None:
+        return None
+    return float(value * USD_TO_COMPUTE)
 
 
 def reasoning_rule(model: dict) -> dict:
@@ -112,18 +123,44 @@ def main() -> None:
         code = model_id.split("/", 1)[1].replace(".", "-")
         vendor = model_id.split("/", 1)[0]
         pricing = official.get("pricing") or {}
+        source_input = per_million(pricing.get("prompt"))
+        source_output = per_million(pricing.get("completion"))
+        source_cache_read = per_million(pricing.get("input_cache_read"))
+        source_cache_write = per_million(pricing.get("input_cache_write"))
         price = {
             "billing_type": "per_token",
-            "currency": "$",
-            "input_price_per_m": per_million(pricing.get("prompt")),
-            "output_price_per_m": per_million(pricing.get("completion")),
+            "currency": "CREDITS",
+            "usd_to_compute": float(USD_TO_COMPUTE),
+            "input_price_per_m": credit(source_input),
+            "output_price_per_m": credit(source_output),
+            "source_currency": "USD",
+            "source_input_price_per_m": float(source_input) if source_input is not None else None,
+            "source_output_price_per_m": float(source_output) if source_output is not None else None,
+            "price_unit_normalized": True,
         }
-        cache_read = per_million(pricing.get("input_cache_read"))
-        cache_write = per_million(pricing.get("input_cache_write"))
-        if cache_read:
-            price["cache_read_price_per_m"] = cache_read
-        if cache_write:
-            price["cache_write_price_per_m"] = cache_write
+        if source_cache_read:
+            price["cache_read_price_per_m"] = credit(source_cache_read)
+            price["source_cache_read_price_per_m"] = float(source_cache_read)
+        if source_cache_write:
+            price["cache_write_price_per_m"] = credit(source_cache_write)
+            price["source_cache_write_price_per_m"] = float(source_cache_write)
+        cost_rule = {
+            "billing_type": "per_token",
+            "currency": "CREDITS",
+            "usd_to_compute": float(USD_TO_COMPUTE),
+            "input_cost_per_m": credit(source_input),
+            "output_cost_per_m": credit(source_output),
+            "source_currency": "USD",
+            "source_input_cost_per_m": float(source_input) if source_input is not None else None,
+            "source_output_cost_per_m": float(source_output) if source_output is not None else None,
+            "price_unit_normalized": True,
+        }
+        if source_cache_read:
+            cost_rule["cache_read_cost_per_m"] = credit(source_cache_read)
+            cost_rule["source_cache_read_cost_per_m"] = float(source_cache_read)
+        if source_cache_write:
+            cost_rule["cache_write_cost_per_m"] = credit(source_cache_write)
+            cost_rule["source_cache_write_cost_per_m"] = float(source_cache_write)
         runtime = {"capabilities": capabilities(official), "reasoning": reasoning_rule(official)}
         tags = ["对话", vendor]
         statements.append(f"""
@@ -153,7 +190,7 @@ INSERT INTO model_routes (
   timeout_seconds, max_retries, is_enabled
 )
 SELECT m.id, 'OpenRouter', src.provider, src.protocol, {sql_text(model_id)}, src.endpoint, src.base_url, src.api_key,
-  src.auth_type, src.api_key_header, src.headers, src.extra_params, '{{}}'::jsonb, '{{}}'::jsonb, src.priority, src.weight,
+  src.auth_type, src.api_key_header, src.headers, src.extra_params, '{{}}'::jsonb, {sql_json(cost_rule)}, src.priority, src.weight,
   src.timeout_seconds, src.max_retries, true
 FROM models m
 JOIN model_routes src ON src.model_id = (SELECT id FROM models WHERE code = '{SOURCE_CODE}')
@@ -161,6 +198,11 @@ WHERE m.code = {sql_text(code)}
   AND NOT EXISTS (
     SELECT 1 FROM model_routes existing WHERE existing.model_id = m.id AND existing.upstream_model = {sql_text(model_id)}
   );
+UPDATE model_routes SET endpoint=src.endpoint, cost_rule={sql_json(cost_rule)}, is_enabled=true, updated_at=now()
+FROM models src
+WHERE model_routes.model_id = (SELECT id FROM models WHERE code = {sql_text(code)})
+  AND model_routes.upstream_model = {sql_text(model_id)}
+  AND src.code = '{SOURCE_CODE}';
 """)
     statements.append("COMMIT;")
     sql = "\n".join(statements)

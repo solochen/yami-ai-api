@@ -163,19 +163,19 @@ func processGalleryGenerationTask(ctx context.Context, pool *pgxpool.Pool, baseU
 
 	usage := upstreamUsageFromBody(selected.ResponseBody)
 	billingInput := inputWithActualUpstreamUsage(input, usage)
-	actualCost := estimated
-	if usage.hasAny() {
-		actualCost = estimateModelCostByIDWorker(ctx, pool, modelID, billingInput, usage.PromptTokens, usage.OutputTokens, 0, 0)
-	}
 	providerCost := workerRouteProviderCost(selected.Route, billingInput, usage.PromptTokens, usage.OutputTokens, 0, 0)
 	if usd := upstreamUSDCost(selected.ResponseBody); usd > 0 {
 		if rate := modelUSDToComputeRate(ctx, pool, modelID); rate > 0 {
-			actualCost = usd * rate
-			providerCost = actualCost
+			providerCost = float64(workerCeilMicrocredits(usd*rate)) / 1_000_000
 		} else {
 			providerCost = usd
 		}
 	}
+	charge, err := workerChargeForProviderCost(ctx, pool, providerCost)
+	if err != nil {
+		return failGalleryGenerationTask(ctx, pool, payload.TaskID, "BILLING_COST_MISSING", "上游未返回可核验成本，已停止记账："+err.Error(), false)
+	}
+	actualCost := charge.UserCharge
 	images := make([]map[string]string, 0, len(resultData))
 	for idx, item := range resultData {
 		url := normalizeImageResultURL(item.URL, item.B64JSON)

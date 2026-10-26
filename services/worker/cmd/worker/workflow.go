@@ -41,6 +41,7 @@ type workflowNode struct {
 }
 
 func processWorkflowTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token string, p WorkflowTaskPayload) error {
+	ctx = context.WithValue(ctx, workflowProjectContextKey{}, p.ProjectID)
 	lockConn, err := pool.Acquire(ctx)
 	if err != nil {
 		return err
@@ -141,6 +142,8 @@ func processWorkflowTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token
 	_ = json.Unmarshal(nodesRaw, &nodes)
 	return processCustomWorkflow(ctx, pool, baseURL, token, p, publicID, category, estimated, inputs, nodes)
 }
+
+type workflowProjectContextKey struct{}
 
 func processVideoRedrawWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL, token string, p WorkflowTaskPayload, publicID string, estimated float64, inputs, runtimeCfg map[string]interface{}) error {
 	outputs := loadWorkflowOutputs(ctx, pool, p.ProjectID)
@@ -458,9 +461,9 @@ func removeEmbeddedSubtitleTracks(ctx context.Context, pool *pgxpool.Pool, proje
 		return nil, false, nil
 	}
 	taskNo := newWorkflowTaskNo(0)
-	taskInput := map[string]interface{}{"video_url": sourceURL, "operation": "remove_subtitle_track", "_skip_billing": true, "_workflow_project": publicID}
+	taskInput := map[string]interface{}{"video_url": sourceURL, "operation": "remove_subtitle_track", "_skip_billing": true, "_local_free": true, "_workflow_project": publicID}
 	inputJSON, _ := json.Marshal(taskInput)
-	if _, err := pool.Exec(ctx, `INSERT INTO tasks (task_no,user_id,model_id,type,status,input,estimated_cost,started_at) VALUES ($1,$2,NULL,'video','running',$3,0,now())`, taskNo, userID, inputJSON); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO tasks (task_no,user_id,model_id,type,status,input,estimated_cost,started_at,workflow_project_id) VALUES ($1,$2,NULL,'video','running',$3,0,now(),$4)`, taskNo, userID, inputJSON, projectID); err != nil {
 		return nil, hadTrack, err
 	}
 	appendWorkflowMediaTask(ctx, pool, projectID, map[string]interface{}{"task_no": taskNo, "type": "video", "status": "running", "progress": 20, "output": map[string]interface{}{}})
@@ -496,7 +499,7 @@ func removeEmbeddedSubtitleTracks(ctx context.Context, pool *pgxpool.Pool, proje
 	pool.Exec(ctx, `INSERT INTO works (public_id,user_id,task_id,model_id,type,prompt,thumbnail_url,metadata,expires_at) VALUES ($1,$2,$3,NULL,'video',$4,$5,$6,$7)`,
 		workID, userID, taskID, "移除视频独立字幕轨", publicURL, outputJSON, expires)
 	pool.Exec(ctx, `INSERT INTO task_events (task_id,event_type,payload) VALUES ($1,'completed',$2)`, taskID, outputJSON)
-	item := map[string]interface{}{"task_no": taskNo, "type": "video", "status": "succeeded", "progress": 100, "output": output, "estimated_cost": 0, "actual_cost": 0}
+	item := map[string]interface{}{"task_no": taskNo, "type": "video", "status": "succeeded", "progress": 100, "output": output, "estimated_cost": 0, "actual_cost": 0, "provider_cost": 0}
 	appendWorkflowMediaTask(ctx, pool, projectID, item)
 	return item, hadTrack, nil
 }
@@ -515,6 +518,22 @@ func mediaHasSubtitle(ctx context.Context, path string) (bool, error) {
 		return false, err
 	}
 	return strings.TrimSpace(string(output)) != "", nil
+}
+
+func insertWorkflowMediaTask(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	projectID, userID, modelID int64,
+	taskNo, taskType string,
+	input map[string]interface{},
+	estimated float64,
+) error {
+	inputJSON, _ := json.Marshal(input)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO tasks (task_no,user_id,model_id,type,status,input,estimated_cost,workflow_project_id)
+		VALUES ($1,$2,NULLIF($3,0),$4,'pending',$5,$6,NULLIF($7,0))`,
+		taskNo, userID, modelID, taskType, inputJSON, estimated, projectID)
+	return err
 }
 
 func processCustomWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL, token string, p WorkflowTaskPayload, publicID string, category string, estimated float64, inputs map[string]interface{}, nodes []workflowNode) error {
@@ -584,13 +603,16 @@ func processCustomWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL, tok
 		}
 	}
 
-	totalCost = workflowActualCost(ctx, pool, p.ProjectID, outputs)
-	totalCost = agentConfirmedCost(inputs, totalCost)
+	chargeResult, costErr := workflowSettlementCharge(ctx, pool, p.ProjectID)
+	if costErr != nil {
+		return failWorkflowWithoutCost(ctx, pool, p, publicID, estimated, costErr.Error())
+	}
+	totalCost = chargeResult.UserCharge
 	if err := validateAgentExpectedWorkflowOutput(inputs, outputs); err != nil {
 		return failWorkflow(ctx, pool, p, publicID, estimated, "最终交付物校验失败："+err.Error())
 	}
 	chargeCost := incrementalWorkflowCharge(ctx, pool, p.ProjectID, totalCost)
-	if err := chargeBillingWithFinalize(ctx, pool, p.UserID, estimated, chargeCost, "workflow", publicID, "workflow_usage", "智能体工作流", func(tx pgx.Tx) error {
+	if err := chargeWorkflowWithSettlement(ctx, pool, p.UserID, publicID, p.ProjectID, estimated, chargeCost, chargeResult, "智能体工作流", func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
 			UPDATE workflow_projects SET
 				status=CASE WHEN status='canceling' THEN 'canceled' ELSE 'succeeded' END,
@@ -2420,7 +2442,12 @@ func executeWorkerLLMWithMedia(ctx context.Context, pool *pgxpool.Pool, baseURL,
 				markWorkerRouteSuccess(ctx, pool, route.ID)
 				logWorkerRouteAttempt(ctx, pool, requestID, model.ID, route.ID, attempt, "SUCCESS", status, latencyMS)
 				promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens := chatUsageTokenDetails(responseBody)
-				updateWorkerRouteAttemptProviderCost(ctx, pool, requestID, route.ID, workerRouteProviderCost(route, bodyMap, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens))
+				providerCost := workerRouteProviderCost(route, bodyMap, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens)
+				if projectID, _ := ctx.Value(workflowProjectContextKey{}).(int64); projectID > 0 {
+					updateWorkerRouteAttemptProviderCostForProject(ctx, pool, projectID, requestID, route.ID, providerCost, workerRouteCostSource(route), true)
+				} else {
+					updateWorkerRouteAttemptProviderCost(ctx, pool, requestID, route.ID, providerCost, workerRouteCostSource(route), true)
+				}
 				return workerLLMResult{Route: route, RequestBody: bodyMap, ResponseBody: responseBody}, nil
 			}
 			statusLabel := "ERROR"
@@ -2854,12 +2881,17 @@ func sumAgentMediaTaskCost(tasks []map[string]interface{}) float64 {
 }
 
 func workflowActualCost(ctx context.Context, pool *pgxpool.Pool, projectID int64, outputs map[string]interface{}) float64 {
-	base := workflowBaseCost(ctx, pool, projectID)
-	if base <= 0 {
-		base = workflowChapterCost(ctx, pool, projectID, intAny(outputs["current_chapter"]))
+	rule := workflowPriceRule(ctx, pool, projectID)
+	switch stringAny(rule["billing_type"]) {
+	case "per_request":
+		if price := floatAny(rule["unit_price"]); price > 0 {
+			return price
+		}
+	case "per_chapter":
+		if price := workflowChapterCost(ctx, pool, projectID, intAny(outputs["current_chapter"])); price > 0 {
+			return price
+		}
 	}
-	var nodeCost float64
-	_ = pool.QueryRow(ctx, `SELECT COALESCE(SUM(cost),0) FROM workflow_node_runs WHERE project_id=$1`, projectID).Scan(&nodeCost)
 	mediaCost := 0.0
 	if raw, ok := outputs["media_tasks"].([]interface{}); ok {
 		for _, item := range raw {
@@ -2876,47 +2908,56 @@ func workflowActualCost(ctx context.Context, pool *pgxpool.Pool, projectID int64
 	if mediaCost <= 0 {
 		mediaCost = floatAny(outputs["cost"])
 	}
-	usage := selectWorkflowActualCost(0, nodeCost, mediaCost)
-	if usage > 0 {
-		if base := workflowUsageBaseCost(ctx, pool, projectID); base > 0 {
-			// 工作流费 + 大模型用量费；用量取 min(上游真实成本, 模型设定售价)
-			usage = base + workflowModelUsageCost(ctx, pool, projectID, nodeCost)
-		}
-	}
-	return selectWorkflowActualCost(base, usage, 0)
+	usage := workflowProviderUsageCharge(ctx, pool, projectID, mediaCost)
+	return workflowUsageBaseCost(ctx, pool, projectID) + usage
 }
 
 func workflowAccruedCost(ctx context.Context, pool *pgxpool.Pool, projectID int64) float64 {
-	var nodeCost float64
-	if err := pool.QueryRow(ctx, `SELECT COALESCE(SUM(cost),0) FROM workflow_node_runs WHERE project_id=$1`, projectID).Scan(&nodeCost); err != nil || nodeCost <= 0 {
-		return 0
-	}
+	// 失败/取消结算时从数据库读取已完成章节数，按章计费优先于 token 成本。
 	if base := workflowBaseCost(ctx, pool, projectID); base > 0 {
 		return base
 	}
-	// 失败/取消结算时从数据库读取已完成章节数，按章计费优先于 token 成本。
 	if chapterCost := workflowChapterCost(ctx, pool, projectID, -1); chapterCost > 0 {
 		return chapterCost
 	}
-	// model_actual：已产生用量时收取 工作流费 + min(上游真实成本, 模型设定售价)。
-	if base := workflowUsageBaseCost(ctx, pool, projectID); base > 0 {
-		return base + workflowModelUsageCost(ctx, pool, projectID, nodeCost)
+	outputs := loadWorkflowOutputs(ctx, pool, projectID)
+	mediaCost := sumAgentMediaTaskCostFromOutputs(outputs)
+	if mediaCost <= 0 {
+		mediaCost = floatAny(outputs["cost"])
 	}
-	return nodeCost
+	return workflowUsageBaseCost(ctx, pool, projectID) + workflowProviderUsageCharge(ctx, pool, projectID, mediaCost)
 }
 
-// workflowModelUsageCost 大模型用量费 = min(上游真实成本, 按模型设定单价计算的售价)。
-// 上游真实成本来自线路记录的 provider_cost（按 request_id 前缀归集本项目）；
-// 未配置线路成本时退化为模型售价，保证不免费。
-func workflowModelUsageCost(ctx context.Context, pool *pgxpool.Pool, projectID int64, nodeCost float64) float64 {
+func sumAgentMediaTaskCostFromOutputs(outputs map[string]interface{}) float64 {
+	total := 0.0
+	switch raw := outputs["media_tasks"].(type) {
+	case []interface{}:
+		for _, value := range raw {
+			if item, ok := value.(map[string]interface{}); ok {
+				total += floatAny(item["provider_cost"])
+			}
+		}
+	case []map[string]interface{}:
+		for _, item := range raw {
+			total += floatAny(item["provider_cost"])
+		}
+	}
+	return total
+}
+
+func workflowProviderUsageCharge(ctx context.Context, pool *pgxpool.Pool, projectID int64, mediaProviderCost float64) float64 {
 	provider := workflowUpstreamProviderCost(ctx, pool, projectID)
+	if mediaProviderCost > 0 {
+		provider += mediaProviderCost
+	}
 	if provider <= 0 {
-		return nodeCost
+		return 0
 	}
-	if nodeCost > 0 && provider > nodeCost {
-		return nodeCost
+	charge, err := workerChargeForProviderCost(ctx, pool, provider)
+	if err != nil {
+		return 0
 	}
-	return provider
+	return charge.UserCharge
 }
 
 // workflowUpstreamProviderCost 汇总本项目 LLM 调用的上游真实成本。
@@ -2986,15 +3027,101 @@ func incrementalWorkflowCharge(ctx context.Context, pool *pgxpool.Pool, projectI
 	if err := pool.QueryRow(ctx, `SELECT actual_cost FROM workflow_projects WHERE id=$1`, projectID).Scan(&settled); err != nil {
 		return cumulativeCost
 	}
-	return incrementalChargeAmount(cumulativeCost, settled)
+	charge, _ := incrementalChargeAmount(cumulativeCost, settled)
+	return charge
 }
 
-func incrementalChargeAmount(cumulativeCost, settledCost float64) float64 {
+func incrementalChargeAmount(cumulativeCost, settledCost float64) (float64, float64) {
 	incremental := cumulativeCost - settledCost
 	if incremental < 0 {
+		return 0, 0
+	}
+	marginPercent := defaultGrossMarginPercent
+	// This helper has no query handle, so it uses the configured default. The
+	// settlement path overwrites both amounts from the live config before the
+	// ledger insert.
+	commission := numericMicrosWorker(incremental * marginPercent / 100)
+	if commission > incremental {
+		commission = incremental
+	}
+	return incremental, commission
+}
+
+func numericMicrosWorker(value float64) float64 {
+	if value <= 0 || math.IsNaN(value) || math.IsInf(value, 0) {
 		return 0
 	}
-	return incremental
+	return math.Ceil(value*1_000_000-1e-9) / 1_000_000
+}
+
+type workflowChargeResult struct {
+	ProviderCost   float64
+	UserCharge     float64
+	Commission     float64
+	Config         workerPricingConfig
+	Items          []workerSettlementItem
+	CostIncomplete bool
+}
+
+// workflowSettlementCharge converts the durable upstream costs of exactly one
+// workflow project into the user-facing charge. No workflow price_rule is
+// consulted here: admin-configured workflow prices are reservation estimates,
+// while this function is the authoritative final price.
+func workflowSettlementCharge(ctx context.Context, pool *pgxpool.Pool, projectID int64) (workflowChargeResult, error) {
+	costs, err := workflowProviderCosts(ctx, pool, projectID)
+	if err != nil {
+		return workflowChargeResult{}, err
+	}
+	if costs.IncompleteCost {
+		return workflowChargeResult{}, fmt.Errorf("工作流共有 %d 次成功调用缺少可核验的上游成本，已停止结算", costs.MissingCostCount)
+	}
+	charge, err := workerChargeForProviderCost(ctx, pool, costs.ProviderCost)
+	if err != nil {
+		return workflowChargeResult{}, err
+	}
+	result := workflowChargeResult{
+		ProviderCost: charge.ProviderCost,
+		UserCharge:   charge.UserCharge,
+		Commission:   charge.Commission,
+		Config:       charge.Config,
+		Items:        make([]workerSettlementItem, 0, len(costs.Items)),
+	}
+	for _, item := range costs.Items {
+		itemCharge, err := workerCalculateCharge(item.ProviderCost, charge.Config.GrossMarginPercent)
+		if err != nil {
+			return workflowChargeResult{}, err
+		}
+		result.Items = append(result.Items, workerSettlementItem{
+			ModelID: item.ModelID, RouteID: item.RouteID, Source: item.Source,
+			RefType: "workflow_item", RefID: item.RefID,
+			ProviderCost: itemCharge.ProviderCost, UserCharge: itemCharge.UserCharge,
+			Commission:   itemCharge.Commission,
+			PromptTokens: item.PromptTokens, CompletionTokens: item.CompletionTokens,
+			CachedTokens: item.CachedTokens, ImageCount: item.ImageCount,
+			VideoSeconds: item.VideoSeconds,
+		})
+	}
+	// Rounding each item up can exceed the charge for the aggregate because the
+	// aggregate is also rounded once. The ledger requires exact balance, so
+	// distribute the tiny round-up difference to the final item.
+	if len(result.Items) > 0 {
+		itemProvider, itemUser, itemCommission := 0.0, 0.0, 0.0
+		for _, item := range result.Items {
+			itemProvider += item.ProviderCost
+			itemUser += item.UserCharge
+			itemCommission += item.Commission
+		}
+		providerDelta := numericMicrosWorker(result.ProviderCost - itemProvider)
+		userDelta := numericMicrosWorker(result.UserCharge - itemUser)
+		commissionDelta := numericMicrosWorker(result.Commission - itemCommission)
+		if math.Abs(providerDelta) > 1e-6 || math.Abs(userDelta) > 1e-6 || math.Abs(commissionDelta) > 1e-6 {
+			last := &result.Items[len(result.Items)-1]
+			last.ProviderCost = numericMicrosWorker(last.ProviderCost + providerDelta)
+			last.UserCharge = numericMicrosWorker(last.UserCharge + userDelta)
+			last.Commission = numericMicrosWorker(last.Commission + commissionDelta)
+		}
+	}
+	return result, nil
 }
 
 // chargeStepBilling 逐步确认模式下的分段扣费：进入等待确认前，
@@ -3002,52 +3129,37 @@ func incrementalChargeAmount(cumulativeCost, settledCost float64) float64 {
 // 剩余额度继续担保后续步骤；结算进度记录在 actual_cost 供后续增量结算使用。
 // 与最终完成结算（chargeBillingWithFinalize）互不重复：后者只收累计成本减去 actual_cost 的差额。
 func chargeStepBilling(ctx context.Context, pool *pgxpool.Pool, userID, projectID int64, publicID string, cumulativeCost float64) error {
-	cumulativeCost = agentConfirmedWorkflowCost(ctx, pool, projectID, cumulativeCost)
-	var settled float64
-	if err := pool.QueryRow(ctx, `SELECT COALESCE(actual_cost,0) FROM workflow_projects WHERE id=$1`, projectID).Scan(&settled); err != nil {
+	_ = cumulativeCost
+	chargeResult, costErr := workflowSettlementCharge(ctx, pool, projectID)
+	if costErr != nil {
+		return costErr
+	}
+	cumulativeCost = chargeResult.UserCharge
+	var settled, projectProviderCost float64
+	if err := pool.QueryRow(ctx, `SELECT COALESCE(actual_cost,0),COALESCE(provider_cost,0) FROM workflow_projects WHERE id=$1`, projectID).Scan(&settled, &projectProviderCost); err != nil {
 		return err
 	}
-	charge := incrementalChargeAmount(cumulativeCost, settled)
+	charge, commission := incrementalChargeAmount(cumulativeCost, settled)
 	if charge <= 0 {
 		return nil
 	}
-	tx, err := pool.Begin(ctx)
-	if err != nil {
+	incurredProviderCost := chargeResult.ProviderCost
+	providerCost := numericMicrosWorker(incurredProviderCost - projectProviderCost)
+	if providerCost < 0 {
+		providerCost = 0
+	}
+	if providerCost > charge {
+		providerCost = charge
+	}
+	commission = numericMicrosWorker(charge - providerCost)
+	_ = commission
+	return chargeWorkflowWithSettlement(ctx, pool, userID, publicID, projectID, cumulativeCost, charge, chargeResult, "工作流分段扣费", func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`UPDATE workflow_projects SET actual_cost=actual_cost+$1,provider_cost=GREATEST($2,provider_cost+$3),updated_at=now() WHERE id=$4`,
+			charge, incurredProviderCost, projectProviderCost, projectID,
+		)
 		return err
-	}
-	defer tx.Rollback(ctx)
-	var balance, frozen float64
-	if err = tx.QueryRow(ctx, `SELECT compute_balance, frozen_compute FROM wallets WHERE user_id=$1 FOR UPDATE`, userID).Scan(&balance, &frozen); err != nil {
-		return err
-	}
-	locked, err := lockedFreezeAmount(ctx, tx, userID, "workflow", publicID)
-	if err != nil {
-		return err
-	}
-	if locked <= 0 {
-		return nil
-	}
-	if charge > locked {
-		charge = locked
-	}
-	newBalance := balance - charge
-	newFrozen := frozen - charge
-	if newFrozen < 0 {
-		newFrozen = 0
-	}
-	if _, err = tx.Exec(ctx, `UPDATE wallets SET compute_balance=$1, frozen_compute=$2, updated_at=now() WHERE user_id=$3`, newBalance, newFrozen, userID); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(ctx, `UPDATE balance_freezes SET amount=GREATEST(amount-$1,0) WHERE user_id=$2 AND ref_type='workflow' AND ref_id=$3 AND status='frozen'`, charge, userID, publicID); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(ctx, `INSERT INTO wallet_transactions (user_id, type, direction, amount, balance_after, ref_type, ref_id, remark) VALUES ($1,'workflow_usage','out',$2,$3,'workflow',$4,'工作流分段扣费')`, userID, charge, newBalance, publicID); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(ctx, `UPDATE workflow_projects SET actual_cost=actual_cost+$1, updated_at=now() WHERE id=$2`, charge, projectID); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	})
 }
 
 func selectWorkflowActualCost(flatPrice, nodeCost, mediaCost float64) float64 {
@@ -3534,6 +3646,9 @@ func nestedWorkerFloat(raw interface{}, first, second string) float64 {
 }
 
 func workerDurationSeconds(params map[string]interface{}) float64 {
+	if value := floatAny(params["_actual_output_seconds"]); value > 0 {
+		return value
+	}
 	for _, key := range []string{"duration", "duration_sec", "seconds"} {
 		if value := floatAny(params[key]); value > 0 {
 			return value
@@ -3861,10 +3976,7 @@ func runAgentMediaTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, token 
 			taskInput["reference_images"] = referenceImages
 		}
 		taskEstimated := estimateModelCostByIDWorker(ctx, pool, modelID, taskInput, 0, 0, 0, 0)
-		inputJSON, _ := json.Marshal(taskInput)
-		_, err := pool.Exec(ctx, `
-			INSERT INTO tasks (task_no, user_id, model_id, type, status, input, estimated_cost)
-			VALUES ($1,$2,$3,$4,'pending',$5,$6)`, taskNo, userID, modelID, taskType, inputJSON, taskEstimated)
+		err := insertWorkflowMediaTask(ctx, pool, projectID, userID, modelID, taskNo, taskType, taskInput, taskEstimated)
 		if err != nil {
 			if firstErr == "" {
 				firstErr = err.Error()
@@ -3873,7 +3985,10 @@ func runAgentMediaTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, token 
 			continue
 		}
 		appendWorkflowMediaTask(ctx, pool, projectID, map[string]interface{}{"task_no": taskNo, "type": taskType, "status": "pending", "progress": 5, "output": map[string]interface{}{}})
-		_ = processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{TaskNo: taskNo, UserID: userID, ModelID: modelID, ModelCode: modelCode, Input: taskInput})
+		_ = processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{
+			TaskNo: taskNo, UserID: userID, ModelID: modelID, ModelCode: modelCode,
+			WorkflowProjectID: projectID, Input: taskInput,
+		})
 		item := loadAgentMediaTask(ctx, pool, taskNo)
 		item["type"] = taskType
 		appendWorkflowMediaTask(ctx, pool, projectID, item)
@@ -3992,8 +4107,7 @@ func runAgentContentImagePostTasks(ctx context.Context, pool *pgxpool.Pool, base
 			taskInput["reference_images"] = references
 		}
 		estimated := estimateModelCostByIDWorker(ctx, pool, modelID, taskInput, 0, 0, 0, 0)
-		inputJSON, _ := json.Marshal(taskInput)
-		_, err := pool.Exec(ctx, `INSERT INTO tasks (task_no, user_id, model_id, type, status, input, estimated_cost) VALUES ($1,$2,$3,'image','pending',$4,$5)`, taskNo, userID, modelID, inputJSON, estimated)
+		err := insertWorkflowMediaTask(ctx, pool, projectID, userID, modelID, taskNo, "image", taskInput, estimated)
 		if err != nil {
 			if firstErr == "" {
 				firstErr = err.Error()
@@ -4006,7 +4120,10 @@ func runAgentContentImagePostTasks(ctx context.Context, pool *pgxpool.Pool, base
 			continue
 		}
 		appendWorkflowMediaTask(ctx, pool, projectID, map[string]interface{}{"task_no": taskNo, "type": "image", "status": "pending", "progress": 5, "output": map[string]interface{}{}, "content_card": card})
-		_ = processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{TaskNo: taskNo, UserID: userID, ModelID: modelID, ModelCode: modelCode, Input: taskInput})
+		_ = processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{
+			TaskNo: taskNo, UserID: userID, ModelID: modelID, ModelCode: modelCode,
+			WorkflowProjectID: projectID, Input: taskInput,
+		})
 		item := loadAgentMediaTask(ctx, pool, taskNo)
 		item["type"], item["content_card"] = "image", card
 		appendWorkflowMediaTask(ctx, pool, projectID, item)
@@ -4141,8 +4258,7 @@ func runAgentDetailPageTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, t
 			continue
 		}
 		taskEstimated := estimateModelCostByIDWorker(ctx, pool, modelID, taskInput, 0, 0, 0, 0)
-		inputJSON, _ := json.Marshal(taskInput)
-		_, err := pool.Exec(ctx, "INSERT INTO tasks (task_no, user_id, model_id, type, status, input, estimated_cost) VALUES ($1,$2,$3,'image','pending',$4,$5)", taskNo, userID, modelID, inputJSON, taskEstimated)
+		err := insertWorkflowMediaTask(ctx, pool, projectID, userID, modelID, taskNo, "image", taskInput, taskEstimated)
 		if err != nil {
 			failed := map[string]interface{}{"task_no": taskNo, "status": "failed", "progress": 100, "error_message": err.Error(), "detail_section": section}
 			jobs[i] = detailJob{failed: failed, signature: signature}
@@ -4160,7 +4276,10 @@ func runAgentDetailPageTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, t
 		if job.failed != nil {
 			return []map[string]interface{}{job.failed}, 0, stringAny(job.failed["error_message"])
 		}
-		_ = processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{TaskNo: job.taskNo, UserID: userID, ModelID: modelID, ModelCode: modelCode, Input: job.input})
+		_ = processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{
+			TaskNo: job.taskNo, UserID: userID, ModelID: modelID, ModelCode: modelCode,
+			WorkflowProjectID: projectID, Input: job.input,
+		})
 		item := loadAgentMediaTask(ctx, pool, job.taskNo)
 		item["detail_section"] = section
 		if stringAny(item["status"]) == "succeeded" {
@@ -4517,10 +4636,13 @@ func completeSimpleAgentWorkflow(ctx context.Context, pool *pgxpool.Pool, p Work
 	if err := validateAgentExpectedWorkflowOutput(inputs, outputs); err != nil {
 		return failWorkflow(ctx, pool, p, publicID, estimated, "最终交付物校验失败："+err.Error())
 	}
-	actual := workflowActualCost(ctx, pool, p.ProjectID, outputs)
-	actual = agentConfirmedCost(inputs, actual)
+	chargeResult, costErr := workflowSettlementCharge(ctx, pool, p.ProjectID)
+	if costErr != nil {
+		return failWorkflow(ctx, pool, p, publicID, estimated, costErr.Error())
+	}
+	actual := chargeResult.UserCharge
 	chargeCost := incrementalWorkflowCharge(ctx, pool, p.ProjectID, actual)
-	if err := chargeBillingWithFinalize(ctx, pool, p.UserID, estimated, chargeCost, "workflow", publicID, "workflow_usage", "智能体工作流", func(tx pgx.Tx) error {
+	if err := chargeWorkflowWithSettlement(ctx, pool, p.UserID, publicID, p.ProjectID, estimated, chargeCost, chargeResult, "智能体工作流", func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
 			UPDATE workflow_projects SET
 				status=CASE WHEN status='canceling' THEN 'canceled' ELSE 'succeeded' END,
@@ -4655,6 +4777,7 @@ func runNode(ctx context.Context, pool *pgxpool.Pool, baseURL, token string, use
 }
 
 func runMediaNode(ctx context.Context, pool *pgxpool.Pool, baseURL, token string, userID int64, publicID string, node workflowNode, prompt string, inputs map[string]interface{}, fallbackType string) (map[string]interface{}, string) {
+	projectID, _ := ctx.Value(workflowProjectContextKey{}).(int64)
 	modelCode := strings.TrimSpace(node.ModelCode)
 	if modelCode == "" {
 		return nil, "未配置生成模型"
@@ -4671,13 +4794,13 @@ func runMediaNode(ctx context.Context, pool *pgxpool.Pool, baseURL, token string
 	taskInput := agentMediaTaskInput(inputs, prompt, publicID)
 	taskNo := newWorkflowTaskNo(0)
 	taskEstimated := estimateModelCostByIDWorker(ctx, pool, modelID, taskInput, 0, 0, 0, 0)
-	inputJSON, _ := json.Marshal(taskInput)
-	if _, err := pool.Exec(ctx, `
-		INSERT INTO tasks (task_no, user_id, model_id, type, status, input, estimated_cost)
-		VALUES ($1,$2,$3,$4,'pending',$5,$6)`, taskNo, userID, modelID, taskType, inputJSON, taskEstimated); err != nil {
+	if err := insertWorkflowMediaTask(ctx, pool, projectID, userID, modelID, taskNo, taskType, taskInput, taskEstimated); err != nil {
 		return nil, err.Error()
 	}
-	_ = processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{TaskNo: taskNo, UserID: userID, ModelID: modelID, ModelCode: modelCode, Input: taskInput})
+	_ = processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{
+		TaskNo: taskNo, UserID: userID, ModelID: modelID, ModelCode: modelCode,
+		WorkflowProjectID: projectID, Input: taskInput,
+	})
 	item := loadAgentMediaTask(ctx, pool, taskNo)
 	if stringAny(item["status"]) != "succeeded" {
 		if msg := stringAny(item["error_message"]); msg != "" {
@@ -4814,8 +4937,8 @@ func loadAgentMediaTask(ctx context.Context, pool *pgxpool.Pool, taskNo string) 
 	var status string
 	var outputRaw []byte
 	var errMsg *string
-	var estimatedCost, actualCost float64
-	if err := pool.QueryRow(ctx, `SELECT status, output, error_message, estimated_cost, actual_cost FROM tasks WHERE task_no=$1`, taskNo).Scan(&status, &outputRaw, &errMsg, &estimatedCost, &actualCost); err != nil {
+	var estimatedCost, actualCost, providerCost float64
+	if err := pool.QueryRow(ctx, `SELECT status, output, error_message, estimated_cost, actual_cost, COALESCE(provider_cost,0) FROM tasks WHERE task_no=$1`, taskNo).Scan(&status, &outputRaw, &errMsg, &estimatedCost, &actualCost, &providerCost); err != nil {
 		return map[string]interface{}{"task_no": taskNo, "status": "failed", "progress": 100, "error_message": err.Error()}
 	}
 	output := map[string]interface{}{}
@@ -4824,7 +4947,7 @@ func loadAgentMediaTask(ctx context.Context, pool *pgxpool.Pool, taskNo string) 
 	if status == "succeeded" || status == "failed" {
 		progress = 100
 	}
-	item := map[string]interface{}{"task_no": taskNo, "status": status, "progress": progress, "output": output, "estimated_cost": estimatedCost, "actual_cost": actualCost}
+	item := map[string]interface{}{"task_no": taskNo, "status": status, "progress": progress, "output": output, "estimated_cost": estimatedCost, "actual_cost": actualCost, "provider_cost": providerCost}
 	if errMsg != nil && *errMsg != "" {
 		item["error_message"] = *errMsg
 	}
@@ -5464,8 +5587,11 @@ func failWorkflow(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPayload
 	if stopped, stopErr := stopWorkflowIfRequested(ctx, pool, p, publicID, estimated); stopped {
 		return stopErr
 	}
-	actual := workflowAccruedCost(ctx, pool, p.ProjectID)
-	actual = agentConfirmedWorkflowCost(ctx, pool, p.ProjectID, actual)
+	chargeResult, costErr := workflowSettlementCharge(ctx, pool, p.ProjectID)
+	if costErr != nil {
+		return failWorkflowWithoutCost(ctx, pool, p, publicID, estimated, costErr.Error())
+	}
+	actual := chargeResult.UserCharge
 	chargeCost := incrementalWorkflowCharge(ctx, pool, p.ProjectID, actual)
 	finalize := func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
@@ -5485,7 +5611,7 @@ func failWorkflow(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPayload
 	}
 	var err error
 	if chargeCost > 0 {
-		err = chargeBillingWithFinalize(ctx, pool, p.UserID, estimated, chargeCost, "workflow", publicID, "workflow_usage", "工作流失败前已完成步骤", finalize)
+		err = chargeWorkflowWithSettlement(ctx, pool, p.UserID, publicID, p.ProjectID, estimated, chargeCost, chargeResult, "工作流失败前已完成步骤", finalize)
 	} else {
 		err = unfreezeBillingWithFinalize(ctx, pool, p.UserID, estimated, "workflow", publicID, finalize)
 	}
@@ -5493,6 +5619,22 @@ func failWorkflow(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPayload
 		return fmt.Errorf("workflow %s release billing: %w", publicID, err)
 	}
 	log.Printf("Workflow project %s failed: %s", publicID, msg)
+	return nil
+}
+
+func failWorkflowWithoutCost(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPayload, publicID string, estimated float64, msg string) error {
+	releaseErr := unfreezeBillingWithFinalize(ctx, pool, p.UserID, estimated, "workflow", publicID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `
+			UPDATE workflow_projects
+			SET status='failed',actual_cost=0,error_message=$1,
+			    finished_at=now(),updated_at=now()
+			WHERE id=$2 AND status IN ('pending','running','canceling','waiting_confirm')`, msg, p.ProjectID)
+		return err
+	})
+	if releaseErr != nil && !errors.Is(releaseErr, pgx.ErrNoRows) {
+		return fmt.Errorf("workflow %s cost missing: %s; release reservation: %w", publicID, msg, releaseErr)
+	}
+	log.Printf("Workflow project %s stopped without charging: %s", publicID, msg)
 	return nil
 }
 
@@ -5523,8 +5665,11 @@ func cancelWorkflow(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPaylo
 	if mode == "product_refine" {
 		return finishProductWorkflow(ctx, pool, p, publicID, estimated, floatAny(inputs["max_cost"]), loadWorkflowOutputs(ctx, pool, p.ProjectID), "用户已停止，已有结果已保留")
 	}
-	actual := workflowAccruedCost(ctx, pool, p.ProjectID)
-	actual = agentConfirmedCost(inputs, actual)
+	chargeResult, costErr := workflowSettlementCharge(ctx, pool, p.ProjectID)
+	if costErr != nil {
+		return failWorkflowWithoutCost(ctx, pool, p, publicID, estimated, costErr.Error())
+	}
+	actual := chargeResult.UserCharge
 	chargeCost := incrementalWorkflowCharge(ctx, pool, p.ProjectID, actual)
 	finalize := func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
@@ -5541,7 +5686,7 @@ func cancelWorkflow(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPaylo
 	}
 	var err error
 	if chargeCost > 0 {
-		err = chargeBillingWithFinalize(ctx, pool, p.UserID, estimated, chargeCost, "workflow", publicID, "workflow_usage", "工作流停止前已完成步骤", finalize)
+		err = chargeWorkflowWithSettlement(ctx, pool, p.UserID, publicID, p.ProjectID, estimated, chargeCost, chargeResult, "工作流停止前已完成步骤", finalize)
 	} else {
 		err = unfreezeBillingWithFinalize(ctx, pool, p.UserID, estimated, "workflow", publicID, finalize)
 	}
@@ -5565,11 +5710,8 @@ func agentConfirmedWorkflowCost(ctx context.Context, pool *pgxpool.Pool, project
 }
 
 func agentConfirmedCost(inputs map[string]interface{}, actual float64) float64 {
-	if strings.TrimSpace(stringAny(inputs["_agent_confirmation"])) == "" {
-		return actual
-	}
-	if limit := floatAny(inputs["_agent_max_cost"]); limit > 0 && actual > limit {
-		return limit
-	}
+	// A confirmation is a preflight estimate, never a cap on cost already
+	// incurred upstream. Lowering the final bill would make the platform pay
+	// the difference and corrupt margin reporting.
 	return actual
 }

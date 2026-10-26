@@ -272,7 +272,7 @@ func (s *WalletService) ReferralSummary(ctx context.Context, userID int64) (*Ref
 	rows, err := s.db.Query(ctx, `
 		SELECT u.id, u.public_id, COALESCE(u.nickname,''), COALESCE(ai.identifier,''), u.created_at,
 		       COALESCE((SELECT SUM(o.amount) FROM orders o WHERE o.user_id=u.id AND o.status='paid'),0)
-		       + COALESCE((SELECT SUM(wt.amount) FROM wallet_transactions wt WHERE wt.user_id=u.id AND wt.direction='in' AND wt.type='card_recharge'),0),
+		       + COALESCE((SELECT SUM(c.face_value_cny) FROM recharge_cards c WHERE c.used_by=u.id AND c.status='used'),0),
 		       COALESCE(u.referrer_note,'')
 		FROM users u
 		LEFT JOIN auth_identities ai ON ai.user_id=u.id AND ai.provider='email'
@@ -479,12 +479,12 @@ func (s *WalletService) RedeemCardAtomic(ctx context.Context, userID int64, code
 	defer tx.Rollback(ctx)
 
 	var cardID int64
-	var value float64
+	var faceValue, credited float64
 	var status string
 	err = tx.QueryRow(ctx,
-		`SELECT id, value, status FROM recharge_cards WHERE code_hash=$1 FOR UPDATE`,
+		`SELECT id, COALESCE(face_value_cny,0), COALESCE(compute_credits,value), status FROM recharge_cards WHERE code_hash=$1 FOR UPDATE`,
 		hash,
-	).Scan(&cardID, &value, &status)
+	).Scan(&cardID, &faceValue, &credited, &status)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return 0, errors.New("卡密无效")
@@ -508,7 +508,7 @@ func (s *WalletService) RedeemCardAtomic(ctx context.Context, userID int64, code
 		}
 	}
 
-	newBalance := balance + value
+	newBalance := balance + credited
 	if _, err = tx.Exec(ctx,
 		`UPDATE recharge_cards SET status='used', used_by=$1, used_at=now() WHERE id=$2 AND status='unused'`,
 		userID, cardID); err != nil {
@@ -519,17 +519,21 @@ func (s *WalletService) RedeemCardAtomic(ctx context.Context, userID int64, code
 	}
 	if _, err = tx.Exec(ctx,
 		`INSERT INTO wallet_transactions (user_id, type, direction, amount, balance_after, ref_type, ref_id, remark)
-		 VALUES ($1,'card_recharge','in',$2,$3,'card',$4,'Card recharge')`,
-		userID, value, newBalance, hash); err != nil {
+		 VALUES ($1,'card_recharge','in',$2,$3,'card',$4,'卡密兑换')`,
+		userID, credited, newBalance, hash); err != nil {
 		return 0, err
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return 0, err
 	}
-	if err = s.billing.AwardReferralOnRecharge(ctx, userID, value, value, "card", hash); err != nil {
+	paidAmount := faceValue
+	if paidAmount <= 0 {
+		paidAmount = credited // Legacy cards did not persist a separate RMB face value.
+	}
+	if err = s.billing.AwardReferralOnRecharge(ctx, userID, paidAmount, credited, "card", hash); err != nil {
 		log.Printf("card %s credited; referral reward deferred: %v", hash, err)
 	}
-	return value, nil
+	return credited, nil
 }
 
 func (s *WalletService) GetPaymentConfig(ctx context.Context) (map[string]interface{}, error) {
@@ -537,9 +541,21 @@ func (s *WalletService) GetPaymentConfig(ctx context.Context) (map[string]interf
 	if err != nil {
 		return nil, err
 	}
+	shopURL := strings.TrimSpace(configString(cfg["recharge_shop_url"]))
+	if shopURL == "" {
+		shopURL = DefaultRechargeShopURL
+	}
+	paymentCurrency := normalizeCurrency(configString(cfg["payment_currency"]))
+	if paymentCurrency == "" {
+		paymentCurrency = DefaultPaymentCurrency
+	}
 	return map[string]interface{}{
 		"payment_enabled":       parseConfigBool(cfg["payment_enabled"], false),
 		"card_recharge_enabled": parseConfigBool(cfg["card_recharge_enabled"], true),
+		"payment_compute_rate":  paymentComputeRate(ctx, s.db),
+		"payment_currency":      paymentCurrency,
+		"recharge_shop_enabled": parseConfigBool(cfg["recharge_shop_enabled"], true),
+		"recharge_shop_url":     shopURL,
 	}, nil
 }
 

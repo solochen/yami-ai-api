@@ -603,11 +603,14 @@ func completeNovelWorkflow(
 	if stopped, stopErr := stopWorkflowIfRequested(ctx, pool, p, publicID, estimated); stopped {
 		return stopErr
 	}
-	totalCost := workflowActualCost(ctx, pool, p.ProjectID, outputs)
-	totalCost = agentConfirmedWorkflowCost(ctx, pool, p.ProjectID, totalCost)
+	chargeResult, costErr := workflowSettlementCharge(ctx, pool, p.ProjectID)
+	if costErr != nil {
+		return failWorkflowWithoutCost(ctx, pool, p, publicID, estimated, costErr.Error())
+	}
+	totalCost := chargeResult.UserCharge
 	chargeCost := incrementalWorkflowCharge(ctx, pool, p.ProjectID, totalCost)
 
-	if err := chargeBillingWithFinalize(ctx, pool, p.UserID, estimated, chargeCost, "workflow", publicID, "workflow_usage", "AI小说工坊", func(tx pgx.Tx) error {
+	if err := chargeWorkflowWithSettlement(ctx, pool, p.UserID, publicID, p.ProjectID, estimated, chargeCost, chargeResult, "AI小说工坊", func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
 			UPDATE workflow_projects SET
 				status=CASE WHEN status='canceling' THEN 'canceled' ELSE 'succeeded' END,

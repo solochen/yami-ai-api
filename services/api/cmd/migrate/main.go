@@ -230,7 +230,7 @@ func seedCredentials(pool *pgxpool.Pool) error {
 	if err != nil {
 		return err
 	}
-	cardHash := sha256.Sum256([]byte("STARAI-DEMO-1000"))
+	cardHash := sha256.Sum256([]byte("ORBIT-E-DEMO-1000"))
 	cardHex := hex.EncodeToString(cardHash[:])
 	const placeholderHash = "$2a$10$placeholder_will_be_updated_by_migrate"
 

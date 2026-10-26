@@ -63,10 +63,10 @@ func TestWorkerRouteSelectionWeightUsesObservedReliability(t *testing.T) {
 	}
 }
 
-func TestAgentConfirmedCostCapsUserChargeOnlyForConfirmedRun(t *testing.T) {
+func TestAgentConfirmedCostDoesNotCapIncurredUpstreamCost(t *testing.T) {
 	confirmed := map[string]interface{}{"_agent_confirmation": "signed", "_agent_max_cost": 1.25}
-	if got := agentConfirmedCost(confirmed, 2); got != 1.25 {
-		t.Fatalf("confirmed cost = %v, want 1.25", got)
+	if got := agentConfirmedCost(confirmed, 2); got != 2 {
+		t.Fatalf("confirmed cost = %v, want 2", got)
 	}
 	if got := agentConfirmedCost(map[string]interface{}{"_agent_max_cost": 1.25}, 2); got != 2 {
 		t.Fatalf("untrusted cost limit changed charge: %v", got)

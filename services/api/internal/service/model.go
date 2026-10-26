@@ -47,9 +47,7 @@ type ModelDTO struct {
 
 func (s *ModelService) ListPublic(ctx context.Context, category string) ([]ModelDTO, error) {
 	q := `SELECT id, code, display_name, category, icon_url, description, tags, runtime_rule, input_schema, default_params, price_rule, is_enabled, sort_order
-		FROM models WHERE is_enabled=true
-		AND (NOT EXISTS (SELECT 1 FROM model_routes configured_route WHERE configured_route.model_id=models.id)
-			OR EXISTS (SELECT 1 FROM model_routes enabled_route WHERE enabled_route.model_id=models.id AND enabled_route.is_enabled=true))`
+		FROM models WHERE is_enabled=true`
 	args := []interface{}{}
 	if category != "" && category != "all" {
 		if category == "chat" {
@@ -65,7 +63,24 @@ func (s *ModelService) ListPublic(ctx context.Context, category string) ([]Model
 		return nil, err
 	}
 	defer rows.Close()
-	return scanModels(rows)
+	models, err := scanModels(rows)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]ModelDTO, 0, len(models))
+	for i := range models {
+		full, err := s.GetFullByCode(ctx, models[i].Code)
+		if err != nil {
+			continue
+		}
+		rule, err := s.publicPriceRule(ctx, full)
+		if err != nil {
+			continue
+		}
+		models[i].PriceRule = rule
+		result = append(result, models[i])
+	}
+	return result, nil
 }
 
 func (s *ModelService) GetByCode(ctx context.Context, code string, publicOnly bool) (*ModelDTO, error) {
@@ -92,6 +107,17 @@ func (s *ModelService) GetByCode(ctx context.Context, code string, publicOnly bo
 	json.Unmarshal(schema, &m.InputSchema)
 	json.Unmarshal(defaults, &m.DefaultParams)
 	json.Unmarshal(price, &m.PriceRule)
+	if publicOnly {
+		full, fullErr := s.GetFullByCode(ctx, m.Code)
+		if fullErr != nil {
+			return nil, fullErr
+		}
+		if publicRule, ruleErr := s.publicPriceRule(ctx, full); ruleErr == nil {
+			m.PriceRule = publicRule
+		} else {
+			return nil, ruleErr
+		}
+	}
 	return &m, nil
 }
 
@@ -2044,7 +2070,7 @@ func scanModels(rows pgx.Rows) ([]ModelDTO, error) {
 		json.Unmarshal(price, &m.PriceRule)
 		models = append(models, m)
 	}
-	return models, nil
+	return models, rows.Err()
 }
 
 type CategoryCount struct {

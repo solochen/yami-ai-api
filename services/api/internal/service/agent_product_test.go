@@ -59,6 +59,12 @@ func TestProductPriceTotal(t *testing.T) {
 	if got := productBillingReservation(0.7, 0.5); got != 0.7 {
 		t.Fatalf("billing reservation = %v, want configured floor", got)
 	}
+	if got := productBudgetLimit(1000); got != 1_000_000 {
+		t.Fatalf("product budget limit = %v, want 1 CNY rate scaled to credits", got)
+	}
+	if got := productBudgetLimit(0); got != 1_000_000 {
+		t.Fatalf("product budget fallback = %v, want default rate", got)
+	}
 }
 
 func TestProductModelAspectRatios(t *testing.T) {

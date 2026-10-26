@@ -1030,7 +1030,7 @@ const dictionary: Record<string, string> = {
     "recharge.waitingPayment": "等待支付结果...",
     "recharge.noPackages": "暂无可用的在线充值套餐，请联系管理员。",
     "recharge.creditsReceived": "到账 {amount} 算力",
-    "recharge.cardPlaceholder": "请输入卡密，例如 STARAI-DEMO-1000",
+    "recharge.cardPlaceholder": "请输入卡密，例如 ORBIT-E-DEMO-1000",
     "recharge.redeeming": "兑换中...",
     "recharge.redeemNow": "立即兑换",
     "homeCard.multi_view.title": "多元视角",

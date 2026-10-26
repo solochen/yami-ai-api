@@ -780,16 +780,7 @@ func configBool(v interface{}, fallback bool) bool {
 }
 
 func (s *PaymentService) computeRate(ctx context.Context) float64 {
-	var raw []byte
-	err := s.db.QueryRow(ctx, `SELECT value FROM system_configs WHERE key='payment_compute_rate'`).Scan(&raw)
-	if err != nil {
-		return 100
-	}
-	var rate float64
-	if e := json.Unmarshal(raw, &rate); e != nil || rate <= 0 {
-		return 100
-	}
-	return rate
+	return paymentComputeRate(ctx, s.db)
 }
 
 func (s *PaymentService) GetUserOrder(ctx context.Context, userID int64, orderNo string) (*OrderDTO, error) {

@@ -1030,7 +1030,7 @@ const dictionary: Record<string, string> = {
     "recharge.waitingPayment": "Waiting for payment...",
     "recharge.noPackages": "No online recharge packages are currently available.",
     "recharge.creditsReceived": "Receive {amount} credits",
-    "recharge.cardPlaceholder": "Enter recharge code, e.g. STARAI-DEMO-1000",
+    "recharge.cardPlaceholder": "Enter recharge code, e.g. ORBIT-E-DEMO-1000",
     "recharge.redeeming": "Redeeming...",
     "recharge.redeemNow": "Redeem now",
     "homeCard.multi_view.title": "Multiple perspectives",

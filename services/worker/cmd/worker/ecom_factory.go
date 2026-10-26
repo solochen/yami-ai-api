@@ -32,24 +32,24 @@ type ecomItem struct {
 }
 
 type ecomFactoryState struct {
-	Mode         string     `json:"mode"` // suite batch quick
-	Suite        string     `json:"suite"`
-	Platform     string     `json:"platform"`
-	Resolution   string     `json:"resolution"`
-	ProductName  string     `json:"productName"`
-	BatchStatus  string     `json:"batchStatus"` // running completed failed stopped
-	Items        []ecomItem `json:"items"`
-	Total        int        `json:"total"`
-	Success      int        `json:"success"`
-	Failed       int        `json:"failed"`
+	Mode        string     `json:"mode"` // suite batch quick
+	Suite       string     `json:"suite"`
+	Platform    string     `json:"platform"`
+	Resolution  string     `json:"resolution"`
+	ProductName string     `json:"productName"`
+	BatchStatus string     `json:"batchStatus"` // running completed failed stopped
+	Items       []ecomItem `json:"items"`
+	Total       int        `json:"total"`
+	Success     int        `json:"success"`
+	Failed      int        `json:"failed"`
 }
 
 type ecomItemScope struct {
-	Action    string   `json:"action"`    // regenerate refine continue
-	ItemIDs   []string `json:"itemIds"`   // regenerate/refine 指定项
-	Prompt    string   `json:"prompt"`    // regenerate 提示词覆盖
-	Reference string   `json:"reference"` // refine 以指定图为基准（默认该项已生成图）
-	Instruction string `json:"instruction"` // refine 调整要求
+	Action      string   `json:"action"`      // regenerate refine continue
+	ItemIDs     []string `json:"itemIds"`     // regenerate/refine 指定项
+	Prompt      string   `json:"prompt"`      // regenerate 提示词覆盖
+	Reference   string   `json:"reference"`   // refine 以指定图为基准（默认该项已生成图）
+	Instruction string   `json:"instruction"` // refine 调整要求
 }
 
 func processEcomFactoryWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL, token string, p WorkflowTaskPayload, publicID string, reserved float64, inputs, runtime map[string]interface{}) error {
@@ -233,7 +233,7 @@ func ecomBuildState(catalog *ecomCatalog, inputs map[string]interface{}) (*ecomF
 				}
 				items = append(items, ecomItem{
 					ID: fmt.Sprintf("%s-%d", module.ID, v), ModuleID: module.ID, Label: label,
-					Ratio: firstNonEmpty(form.Ratio, module.DefaultRatio),
+					Ratio:  firstNonEmpty(form.Ratio, module.DefaultRatio),
 					Prompt: renderEcomNormalPrompt(catalog, form, module, v),
 					Status: "queued", Progress: "排队中",
 				})
@@ -287,12 +287,12 @@ func peekFirstModuleID(inputs map[string]interface{}) string {
 // ---------- 表单 ----------
 
 type ecomForm struct {
-	ProductName, SellingPoints, Audience, Scenario string
-	Platform, Language, VisualStyle, CustomStyle   string
-	Suite, Ratio, Resolution, ExtraPrompt          string
-	CopyEnabled, HasAssets                         bool
+	ProductName, SellingPoints, Audience, Scenario              string
+	Platform, Language, VisualStyle, CustomStyle                string
+	Suite, Ratio, Resolution, ExtraPrompt                       string
+	CopyEnabled, HasAssets                                      bool
 	BatchPrompt, BatchStrategy, BatchSimilarity, BatchVariation string
-	BatchKeepKeys, BatchChangeKeys                 []string
+	BatchKeepKeys, BatchChangeKeys                              []string
 }
 
 func ecomFormFromInputs(inputs map[string]interface{}) ecomForm {
@@ -437,11 +437,11 @@ func ecomPromptVars(form ecomForm) map[string]interface{} {
 		"visualStyle": visualStyle, "extraPrompt": form.ExtraPrompt,
 		"copyAllowed": copyAllowed, "copyForbidden": !copyAllowed,
 		"hasAssets": form.HasAssets, "noAssets": !form.HasAssets,
-		"hasExtra":        strings.TrimSpace(form.ExtraPrompt) != "",
-		"hasProductName":  form.ProductName != "",
+		"hasExtra":         strings.TrimSpace(form.ExtraPrompt) != "",
+		"hasProductName":   form.ProductName != "",
 		"hasSellingPoints": form.SellingPoints != "",
-		"hasAudience":     form.Audience != "",
-		"hasScenario":     form.Scenario != "",
+		"hasAudience":      form.Audience != "",
+		"hasScenario":      form.Scenario != "",
 	}
 }
 
@@ -520,7 +520,7 @@ func ecomFactoryGenerate(ctx context.Context, pool *pgxpool.Pool, baseURL, token
 				return "", taskNo, fmt.Errorf("剩余预算不足以生成下一张图片")
 			}
 		}
-		if _, err := pool.Exec(ctx, `INSERT INTO tasks(task_no,user_id,model_id,type,status,input,estimated_cost) VALUES($1,$2,$3,'image','pending',$4,$5)`, taskNo, p.UserID, modelID, mustJSON(taskInput), forecast); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO tasks(task_no,user_id,model_id,type,status,input,estimated_cost,workflow_project_id) VALUES($1,$2,$3,'image','pending',$4,$5,$6)`, taskNo, p.UserID, modelID, mustJSON(taskInput), forecast, p.ProjectID); err != nil {
 			return "", taskNo, err
 		}
 		state = "pending"
@@ -538,7 +538,10 @@ func ecomFactoryGenerate(ctx context.Context, pool *pgxpool.Pool, baseURL, token
 		if projectState != "running" {
 			return "", taskNo, fmt.Errorf("工作流已停止，未提交生成")
 		}
-		if err := processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{TaskNo: taskNo, UserID: p.UserID, ModelID: modelID, ModelCode: modelCode, Input: taskInput}); err != nil {
+		if err := processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{
+			TaskNo: taskNo, UserID: p.UserID, ModelID: modelID, ModelCode: modelCode,
+			WorkflowProjectID: p.ProjectID, Input: taskInput,
+		}); err != nil {
 			return "", taskNo, err
 		}
 	}
@@ -641,7 +644,7 @@ func ecomProcessLog(outputs map[string]interface{}, state *ecomFactoryState) []m
 	now := time.Now().UTC().Format(time.RFC3339)
 	entry := map[string]interface{}{
 		"id": "ecom_factory_summary", "stage": "ecom_factory", "status": state.BatchStatus,
-		"message": fmt.Sprintf("%d 成功 / %d 失败 / %d 进行中", state.Success, state.Failed, state.Total-state.Success-state.Failed),
+		"message":    fmt.Sprintf("%d 成功 / %d 失败 / %d 进行中", state.Success, state.Failed, state.Total-state.Success-state.Failed),
 		"updated_at": now,
 	}
 	replaced := false
@@ -716,12 +719,12 @@ func finishEcomFactory(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPa
 		}
 		outputs["ecom_factory"] = state
 	}
-	spent, err := productSpent(ctx, pool, p.ProjectID)
+	chargeResult, err := workflowSettlementCharge(ctx, pool, p.ProjectID)
 	if err != nil {
-		return err
+		return failWorkflowWithoutCost(ctx, pool, p, publicID, reserved, err.Error())
 	}
-	actual := productActualCharge(0, spent)
-	outputs["incurred_cost"], outputs["cost"] = spent, actual
+	actual := chargeResult.UserCharge
+	outputs["incurred_cost"], outputs["cost"] = chargeResult.ProviderCost, actual
 	status := "succeeded"
 	quality := "passed"
 	if message != "" {
@@ -730,7 +733,7 @@ func finishEcomFactory(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPa
 		quality = "needs_review"
 	}
 	outputs["quality_status"] = quality
-	return chargeBillingWithFinalize(ctx, pool, p.UserID, reserved, incrementalWorkflowCharge(ctx, pool, p.ProjectID, actual), "workflow", publicID, "workflow_usage", "电商图片工厂", func(tx pgx.Tx) error {
+	return chargeWorkflowWithSettlement(ctx, pool, p.UserID, publicID, p.ProjectID, reserved, incrementalWorkflowCharge(ctx, pool, p.ProjectID, actual), chargeResult, "电商图片工厂", func(tx pgx.Tx) error {
 		if state != nil {
 			for index, item := range state.Items {
 				if item.ImageURL == "" {

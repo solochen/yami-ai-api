@@ -251,7 +251,10 @@ func (s *TaskService) Create(ctx context.Context, userID int64, input CreateTask
 		}
 	}
 
-	estimated := s.models.EstimateCost(model, params, 0, 0)
+	estimated, _, err := s.models.RouteBillingEstimate(ctx, model, params, 0, 0)
+	if err != nil {
+		return nil, err
+	}
 	taskNo := util.NewTaskNo()
 
 	inputJSON, _ := json.Marshal(params)
@@ -670,7 +673,10 @@ func (s *TaskService) Retry(ctx context.Context, taskNo string) error {
 	if err != nil {
 		return err
 	}
-	estimated := s.models.EstimateCost(model, params, 0, 0)
+	estimated, _, err := s.models.RouteBillingEstimate(ctx, model, params, 0, 0)
+	if err != nil {
+		return err
+	}
 	if err := s.billing.FreezeWithFinalize(ctx, userID, estimated, "task", taskNo, func(tx pgx.Tx) error {
 		var lockedStatus string
 		if err := tx.QueryRow(ctx, `SELECT status FROM tasks WHERE task_no=$1 FOR UPDATE`, taskNo).Scan(&lockedStatus); err != nil {

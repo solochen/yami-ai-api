@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -460,9 +461,30 @@ func (s *OpsService) settleStuckWorkflowFreeze(ctx context.Context, freezeID int
 	if err := s.db.QueryRow(ctx, `SELECT public_id FROM workflow_projects WHERE id=$1`, projectID).Scan(&publicID); err != nil {
 		return err
 	}
-	cumulativeCost, chargeCost, err := accruedWorkflowCostDB(ctx, s.db, projectID)
+	charge, err := s.billing.WorkflowCharge(ctx, projectID)
 	if err != nil {
 		return err
+	}
+	var settledCost float64
+	var settledProviderCost float64
+	if err = s.db.QueryRow(ctx, `SELECT actual_cost,COALESCE(provider_cost,0) FROM workflow_projects WHERE id=$1`, projectID).Scan(&settledCost, &settledProviderCost); err != nil {
+		return err
+	}
+	cumulativeCost := charge.UserCharge
+	chargeCost := cumulativeCost - settledCost
+	if chargeCost < 0 {
+		chargeCost = 0
+	}
+	providerIncrement := numericMicros(charge.ProviderCost - settledProviderCost)
+	if providerIncrement < 0 {
+		providerIncrement = 0
+	}
+	if providerIncrement > chargeCost {
+		providerIncrement = chargeCost
+	}
+	commission := numericMicros(chargeCost - providerIncrement)
+	if commission < 0 {
+		commission = 0
 	}
 	finalize := func(tx pgx.Tx) error {
 		var lockAvailable bool
@@ -492,7 +514,12 @@ func (s *OpsService) settleStuckWorkflowFreeze(ctx context.Context, freezeID int
 		return err
 	}
 	if chargeCost > 0 {
-		err = s.billing.ChargeWithFinalize(ctx, userID, cumulativeCost, chargeCost, "workflow", publicID, "workflow_usage", "超时取消前已完成步骤", finalize)
+		err = s.billing.ChargeWithSettlement(ctx, userID, cumulativeCost, billing.Settlement{
+			RefType: "workflow", RefID: publicID,
+			ProviderCost: providerIncrement, UserCharge: chargeCost, Commission: commission,
+			CostSource: "workflow_actual", CostComplete: charge.CostComplete,
+			Config: charge.Config, Key: fmt.Sprintf("workflow:%s:workflow_usage:%.6f", publicID, settledCost),
+		}, "workflow_usage", "超时取消前已完成步骤", finalize)
 	} else {
 		err = s.billing.UnfreezeWithFinalize(ctx, userID, cumulativeCost, "workflow", publicID, finalize)
 	}
@@ -684,7 +711,7 @@ func (s *OpsService) ListCardRechargeAnomalies(ctx context.Context, limit int) (
 		limit = 20
 	}
 	rows, err := s.db.Query(ctx, `
-		SELECT c.id, c.used_by, c.value, LEFT(c.code_hash, 12), c.used_at
+		SELECT c.id, c.used_by, COALESCE(c.compute_credits,c.value), LEFT(c.code_hash, 12), c.used_at
 		FROM recharge_cards c
 		LEFT JOIN wallet_transactions wt
 		  ON wt.ref_type='card' AND wt.ref_id=c.code_hash AND wt.type='card_recharge' AND wt.direction='in'

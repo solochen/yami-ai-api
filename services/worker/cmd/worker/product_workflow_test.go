@@ -218,6 +218,12 @@ func TestProductReviewRequiresEveryCheck(t *testing.T) {
 	if !productBudgetAllows(10, 10, 20) {
 		t.Fatal("exact remaining budget refused")
 	}
+	if got := productBudgetLimit(1000); got != 1_000_000 {
+		t.Fatalf("product budget limit = %v, want 1 CNY rate scaled to credits", got)
+	}
+	if got := productBudgetLimit(math.NaN()); got != 1_000_000 {
+		t.Fatalf("product budget fallback = %v, want default rate", got)
+	}
 }
 
 func TestProductRepairUsesStrictVerificationFailure(t *testing.T) {
