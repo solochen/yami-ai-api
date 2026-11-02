@@ -23,6 +23,8 @@ const promptAgentWorkspace: Record<string, string> = {
   "去充值": "Top up",
   "关闭": "Close",
   "输入你的需求，越具体越好": "Describe what you need — the more specific, the better",
+  "字": "chars",
+  "思考过程": "Reasoning",
   "正在思考…": "Thinking…",
   "正在生成…": "Generating…",
   "正在重新生成…": "Regenerating…",

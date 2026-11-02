@@ -301,6 +301,8 @@ func (s *PromptAgentService) runCompletion(ctx context.Context, userID int64, cf
 		}
 		if chunk.ReasoningContent != "" {
 			reasoning.WriteString(chunk.ReasoningContent)
+			// 推理内容单独下发，前端折叠展示，避免等待首 token 时页面毫无反应。
+			sink("thinking", map[string]interface{}{"text": chunk.ReasoningContent})
 		}
 		if chunk.Usage != nil {
 			usage = chunk.Usage

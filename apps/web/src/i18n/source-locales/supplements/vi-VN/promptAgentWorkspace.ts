@@ -23,6 +23,8 @@ const promptAgentWorkspace: Record<string, string> = {
   "去充值": "Nạp tiền",
   "关闭": "Đóng",
   "输入你的需求，越具体越好": "Nhập nhu cầu của bạn, càng cụ thể càng tốt",
+  "字": "ký tự",
+  "思考过程": "Quá trình suy luận",
   "正在思考…": "Đang suy nghĩ…",
   "正在生成…": "Đang tạo…",
   "正在重新生成…": "Đang tạo lại…",

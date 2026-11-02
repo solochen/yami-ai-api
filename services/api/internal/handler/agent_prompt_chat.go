@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/starai/api/internal/runtime"
@@ -90,7 +92,12 @@ func (h *Handler) streamPromptAgent(c *gin.Context, run func(sink func(string, i
 	ctx, cancel := context.WithCancel(c.Request.Context())
 	defer cancel()
 
+	// 部分上游会把整段回复攒完才下发，等待期可能长达数十秒。
+	// 心跳事件让前端能显示耗时，也避免中间代理因空闲超时断开连接。
+	var writeMu sync.Mutex
 	sink := func(event string, payload interface{}) {
+		writeMu.Lock()
+		defer writeMu.Unlock()
 		if ctx.Err() != nil {
 			return
 		}
@@ -103,7 +110,27 @@ func (h *Handler) streamPromptAgent(c *gin.Context, run func(sink func(string, i
 		}
 	}
 
+	started := time.Now()
+	stopHeartbeat := make(chan struct{})
+	var heartbeatOnce sync.Once
+	stopPing := func() { heartbeatOnce.Do(func() { close(stopHeartbeat) }) }
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stopHeartbeat:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				sink("ping", map[string]interface{}{"elapsed_seconds": int(time.Since(started).Seconds())})
+			}
+		}
+	}()
+
 	result, runErr := run(sink)
+	stopPing()
 	if runErr != nil {
 		if errors.Is(runErr, context.Canceled) || ctx.Err() != nil {
 			return

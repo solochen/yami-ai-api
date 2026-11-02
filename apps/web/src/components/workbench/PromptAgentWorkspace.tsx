@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  Brain,
   Check,
   Copy,
   Download,
@@ -21,6 +22,7 @@ import { readEventStream } from "@/lib/eventStream";
 import { useI18n } from "@/i18n/I18nProvider";
 import { AgentIcon } from "./AgentIcon";
 import { AgentRichText } from "./AgentRichText";
+import { REVEAL_TICK_MS, revealStep } from "./promptAgentReveal";
 
 type WorkflowLike = {
   code?: string;
@@ -47,6 +49,7 @@ type Message = {
   id?: number;
   role: "user" | "assistant";
   content: string;
+  thinking?: string;
   stopped?: boolean;
 };
 
@@ -117,6 +120,34 @@ function MessageAction({
   );
 }
 
+// 思考过程默认折叠：部分模型会把整篇草稿当思考吐出来，展开会淹没正文。
+// 折叠态显示字数和进行中状态，足以让用户知道"它还在工作"。
+function ThinkingBlock({ text, streaming }: { text: string; streaming: boolean }) {
+  const { ts } = useI18n();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="max-w-[95%] rounded-2xl border border-dashed border-gray-200 bg-gray-50/70 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-1.5 text-[11px] font-medium text-gray-500 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+      >
+        <Brain size={12} className="text-primary" />
+        <span>{ts("思考过程")}</span>
+        {text ? <span className="text-gray-400">· {text.length} {ts("字")}</span> : null}
+        {streaming ? <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" aria-hidden /> : null}
+        <span className="text-gray-400">{open ? "▾" : "▸"}</span>
+      </button>
+      {open ? (
+        <div className="mt-1.5 max-h-52 overflow-auto whitespace-pre-wrap text-[12px] leading-relaxed text-gray-500 dark:text-gray-400">
+          {text}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
   const { ts } = useI18n();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -135,10 +166,19 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [waited, setWaited] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
+  // 打字机缓冲：pending 待揭示、received 已收到的全文、finalize 等揭示完成后执行。
+  const revealRef = useRef<{
+    pending: string;
+    received: string;
+    timer: ReturnType<typeof setInterval> | null;
+    done: boolean;
+    finalize: (() => void) | null;
+  }>({ pending: "", received: "", timer: null, done: false, finalize: null });
 
   const agentCode = workflow.code || "";
   const agentName = workflow.name || ts("智能体");
@@ -218,30 +258,112 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
     [agentCode, ts],
   );
 
+  const patchLastAssistant = useCallback((patch: (m: Message) => Message) => {
+    setMessages((prev) => {
+      if (prev.length === 0) return prev;
+      const index = prev.length - 1;
+      if (prev[index].role !== "assistant") return prev;
+      const next = [...prev];
+      next[index] = patch(next[index]);
+      return next;
+    });
+  }, []);
+
+  // 打字机：把上游推来的文本按稳定速率显示，突发到达的整段也会逐字出现。
+  const startReveal = useCallback(() => {
+    const state = revealRef.current;
+    if (state.timer) return;
+    state.timer = setInterval(() => {
+      const current = revealRef.current;
+      if (!current.pending) {
+        // 没有积压就停表，避免中断后留下空转的定时器。
+        if (current.timer) clearInterval(current.timer);
+        current.timer = null;
+        if (current.done) {
+          current.done = false;
+          const finalize = current.finalize;
+          current.finalize = null;
+          finalize?.();
+        }
+        return;
+      }
+      const take = current.pending.slice(0, revealStep(current.pending.length));
+      current.pending = current.pending.slice(take.length);
+      patchLastAssistant((m) => ({ ...m, content: m.content + take }));
+    }, REVEAL_TICK_MS);
+  }, [patchLastAssistant]);
+
+  const resetReveal = useCallback(() => {
+    const state = revealRef.current;
+    if (state.timer) clearInterval(state.timer);
+    state.pending = "";
+    state.received = "";
+    state.timer = null;
+    state.done = false;
+    state.finalize = null;
+  }, []);
+
+  const pushRevealDelta = useCallback((text: string) => {
+    const state = revealRef.current;
+    state.received += text;
+    state.pending += text;
+    startReveal();
+  }, [startReveal]);
+
+  // 先把积压一次性显示完（停止/失败时用），不丢已收到的内容。
+  const flushReveal = useCallback(() => {
+    const state = revealRef.current;
+    if (state.timer) clearInterval(state.timer);
+    state.timer = null;
+    if (state.pending) {
+      const rest = state.pending;
+      state.pending = "";
+      patchLastAssistant((m) => ({ ...m, content: m.content + rest }));
+    }
+    state.done = false;
+    state.finalize = null;
+  }, [patchLastAssistant]);
+
+  const finishReveal = useCallback((finalize: () => void) => {
+    const state = revealRef.current;
+    state.done = true;
+    state.finalize = finalize;
+    if (!state.pending) {
+      if (state.timer) clearInterval(state.timer);
+      state.timer = null;
+      state.done = false;
+      state.finalize = null;
+      finalize();
+      return;
+    }
+    startReveal();
+  }, [startReveal]);
+
+  useEffect(() => () => {
+    if (revealRef.current.timer) clearInterval(revealRef.current.timer);
+    revealRef.current.timer = null;
+  }, []);
+
+  // 等待首字时按秒计时，配合后端 ping 给出"还在工作"的反馈。
+  useEffect(() => {
+    if (!busy) return;
+    const timer = setInterval(() => setWaited((value) => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, [busy]);
+
   // 统一流式请求：/chat 与 /rerun 共用同一套事件协议。
+  // delta 走打字机缓冲，thinking/ping 直接交给调用方处理。
   const streamRequest = useCallback(
     async (
       path: string,
       body: Record<string, unknown>,
-      apply: (patch: (m: Message) => Message) => void,
-    ): Promise<{ conversationId: string; messageId?: number; userMessageId?: number; content: string }> => {
+      handlers: { onDelta: (text: string) => void; onThinking?: (text: string) => void; onPing?: (seconds: number) => void },
+    ): Promise<{ conversationId: string; messageId?: number; userMessageId?: number; content: string; received: string }> => {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      let pendingText = "";
-      let flushTimer: ReturnType<typeof setTimeout> | undefined;
-      const flush = () => {
-        if (flushTimer !== undefined) clearTimeout(flushTimer);
-        flushTimer = undefined;
-        if (pendingText) {
-          const chunk = pendingText;
-          pendingText = "";
-          apply((m) => ({ ...m, content: m.content + chunk }));
-        }
-      };
-
       const locale = typeof window === "undefined" ? "zh-CN" : localStorage.getItem("site_locale") || "zh-CN";
-      const result = { conversationId, messageId: undefined as number | undefined, userMessageId: undefined as number | undefined, content: "" };
+      const result = { conversationId, messageId: undefined as number | undefined, userMessageId: undefined as number | undefined, content: "", received: "" };
       try {
         const response = await fetch(`${API_URL}${path}`, {
           method: "POST",
@@ -276,16 +398,22 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
               result.conversationId = data.conversation_id;
               setConversationId(data.conversation_id);
             }
-            const model = typeof data.model === "string" ? data.model : "";
-            setStage(model ? ts("正在生成…") : ts("正在思考…"));
           } else if (event === "delta") {
-            pendingText += String(data.text || "");
-            if (flushTimer === undefined) flushTimer = setTimeout(flush, 40);
+            const text = String(data.text || "");
+            if (text) {
+              result.received += text;
+              handlers.onDelta(text);
+            }
+          } else if (event === "thinking") {
+            const text = String(data.text || "");
+            if (text) handlers.onThinking?.(text);
+          } else if (event === "ping") {
+            const seconds = Number(data.elapsed_seconds || 0);
+            if (seconds > 0) handlers.onPing?.(seconds);
           } else if (event === "error") {
             if (String(data.code || "") === "INSUFFICIENT_BALANCE") setNeedRecharge(true);
             throw new Error(String(data.message || ts("生成失败")));
           } else if (event === "done") {
-            flush();
             if (typeof data.conversation_id === "string" && data.conversation_id) {
               result.conversationId = data.conversation_id;
               setConversationId(data.conversation_id);
@@ -295,10 +423,8 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
             if (typeof data.content === "string" && data.content) result.content = data.content;
           }
         }
-        flush();
         return result;
       } finally {
-        if (flushTimer !== undefined) clearTimeout(flushTimer);
         abortRef.current = null;
       }
     },
@@ -318,39 +444,40 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
       setNeedRecharge(false);
       setBusy(true);
       setStage(ts("正在思考…"));
+      setWaited(0);
       stickRef.current = true;
       setEditingIndex(null);
+      resetReveal();
 
       const base = options?.replaceFrom !== undefined ? messages.slice(0, options.replaceFrom) : messages;
       setMessages([...base, { role: "user", content: message }, { role: "assistant", content: "" }]);
-
-      const apply = (patch: (m: Message) => Message) =>
-        setMessages((prev) => {
-          if (prev.length === 0) return prev;
-          const next = [...prev];
-          const index = next.length - 1;
-          if (next[index]?.role !== "assistant") return prev;
-          next[index] = patch(next[index]);
-          return next;
-        });
 
       try {
         const result = await streamRequest(
           `/api/agents/${encodeURIComponent(agentCode)}/chat`,
           { conversation_id: conversationId || undefined, message },
-          apply,
+          {
+            onDelta: pushRevealDelta,
+            onThinking: (chunk) => patchLastAssistant((m) => ({ ...m, thinking: (m.thinking || "") + chunk })),
+            onPing: (seconds) => setWaited((value) => Math.max(value, seconds)),
+          },
         );
-        setMessages((prev) => {
-          const next = [...prev];
-          if (next.length >= 2) {
-            next[next.length - 2] = { ...next[next.length - 2], id: result.userMessageId };
-            next[next.length - 1] = { ...next[next.length - 1], id: result.messageId, content: result.content || next[next.length - 1].content };
-          }
-          return next;
+        finishReveal(() => {
+          setMessages((prev) => {
+            const next = [...prev];
+            if (next.length >= 2) {
+              next[next.length - 2] = { ...next[next.length - 2], id: result.userMessageId };
+              next[next.length - 1] = { ...next[next.length - 1], id: result.messageId, content: result.content || next[next.length - 1].content };
+            }
+            return next;
+          });
+          if (!conversationTitle) setConversationTitle(message.slice(0, 24));
+          setBusy(false);
+          setStage("");
+          void loadHistory();
         });
-        if (!conversationTitle) setConversationTitle(message.slice(0, 24));
-        void loadHistory();
       } catch (e) {
+        flushReveal();
         if (e instanceof DOMException && e.name === "AbortError") {
           // 用户主动停止：保留已生成的部分，并标记为已停止。
           setMessages((prev) => {
@@ -359,18 +486,19 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
             if (last?.role === "assistant") next[next.length - 1] = { ...last, stopped: true };
             return next;
           });
+          setBusy(false);
+          setStage("");
           return;
         }
         // 失败：撤回本轮乐观消息，把内容放回输入框，方便直接重试。
         setMessages(base);
         setInput(message);
         setError(e instanceof Error ? e.message : ts("生成失败"));
-      } finally {
         setBusy(false);
         setStage("");
       }
     },
-    [agentCode, busy, conversationId, conversationTitle, input, loadHistory, maxInput, messages, streamRequest, ts],
+    [agentCode, busy, conversationId, conversationTitle, finishReveal, flushReveal, input, loadHistory, maxInput, messages, patchLastAssistant, pushRevealDelta, resetReveal, streamRequest, ts],
   );
 
   // 重新生成 / 编辑并重跑：已落库走 rerun（服务端截断后续轮次），未落库直接重发。
@@ -394,52 +522,54 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
       setNeedRecharge(false);
       setBusy(true);
       setStage(ts("正在重新生成…"));
+      setWaited(0);
       setEditingIndex(null);
       stickRef.current = true;
+      resetReveal();
       setMessages((prev) => [...prev.slice(0, userIndex), { ...source, content }, { role: "assistant", content: "" }]);
-
-      const apply = (patch: (m: Message) => Message) =>
-        setMessages((prev) => {
-          if (prev.length === 0) return prev;
-          const next = [...prev];
-          const index = next.length - 1;
-          if (next[index]?.role !== "assistant") return prev;
-          next[index] = patch(next[index]);
-          return next;
-        });
 
       try {
         const result = await streamRequest(
           `/api/agents/${encodeURIComponent(agentCode)}/conversations/${conversationId}/messages/${source.id}/rerun`,
           newContent !== undefined ? { content } : {},
-          apply,
+          {
+            onDelta: pushRevealDelta,
+            onThinking: (chunk) => patchLastAssistant((m) => ({ ...m, thinking: (m.thinking || "") + chunk })),
+            onPing: (seconds) => setWaited((value) => Math.max(value, seconds)),
+          },
         );
-        setMessages((prev) => {
-          const next = [...prev];
-          if (next.length >= 2) {
-            next[next.length - 1] = {
-              ...next[next.length - 1],
-              id: result.messageId,
-              content: result.content || next[next.length - 1].content,
-            };
-          }
-          return next;
+        finishReveal(() => {
+          setMessages((prev) => {
+            const next = [...prev];
+            if (next.length >= 2) {
+              next[next.length - 1] = {
+                ...next[next.length - 1],
+                id: result.messageId,
+                content: result.content || next[next.length - 1].content,
+              };
+            }
+            return next;
+          });
+          setBusy(false);
+          setStage("");
+          void loadHistory();
         });
-        void loadHistory();
       } catch (e) {
+        flushReveal();
         if (e instanceof DOMException && e.name === "AbortError") {
           // 重新生成被停止：服务端已截断旧回复，这里移除空白气泡保持界面一致。
           setMessages((prev) => prev.filter((m, i) => !(i === prev.length - 1 && m.role === "assistant" && !m.content)));
+          setBusy(false);
+          setStage("");
           return;
         }
         setMessages(messages);
         setError(e instanceof Error ? e.message : ts("重新生成失败"));
-      } finally {
         setBusy(false);
         setStage("");
       }
     },
-    [agentCode, busy, conversationId, loadHistory, maxInput, messages, send, streamRequest, ts],
+    [agentCode, busy, conversationId, finishReveal, flushReveal, loadHistory, maxInput, messages, patchLastAssistant, pushRevealDelta, resetReveal, send, streamRequest, ts],
   );
 
   const deleteMessage = useCallback(
@@ -750,6 +880,7 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
             const streaming = busy && isLast;
             return (
               <div key={`${index}-${message.id || "local"}`} className="flex flex-col items-start gap-1">
+                {message.thinking ? <ThinkingBlock text={message.thinking} streaming={streaming && !message.content} /> : null}
                 {message.content ? (
                   <div className="soft-card max-w-[95%] px-4 py-3 text-sm leading-relaxed text-gray-700 dark:text-gray-200">
                     <AgentRichText content={message.content} />
@@ -787,7 +918,10 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
           {busy && !(messages[messages.length - 1]?.role === "assistant" && messages[messages.length - 1]?.content) ? (
             <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
               <Loader2 size={14} className="animate-spin text-primary" />
-              <span role="status" aria-live="polite">{stage || ts("正在思考…")}</span>
+              <span role="status" aria-live="polite">
+                {stage || ts("正在思考…")}
+                {waited > 0 ? ` · ${waited}s` : ""}
+              </span>
             </div>
           ) : null}
 
