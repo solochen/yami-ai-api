@@ -6,6 +6,7 @@ import photoStudio from "./supplements/ko-KR/photoStudio.ts";
 import virtualTryOnExtra from "./supplements/ko-KR/virtualTryOnExtra.ts";
 import agentWorkspace from "./supplements/ko-KR/agentWorkspace.ts";
 import commerceVideo from "./supplements/ko-KR/commerceVideo.ts";
+import promptAgentWorkspace from "./supplements/ko-KR/promptAgentWorkspace.ts";
 
 const sourceTranslations: Record<string, string> = {
   "API 文档中心": "API 문서",
@@ -531,5 +532,6 @@ Object.assign(sourceTranslations, photoStudio);
 Object.assign(sourceTranslations, virtualTryOnExtra);
 Object.assign(sourceTranslations, agentWorkspace);
 Object.assign(sourceTranslations, commerceVideo);
+Object.assign(sourceTranslations, promptAgentWorkspace);
 
 export default sourceTranslations;

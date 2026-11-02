@@ -6,6 +6,7 @@ import photoStudio from "./supplements/vi-VN/photoStudio.ts";
 import virtualTryOnExtra from "./supplements/vi-VN/virtualTryOnExtra.ts";
 import agentWorkspace from "./supplements/vi-VN/agentWorkspace.ts";
 import commerceVideo from "./supplements/vi-VN/commerceVideo.ts";
+import promptAgentWorkspace from "./supplements/vi-VN/promptAgentWorkspace.ts";
 
 const sourceTranslations: Record<string, string> = {
   "API 文档中心": "Tài liệu API",
@@ -531,5 +532,6 @@ Object.assign(sourceTranslations, photoStudio);
 Object.assign(sourceTranslations, virtualTryOnExtra);
 Object.assign(sourceTranslations, agentWorkspace);
 Object.assign(sourceTranslations, commerceVideo);
+Object.assign(sourceTranslations, promptAgentWorkspace);
 
 export default sourceTranslations;

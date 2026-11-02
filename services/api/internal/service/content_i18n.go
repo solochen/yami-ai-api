@@ -206,7 +206,7 @@ func (s *ContentI18nService) SyncCatalog(ctx context.Context, models *ModelServi
 		if workflow.Description != nil {
 			description = *workflow.Description
 		}
-		if err := s.SyncEntity(ctx, "workflow", workflow.Code, ExtractWorkflowTranslationFields(workflow.Name, description, workflow.Nodes, workflow.InputSchema, workflow.DisplayConfig)); err != nil {
+		if err := s.SyncEntity(ctx, "workflow", workflow.Code, ExtractWorkflowTranslationFields(workflow.Name, description, workflow.Nodes, workflow.InputSchema, workflow.DisplayConfig, workflow.RuntimeConfig)); err != nil {
 			return count, err
 		}
 		count++
@@ -515,7 +515,7 @@ func ExtractModelTranslationFields(displayName, description string, tags []strin
 	return fields
 }
 
-func ExtractWorkflowTranslationFields(name, description string, nodes []WorkflowNode, schema, display map[string]interface{}) map[string]string {
+func ExtractWorkflowTranslationFields(name, description string, nodes []WorkflowNode, schema, display map[string]interface{}, runtime ...map[string]interface{}) map[string]string {
 	fields := map[string]string{}
 	putTranslationField(fields, "/name", name)
 	putTranslationField(fields, "/description", description)
@@ -524,7 +524,30 @@ func ExtractWorkflowTranslationFields(name, description string, nodes []Workflow
 	}
 	extractVisibleJSONFields(fields, "/input_schema", schema)
 	extractVisibleJSONFields(fields, "/display_config", display)
+	if len(runtime) > 0 {
+		extractWorkflowRuntimeCopy(fields, "/runtime_config", runtime[0])
+	}
 	return fields
+}
+
+// extractWorkflowRuntimeCopy 只收集 runtime_config 里面向用户的文案，
+// 不碰模型编码、温度、上限这类运行参数。
+func extractWorkflowRuntimeCopy(fields map[string]string, path string, runtime map[string]interface{}) {
+	if runtime == nil {
+		return
+	}
+	for _, key := range []string{"greeting", "input_placeholder", "disclaimer"} {
+		if text, ok := runtime[key].(string); ok {
+			putTranslationField(fields, path+"/"+key, text)
+		}
+	}
+	if list, ok := runtime["quick_prompts"].([]interface{}); ok {
+		for i, item := range list {
+			if text, ok := item.(string); ok {
+				putTranslationField(fields, fmt.Sprintf("%s/quick_prompts/%d", path, i), text)
+			}
+		}
+	}
 }
 
 func ExtractAPIDocTranslationFields(title, summary, modelName, modelDescription string, content map[string]interface{}) map[string]string {

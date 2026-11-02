@@ -6,6 +6,7 @@ import photoStudio from "./supplements/ja-JP/photoStudio.ts";
 import virtualTryOnExtra from "./supplements/ja-JP/virtualTryOnExtra.ts";
 import agentWorkspace from "./supplements/ja-JP/agentWorkspace.ts";
 import commerceVideo from "./supplements/ja-JP/commerceVideo.ts";
+import promptAgentWorkspace from "./supplements/ja-JP/promptAgentWorkspace.ts";
 
 const sourceTranslations: Record<string, string> = {
   "API 文档中心": "API ドキュメント",
@@ -531,5 +532,6 @@ Object.assign(sourceTranslations, photoStudio);
 Object.assign(sourceTranslations, virtualTryOnExtra);
 Object.assign(sourceTranslations, agentWorkspace);
 Object.assign(sourceTranslations, commerceVideo);
+Object.assign(sourceTranslations, promptAgentWorkspace);
 
 export default sourceTranslations;

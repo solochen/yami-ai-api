@@ -125,7 +125,8 @@ func main() {
 	}
 
 	renovationSvc := service.NewRenovationService(pool, chatSvc)
-	h := handler.New(cfg, authSvc, walletSvc, modelSvc, chatSvc, taskSvc, worksSvc, adminSvc, billingSvc, paymentSvc, opsSvc, gallerySvc, agentSvc, cacheClient, storageClient, homeSvc, presetSvc, assetSvc, roleTplSvc, oauthSvc, captchaSvc, emailOTPSvc, contentI18nSvc, canvasSvc, galleryGenerationSvc, galleryReviewSvc, renovationSvc)
+	promptAgentSvc := service.NewPromptAgentService(pool, chatSvc)
+	h := handler.New(cfg, authSvc, walletSvc, modelSvc, chatSvc, taskSvc, worksSvc, adminSvc, billingSvc, paymentSvc, opsSvc, gallerySvc, agentSvc, cacheClient, storageClient, homeSvc, presetSvc, assetSvc, roleTplSvc, oauthSvc, captchaSvc, emailOTPSvc, contentI18nSvc, canvasSvc, galleryGenerationSvc, galleryReviewSvc, renovationSvc, promptAgentSvc)
 
 	r := gin.New()
 	trustedProxies := []string{}

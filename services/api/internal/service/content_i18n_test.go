@@ -98,6 +98,35 @@ func TestExtractWorkflowTranslationFieldsIncludesConfigLists(t *testing.T) {
 	}
 }
 
+func TestExtractWorkflowTranslationFieldsIncludesPromptAgentCopy(t *testing.T) {
+	runtime := map[string]interface{}{
+		"agent_mode":        "prompt_chat",
+		"chat_model_code":   "deepseek-v4-1-flash-1017",
+		"max_input_chars":   float64(4000),
+		"greeting":          "把你的视频创意告诉我",
+		"input_placeholder": "例如：30 秒抖音带货",
+		"disclaimer":        "价格请按实际信息替换",
+		"quick_prompts":     []interface{}{"30 秒羽绒服脚本", "15 秒探店视频"},
+	}
+	fields := ExtractWorkflowTranslationFields("短视频脚本编剧", "写脚本", nil, nil, nil, runtime)
+	for path, want := range map[string]string{
+		"/runtime_config/greeting":          "把你的视频创意告诉我",
+		"/runtime_config/input_placeholder": "例如：30 秒抖音带货",
+		"/runtime_config/disclaimer":        "价格请按实际信息替换",
+		"/runtime_config/quick_prompts/0":   "30 秒羽绒服脚本",
+		"/runtime_config/quick_prompts/1":   "15 秒探店视频",
+	} {
+		if fields[path] != want {
+			t.Fatalf("field %s = %q, want %q", path, fields[path], want)
+		}
+	}
+	for _, forbidden := range []string{"/runtime_config/agent_mode", "/runtime_config/chat_model_code", "/runtime_config/max_input_chars"} {
+		if _, ok := fields[forbidden]; ok {
+			t.Fatalf("运行参数不应进入翻译目录: %s", forbidden)
+		}
+	}
+}
+
 func TestExtractAPIDocTranslationFields(t *testing.T) {
 	content := map[string]interface{}{
 		"features":        []interface{}{"流式输出", "多轮对话"},

@@ -989,7 +989,23 @@ Object.assign(dictionary, {
   "upscale.assetOnly": "動画タイプのアセットのみ表示",
   "upscale.noAssets": "動画アセットがありません",
   "upscale.historyTitle": "高画質化履歴",
-  "upscale.noHistory": "履歴がありません"
+  "upscale.noHistory": "履歴がありません",
+    "common.recommended": "おすすめ",
+    "agentCategory.video": "動画処理",
+    "agentCategory.image": "画像処理",
+    "agentCategory.content": "コンテンツ制作",
+    "agentCategory.ai_create": "AI 制作",
+    "agentCategory.assistant": "AI アシスタント",
+    "nav.toolbox": "ツールボックス",
+    "nav.openApi": "オープン API",
+    "recharge.chooseChannel": "お支払い方法",
+    "recharge.channel.alipay": "Alipay",
+    "recharge.channel.wechat": "WeChat Pay",
+    "recharge.channel.stripe": "Stripe",
+    "recharge.channel.paypal": "PayPal",
+    "recharge.channel.generic": "オンライン決済",
+    "recharge.wechatScan": "WeChat で QR コードをスキャンして支払ってください",
+    "recharge.waitingPayment": "支払い結果を待っています...",
 });
 
 Object.assign(dictionary, canvas, workspace, account);

@@ -47,6 +47,7 @@ const VirtualTryOnLanding = dynamic(() => import("./VirtualTryOnLanding").then((
 const VirtualTryOnInputBar = dynamic(() => import("./VirtualTryOnLanding").then((module) => module.VirtualTryOnInputBar), { loading: () => null });
 const VirtualTryOnResult = dynamic(() => import("./VirtualTryOnLanding").then((module) => module.VirtualTryOnResult), { loading: WorkspaceLoading });
 const RenovationBudgetWorkspace = dynamic(() => import("./RenovationBudgetWorkspace").then((module) => module.RenovationBudgetWorkspace), { loading: WorkspaceLoading });
+const PromptAgentWorkspace = dynamic(() => import("./PromptAgentWorkspace").then((module) => module.PromptAgentWorkspace), { loading: WorkspaceLoading });
 
 type DisplayStep = AgentDisplayStep;
 type DisplayConfig = {
@@ -1378,6 +1379,11 @@ export function AgentWorkspace({ code }: { code: string }) {
   };
 
   if (!workflow) return <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">{ts("加载中...")}</div>;
+
+  // 提示词对话智能体：只有多轮文本对话，没有项目/任务编排，直接交给通用工作区。
+  if (workflow?.runtime_config?.agent_mode === "prompt_chat") {
+    return <PromptAgentWorkspace key={workflow.code} workflow={workflow} />;
+  }
 
   if (workflow?.runtime_config?.agent_mode === "ecom_factory") {
     return <EcomFactoryWorkspace key={`ecomf:${project?.public_id || "new"}`} workflowCode={workflow.code} workflowName={workflowName} project={project ? { ...project, inputs: project.inputs || {}, outputs: project.outputs || {} } : null} onProjectChange={(p) => setProject(p as Project)} onSubmitted={(publicId) => startPolling(publicId)} onStop={async () => { if (!project) return; try { await api(`/api/agent-projects/${project.public_id}/cancel`, { method: "POST" }); setProject(await api<Project>(`/api/agent-projects/${project.public_id}`)); } catch (e) { setError(e instanceof Error ? e.message : ts("停止失败")); } }} onNewTask={() => { resetTask(); }} onLoadHistory={loadHistory} />;

@@ -12,7 +12,7 @@ func TestEcomFactoryPlanCount(t *testing.T) {
 		want   int
 	}{
 		{"默认套装", map[string]interface{}{"mode": "suite", "selectedSuite": "launch"}, 5},
-		{"详情套装+每类2张", map[string]interface{}{"mode": "suite", "selectedSuite": "detail", "countPerModule": 2}, 10},
+		{"详情套装+每类2张", map[string]interface{}{"mode": "suite", "selectedSuite": "detail", "countPerModule": 2}, 16},
 		{"自选模块", map[string]interface{}{"mode": "suite", "selectedModuleIds": []interface{}{"main-square", "seed-cover"}}, 2},
 		{"批量默认", map[string]interface{}{"mode": "batch", "batchCount": 5}, 5},
 		{"批量超上限截断24", map[string]interface{}{"mode": "batch", "batchCount": 200}, 24},

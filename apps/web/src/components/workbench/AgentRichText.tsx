@@ -66,7 +66,7 @@ export const AgentRichText = memo(function AgentRichText({ content, sources = []
         rows.push(<tr key={i}>{cells.map((cell, column) => <td key={column} className={`border-t border-gray-200 px-3 py-2 align-top dark:border-white/10 ${alignment[column] || "text-left"}`}>{inline(cell, sources)}</td>)}</tr>);
         i++;
       }
-      nodes.push(<div key={key} className="my-4 max-w-full overflow-x-auto rounded-xl border border-gray-200 dark:border-white/10"><table className="w-full text-sm leading-6"><thead className="bg-gray-50 dark:bg-white/5"><tr>{headers.map((cell, column) => <th key={column} scope="col" className={`px-3 py-2 font-semibold ${alignment[column]}`}>{inline(cell, sources)}</th>)}</tr></thead><tbody>{rows}</tbody></table></div>);
+      nodes.push(<div key={key} className="my-4 max-w-full overflow-x-auto rounded-xl border border-gray-200 dark:border-white/10"><table className="w-full min-w-[560px] text-sm leading-6"><thead className="bg-gray-50 dark:bg-white/5"><tr>{headers.map((cell, column) => <th key={column} scope="col" className={`px-3 py-2 font-semibold ${alignment[column]}`}>{inline(cell, sources)}</th>)}</tr></thead><tbody>{rows}</tbody></table></div>);
       continue;
     }
     if (rule.test(line)) { nodes.push(<hr key={key} className="my-5 border-gray-200 dark:border-white/10" />); i++; continue; }

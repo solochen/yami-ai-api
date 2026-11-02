@@ -989,7 +989,23 @@ Object.assign(dictionary, {
   "upscale.assetOnly": "Chỉ hiển thị tài sản video",
   "upscale.noAssets": "Không có video trong thư viện",
   "upscale.historyTitle": "Lịch sử nâng cấp",
-  "upscale.noHistory": "Chưa có lịch sử tác vụ"
+  "upscale.noHistory": "Chưa có lịch sử tác vụ",
+    "common.recommended": "Đề xuất",
+    "agentCategory.video": "Xử lý video",
+    "agentCategory.image": "Xử lý hình ảnh",
+    "agentCategory.content": "Sáng tạo nội dung",
+    "agentCategory.ai_create": "Sáng tạo AI",
+    "agentCategory.assistant": "Trợ lý AI",
+    "nav.toolbox": "Hộp công cụ",
+    "nav.openApi": "API mở",
+    "recharge.chooseChannel": "Phương thức thanh toán",
+    "recharge.channel.alipay": "Alipay",
+    "recharge.channel.wechat": "WeChat Pay",
+    "recharge.channel.stripe": "Stripe",
+    "recharge.channel.paypal": "PayPal",
+    "recharge.channel.generic": "Thanh toán trực tuyến",
+    "recharge.wechatScan": "Vui lòng quét mã QR bằng WeChat để thanh toán",
+    "recharge.waitingPayment": "Đang chờ kết quả thanh toán...",
 });
 
 Object.assign(dictionary, canvas, workspace, account);

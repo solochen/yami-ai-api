@@ -989,7 +989,23 @@ Object.assign(dictionary, {
   "upscale.assetOnly": "동영상 에셋만 표시",
   "upscale.noAssets": "에셋 라이브러리에 동영상이 없습니다",
   "upscale.historyTitle": "화질 향상 기록",
-  "upscale.noHistory": "작업 기록이 없습니다"
+  "upscale.noHistory": "작업 기록이 없습니다",
+    "common.recommended": "추천",
+    "agentCategory.video": "영상 처리",
+    "agentCategory.image": "이미지 처리",
+    "agentCategory.content": "콘텐츠 제작",
+    "agentCategory.ai_create": "AI 창작",
+    "agentCategory.assistant": "AI 어시스턴트",
+    "nav.toolbox": "도구함",
+    "nav.openApi": "오픈 API",
+    "recharge.chooseChannel": "결제 수단",
+    "recharge.channel.alipay": "Alipay",
+    "recharge.channel.wechat": "WeChat Pay",
+    "recharge.channel.stripe": "Stripe",
+    "recharge.channel.paypal": "PayPal",
+    "recharge.channel.generic": "온라인 결제",
+    "recharge.wechatScan": "WeChat으로 QR 코드를 스캔하여 결제하세요",
+    "recharge.waitingPayment": "결제 결과를 기다리는 중...",
 });
 
 Object.assign(dictionary, canvas, workspace, account);
