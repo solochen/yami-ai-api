@@ -50,6 +50,23 @@ const goldenTexture = `你是资深电商视觉设计师，请生成一张可直
 输出要求：真实商业摄影质感，主体清楚，边缘干净，光影自然，材质可信，构图适合移动端电商浏览。
 禁止：低清晰度、变形、错位手指、混乱文字、错误商标、过度磨皮、重复主体、拼接痕迹、侵权品牌元素。`;
 
+// 模块级资料 golden：size-diagram + sizeData（与 Go 端 ecom_factory_test.go 同文对拍）。
+const goldenSizeDiagram = `你是资深电商视觉设计师，请生成一张可直接用于详情模块的产品尺寸图。
+商品：LA-2
+核心卖点：请从商品外观和使用场景中提炼核心卖点
+目标人群：目标电商用户
+使用场景：真实购买与使用场景
+目标平台：抖音电商
+视觉风格：高端商业摄影
+画面任务：生成电商详情页产品尺寸标注图。以商品实拍为主体，置于浅色干净背景，用带箭头的标注线从长、宽、高三个方向标注尺寸，数值和单位必须与提供的尺寸数据逐字一致，数字清晰、无变形、不遮挡商品；可在角落加「手工测量仅供参考」小字，整体风格对齐主流电商详情页尺寸模块。
+商业目标：用长宽高标注帮助用户确认商品实际尺寸。
+模块数据（必须逐字准确，不得改写、增删或臆造）：83×42×42（mm）；手工测量误差 1-2mm
+版本方向：第 1 张，构图和道具可以有轻微差异，但商品身份必须一致。
+严格参考已上传图片中的商品身份、外形、比例、材质、颜色和关键结构；参考图只用于构图、光影、风格和场景方向，不复制水印、人物身份或第三方品牌。
+可以加入少量简体中文短文案，文案必须清晰、无错别字、少而有力；不确定的文字区域请留白。
+输出要求：真实商业摄影质感，主体清楚，边缘干净，光影自然，材质可信，构图适合移动端电商浏览。
+禁止：低清晰度、变形、错位手指、混乱文字、错误商标、过度磨皮、重复主体、拼接痕迹、侵权品牌元素。`;
+
 test("normal prompt matches reference site golden text verbatim", () => {
   const detailCover = lib.ECOM_MODULES.find(m => m.id === "detail-cover");
   const texture = lib.ECOM_MODULES.find(m => m.id === "texture-close");
@@ -73,6 +90,31 @@ test("normal prompt branches: no assets / copy off / extra", () => {
 
   const extra = lib.renderNormalPrompt({ ...goldenForm, extraPrompt: "背景保持浅色" }, module, 1);
   assert.ok(extra.includes("补充要求：背景保持浅色"));
+});
+
+test("module extra (size/interface/spec) injects verbatim data line", () => {
+  const sizeDiagram = lib.ECOM_MODULES.find(m => m.id === "size-diagram");
+  assert.equal(sizeDiagram.extraKey, "sizeData");
+  const withExtra = { ...goldenForm, moduleExtras: { sizeData: "83×42×42（mm）；手工测量误差 1-2mm" } };
+  assert.equal(lib.renderNormalPrompt(withExtra, sizeDiagram, 1), goldenSizeDiagram);
+
+  // 未填写资料时不出现模块数据行
+  const empty = lib.renderNormalPrompt(goldenForm, sizeDiagram, 1);
+  assert.ok(!empty.includes("模块数据"));
+
+  // 无 extraKey 的模块不受资料影响
+  const plain = lib.ECOM_MODULES.find(m => m.id === "main-square");
+  assert.ok(!lib.renderNormalPrompt(withExtra, plain, 1).includes("模块数据"));
+
+  // 接口/参数模块资料逐字进入模板
+  const interfaceDiagram = lib.ECOM_MODULES.find(m => m.id === "interface-diagram");
+  const withInterface = lib.renderNormalPrompt(
+    { ...goldenForm, moduleExtras: { interfaceData: "INPUT XLR 输入｜左侧面板" } }, interfaceDiagram, 1);
+  assert.ok(withInterface.includes("模块数据（必须逐字准确，不得改写、增删或臆造）：INPUT XLR 输入｜左侧面板"));
+
+  // 目录完整性：17 个模块，reference-batch 保持末位
+  assert.equal(lib.ECOM_MODULES.length, 17);
+  assert.equal(lib.ECOM_MODULES[lib.ECOM_MODULES.length - 1].id, "reference-batch");
 });
 
 test("batch prompt renders framework and user priority lines", () => {
@@ -104,9 +146,10 @@ test("plan builder matches reference-site item composition", () => {
   const plan = lib.buildPlan(goldenForm, "suite", {
     selectedModuleIds: [], selectedSuite: "detail", ratio: "1:1", countPerModule: 1, batchCount: 20,
   });
-  assert.equal(plan.length, 5);
+  assert.equal(plan.length, 8);
   assert.equal(plan[0].id, "detail-cover-1");
   assert.equal(plan[0].prompt, goldenDetailCover);
+  assert.equal(plan.slice(5).map(p => p.moduleId).join(","), "size-diagram,interface-diagram,spec-table");
 
   const batch = lib.buildPlan(goldenForm, "batch", {
     selectedModuleIds: [], selectedSuite: "batch", ratio: "1:1", countPerModule: 1, batchCount: 200,

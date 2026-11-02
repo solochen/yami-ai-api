@@ -49,7 +49,7 @@ func Load() *Config {
 		MinioSecretKey:          getEnv("MINIO_SECRET_KEY", "starai123"),
 		MinioBucket:             getEnv("MINIO_BUCKET", "starai-works"),
 		MinioUseSSL:             getEnv("MINIO_USE_SSL", "false") == "true",
-		MinioPublicURL:          getEnv("MINIO_PUBLIC_URL", "http://localhost:9000"),
+		MinioPublicURL:          getEnv("MINIO_PUBLIC_URL", "/media"),
 		NewAPIBaseURL:           getEnv("NEW_API_BASE_URL", "http://localhost:3002"),
 		NewAPIToken:             getEnv("NEW_API_TOKEN", "sk-platform-internal-token"),
 		NewAPITimeoutSec:        getEnvInt("NEW_API_TIMEOUT_SECONDS", 300),

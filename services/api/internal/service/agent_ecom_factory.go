@@ -33,7 +33,25 @@ var ecomFactoryModuleIDs = map[string]bool{
 	"texture-close": true, "selling-grid": true, "compare": true, "seed-cover": true,
 	"lifestyle": true, "live-sticker": true, "style-clone": true, "color-series": true,
 	"shop-banner": true, "reference-batch": true,
+	"size-diagram": true, "interface-diagram": true, "spec-table": true,
 }
+
+// ecomExtraSpec 模块级必填资料：Key 是 inputs.moduleExtras 中的字段名，
+// MaxLines>0 时限制非空行数。选中带资料的模块时必须提供，且需上传商品图。
+type ecomExtraSpec struct {
+	Key         string
+	ModuleLabel string
+	InputLabel  string
+	MaxLines    int
+}
+
+var ecomFactoryModuleExtras = map[string]ecomExtraSpec{
+	"size-diagram":      {Key: "sizeData", ModuleLabel: "产品尺寸图", InputLabel: "尺寸数据"},
+	"interface-diagram": {Key: "interfaceData", ModuleLabel: "接口定义图", InputLabel: "接口清单", MaxLines: 12},
+	"spec-table":        {Key: "specData", ModuleLabel: "规格参数表", InputLabel: "参数内容", MaxLines: 20},
+}
+
+const ecomFactoryMaxExtraChars = 1500
 
 func normalizeEcomFactoryInputs(runtimeCfg, inputs map[string]interface{}) map[string]interface{} {
 	if inputs == nil {
@@ -101,6 +119,36 @@ func validateEcomFactoryRequest(ctx context.Context, userID int64, runtimeCfg, i
 				return fmt.Errorf("未知图片类别：%s", id)
 			}
 		}
+		needAssets := false
+		extras, _ := inputs["moduleExtras"].(map[string]interface{})
+		for _, id := range modules {
+			spec, ok := ecomFactoryModuleExtras[id]
+			if !ok {
+				continue
+			}
+			needAssets = true
+			value := strings.TrimSpace(stringValue(extras[spec.Key]))
+			if value == "" {
+				return fmt.Errorf("请先填写「%s」的%s，或取消勾选该模块", spec.ModuleLabel, spec.InputLabel)
+			}
+			if len([]rune(value)) > ecomFactoryMaxExtraChars {
+				return fmt.Errorf("「%s」的%s过长，请控制在 %d 字以内", spec.ModuleLabel, spec.InputLabel, ecomFactoryMaxExtraChars)
+			}
+			if spec.MaxLines > 0 {
+				lines := 0
+				for _, line := range strings.Split(value, "\n") {
+					if strings.TrimSpace(line) != "" {
+						lines++
+					}
+				}
+				if lines > spec.MaxLines {
+					return fmt.Errorf("「%s」的%s超过 %d 行，请精简后重试", spec.ModuleLabel, spec.InputLabel, spec.MaxLines)
+				}
+			}
+		}
+		if needAssets && !hasAssetText {
+			return errors.New("尺寸图、接口图和参数表需基于真实商品图生成，请先上传至少 1 张商品图")
+		}
 		if !hasAssetText &&
 			strings.TrimSpace(stringValue(inputs["productName"])) == "" &&
 			strings.TrimSpace(stringValue(inputs["sellingPoints"])) == "" {
@@ -132,7 +180,7 @@ func validateEcomFactoryRequest(ctx context.Context, userID int64, runtimeCfg, i
 func ecomFactorySuiteModules(suite string) []string {
 	switch suite {
 	case "detail":
-		return []string{"detail-cover", "texture-close", "selling-grid", "compare", "scene-hero"}
+		return []string{"detail-cover", "texture-close", "selling-grid", "compare", "scene-hero", "size-diagram", "interface-diagram", "spec-table"}
 	case "social":
 		return []string{"seed-cover", "lifestyle", "live-sticker", "scene-hero"}
 	case "clone":
@@ -291,7 +339,13 @@ func (s *AgentService) EcomFactoryItemAction(ctx context.Context, userID int64, 
 		}
 	}
 	inputs["itemScope"] = scope
-	inputs["_execution_budget"] = estimated + float64(agentStateSpent(outputs))
+	// 项目级预算只增不减：单张重生成不应把整个项目的可用上限压到「已花 + 1 张」，
+	// 否则之后任何重跑都会被误判为「剩余预算不足」。
+	budget := estimated + float64(agentStateSpent(outputs))
+	if previous := floatValue(inputs["_execution_budget"]); previous > budget {
+		budget = previous
+	}
+	inputs["_execution_budget"] = budget
 	if err := s.billing.FreezeWithFinalize(ctx, userID, estimated, "workflow", publicID, func(tx pgx.Tx) error {
 		var currentStatus string
 		if err := tx.QueryRow(ctx, `SELECT status FROM workflow_projects WHERE id=$1 FOR UPDATE`, projectID).Scan(&currentStatus); err != nil {

@@ -50,6 +50,23 @@ const ecomGoldenTexture = `你是资深电商视觉设计师，请生成一张�
 输出要求：真实商业摄影质感，主体清楚，边缘干净，光影自然，材质可信，构图适合移动端电商浏览。
 禁止：低清晰度、变形、错位手指、混乱文字、错误商标、过度磨皮、重复主体、拼接痕迹、侵权品牌元素。`
 
+// 模块级资料 golden：size-diagram + sizeData（与前端 ecomFactoryWorkspace.test.mjs 同文对拍）。
+const ecomGoldenSizeDiagram = `你是资深电商视觉设计师，请生成一张可直接用于详情模块的产品尺寸图。
+商品：LA-2
+核心卖点：请从商品外观和使用场景中提炼核心卖点
+目标人群：目标电商用户
+使用场景：真实购买与使用场景
+目标平台：抖音电商
+视觉风格：高端商业摄影
+画面任务：生成电商详情页产品尺寸标注图。以商品实拍为主体，置于浅色干净背景，用带箭头的标注线从长、宽、高三个方向标注尺寸，数值和单位必须与提供的尺寸数据逐字一致，数字清晰、无变形、不遮挡商品；可在角落加「手工测量仅供参考」小字，整体风格对齐主流电商详情页尺寸模块。
+商业目标：用长宽高标注帮助用户确认商品实际尺寸。
+模块数据（必须逐字准确，不得改写、增删或臆造）：83×42×42（mm）；手工测量误差 1-2mm
+版本方向：第 1 张，构图和道具可以有轻微差异，但商品身份必须一致。
+严格参考已上传图片中的商品身份、外形、比例、材质、颜色和关键结构；参考图只用于构图、光影、风格和场景方向，不复制水印、人物身份或第三方品牌。
+可以加入少量简体中文短文案，文案必须清晰、无错别字、少而有力；不确定的文字区域请留白。
+输出要求：真实商业摄影质感，主体清楚，边缘干净，光影自然，材质可信，构图适合移动端电商浏览。
+禁止：低清晰度、变形、错位手指、混乱文字、错误商标、过度磨皮、重复主体、拼接痕迹、侵权品牌元素。`
+
 func TestRenderEcomNormalPromptGolden(t *testing.T) {
 	catalog, err := loadEcomCatalog()
 	if err != nil {
@@ -122,6 +139,31 @@ func TestRenderEcomNormalPromptBranches(t *testing.T) {
 	}
 }
 
+// 模块级资料（moduleExtra）：有资料时注入「模块数据」行，未填/其他模块不注入。
+func TestRenderEcomNormalPromptModuleExtra(t *testing.T) {
+	catalog, _ := loadEcomCatalog()
+	module, ok := catalog.ModuleByID("size-diagram")
+	if !ok {
+		t.Fatalf("缺少 size-diagram 模块")
+	}
+	withExtra := ecomGoldenForm
+	withExtra.ModuleExtras = map[string]string{"sizeData": "83×42×42（mm）；手工测量误差 1-2mm"}
+	if got := renderEcomNormalPrompt(catalog, withExtra, module, 1); got != ecomGoldenSizeDiagram {
+		t.Errorf("尺寸图提示词与 golden 不一致\ngot:\n%s\nwant:\n%s", got, ecomGoldenSizeDiagram)
+	}
+
+	// 未填写资料：不出现模块数据行（API 侧会拦截，worker 侧容错渲染）
+	if got := renderEcomNormalPrompt(catalog, ecomGoldenForm, module, 1); strings.Contains(got, "模块数据") {
+		t.Error("未填写资料时不应出现模块数据行")
+	}
+
+	// 无 extraKey 的模块不受资料影响
+	other, _ := catalog.ModuleByID("main-square")
+	if got := renderEcomNormalPrompt(catalog, withExtra, other, 1); strings.Contains(got, "模块数据") {
+		t.Error("无 extraKey 模块不应出现模块数据行")
+	}
+}
+
 func TestRenderEcomBatchPrompt(t *testing.T) {
 	catalog, _ := loadEcomCatalog()
 	form := ecomGoldenForm
@@ -187,17 +229,24 @@ func TestEcomCatalogIntegrity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("加载目录失败: %v", err)
 	}
-	if len(catalog.Modules) != 14 {
-		t.Errorf("模块数 = %d, want 14", len(catalog.Modules))
+	if len(catalog.Modules) != 17 {
+		t.Errorf("模块数 = %d, want 17", len(catalog.Modules))
 	}
 	if len(catalog.Suites) != 5 {
 		t.Errorf("套装数 = %d, want 5", len(catalog.Suites))
+	}
+	// reference-batch 必须保持最后一个模块：batch 模式按数组末位定位批量模块。
+	if last := catalog.Modules[len(catalog.Modules)-1]; last.ID != "reference-batch" {
+		t.Errorf("最后一个模块应为 reference-batch, got %s", last.ID)
 	}
 	moduleIDs := map[string]bool{}
 	for _, m := range catalog.Modules {
 		moduleIDs[m.ID] = true
 		if m.Label == "" || m.Channel == "" || m.Goal == "" || m.Prompt == "" || m.DefaultRatio == "" {
 			t.Errorf("模块 %s 字段不完整", m.ID)
+		}
+		if (m.ExtraKey == "") != (m.ExtraLabel == "") {
+			t.Errorf("模块 %s 的 extraKey/extraLabel 必须成对出现", m.ID)
 		}
 	}
 	for _, s := range catalog.Suites {
@@ -221,8 +270,8 @@ func TestEcomBuildState(t *testing.T) {
 	if errMsg != "" || state == nil {
 		t.Fatalf("构建失败: %s", errMsg)
 	}
-	if len(state.Items) != 5 {
-		t.Fatalf("详情页套装应 5 项, got %d", len(state.Items))
+	if len(state.Items) != 8 {
+		t.Fatalf("详情页套装应 8 项, got %d", len(state.Items))
 	}
 	if state.Items[0].ID != "detail-cover-1" || state.Items[0].Prompt != ecomGoldenDetailCover {
 		t.Errorf("首项提示词与参考站不一致:\n%s", state.Items[0].Prompt)

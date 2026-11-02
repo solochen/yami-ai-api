@@ -748,6 +748,19 @@ html.mcdl-product-ui .tech-icon {
   box-shadow: none;
 }
 
+/* 智能体图标底座：浅色模式浅橙底 + 深色图形，深色模式暖炭底 + 暖白图形。 */
+html.mcdl-product-ui .agent-icon-tile {
+  background: #fff1e3;
+  color: #3a2a1c;
+  border-color: rgb(255 135 17 / 0.22);
+}
+
+html.mcdl-product-ui.dark .agent-icon-tile {
+  background: var(--mcdl-color-stage);
+  color: #f5efeb;
+  border-color: var(--mcdl-border-ghost);
+}
+
 html.mcdl-product-ui .pulse-dot::before,
 html.mcdl-product-ui .input-status-line::before {
   background: var(--mcdl-color-accent);

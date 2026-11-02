@@ -95,6 +95,11 @@ func (c *Client) ObjectKeyFromURL(rawURL string) string {
 	}
 	publicBase, _ := url.Parse(strings.TrimRight(c.publicURL, "/"))
 	path := strings.TrimPrefix(u.Path, "/")
+	// 相对媒体路径（/media/<bucket>/<key>，由 web/admin 代理到 MinIO）也接受：
+	// 去掉代理前缀后按桶前缀规则解析，否则 ZIP 导出等按 URL 反查对象的功能拿不到 key。
+	if strings.HasPrefix(path, "media/") {
+		path = strings.TrimPrefix(path, "media/")
+	}
 	if publicBase != nil && publicBase.Host != "" && strings.EqualFold(u.Host, publicBase.Host) {
 		basePath := strings.Trim(strings.TrimPrefix(publicBase.Path, "/"), "/")
 		if basePath != "" {

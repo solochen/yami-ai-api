@@ -27,6 +27,7 @@ import {
   Settings,
   ShieldCheck,
   PlayCircle,
+  TrendingUp,
   Users,
 } from "lucide-react";
 import { clearAdminSession, hasAdminSession } from "@/lib/api";
@@ -46,6 +47,7 @@ const NAV_GROUPS = [
     title: "模型管理",
     items: [
       { href: "/admin/models", label: "模型管理", icon: Boxes },
+      { href: "/admin/upstream-prices", label: "上游价格监控", icon: TrendingUp },
       { href: "/admin/agents", label: "工作流", icon: GitBranch },
       { href: "/admin/home-cards", label: "多模型卡片", icon: Layers3 },
       { href: "/admin/channel-presets", label: "渠道预设", icon: ChartNoAxesCombined },

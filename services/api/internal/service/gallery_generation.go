@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/starai/api/internal/queue"
+	"github.com/starai/api/internal/util"
 )
 
 const galleryGenerationCostRuleVersion = "model.price_rule.v1"
@@ -555,6 +556,9 @@ func scanGalleryGenerationTask(scanner interface{ Scan(...any) error }) (*Galler
 	item.RequestPayload, item.Output = map[string]interface{}{}, map[string]interface{}{}
 	_ = json.Unmarshal(payloadRaw, &item.RequestPayload)
 	_ = json.Unmarshal(outputRaw, &item.Output)
+	if item.ErrorMessage != "" {
+		item.ErrorMessage = util.SanitizeMessage(item.ErrorMessage)
+	}
 	item.CreatedAt, item.UpdatedAt = created.Format(time.RFC3339), updated.Format(time.RFC3339)
 	if started != nil {
 		item.StartedAt = started.Format(time.RFC3339)

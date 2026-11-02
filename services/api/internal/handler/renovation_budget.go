@@ -63,10 +63,10 @@ func (h *Handler) RenovationBudgetChat(c *gin.Context) {
 	if runErr != nil {
 		var balanceErr *service.BalanceError
 		if errors.As(runErr, &balanceErr) {
-			sink("error", map[string]interface{}{"code": "INSUFFICIENT_BALANCE", "message": runErr.Error()})
+			sink("error", map[string]interface{}{"code": "INSUFFICIENT_BALANCE", "message": util.SanitizeMessage(runErr.Error())})
 			return
 		}
-		sink("error", map[string]interface{}{"code": "AGENT_RUN_FAILED", "message": runErr.Error()})
+		sink("error", map[string]interface{}{"code": "AGENT_RUN_FAILED", "message": util.SanitizeMessage(runErr.Error())})
 		return
 	}
 	done := map[string]interface{}{

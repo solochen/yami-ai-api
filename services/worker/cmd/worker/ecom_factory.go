@@ -293,6 +293,7 @@ type ecomForm struct {
 	CopyEnabled, HasAssets                                      bool
 	BatchPrompt, BatchStrategy, BatchSimilarity, BatchVariation string
 	BatchKeepKeys, BatchChangeKeys                              []string
+	ModuleExtras                                                map[string]string
 }
 
 func ecomFormFromInputs(inputs map[string]interface{}) ecomForm {
@@ -311,6 +312,14 @@ func ecomFormFromInputs(inputs map[string]interface{}) ecomForm {
 	f.HasAssets = len(ecomReferenceURLs(inputs, ecomItemScope{}, false)) > 0
 	f.BatchKeepKeys = ecomStringSlice(inputs, "batchKeepKeys")
 	f.BatchChangeKeys = ecomStringSlice(inputs, "batchChangeKeys")
+	f.ModuleExtras = map[string]string{}
+	if raw, ok := inputs["moduleExtras"].(map[string]interface{}); ok {
+		for k, v := range raw {
+			if s := strings.TrimSpace(stringAny(v)); s != "" {
+				f.ModuleExtras[k] = s
+			}
+		}
+	}
 	return f
 }
 
@@ -451,6 +460,12 @@ func renderEcomNormalPrompt(catalog *ecomCatalog, form ecomForm, module ecomModu
 		"channel": module.Channel, "label": module.Label,
 		"prompt": module.Prompt, "goal": module.Goal,
 	}
+	if module.ExtraKey != "" {
+		if v := strings.TrimSpace(form.ModuleExtras[module.ExtraKey]); v != "" {
+			vars["moduleExtra"] = v
+			vars["moduleExtraSet"] = true
+		}
+	}
 	vars["variantIndex"] = variant
 	return renderEcomTemplate(catalog.Templates.Normal, vars)
 }
@@ -500,6 +515,11 @@ func ecomFactoryGenerate(ctx context.Context, pool *pgxpool.Pool, baseURL, token
 	applyAgentModelDefaults(taskInput, defaults, runtime, "image")
 	taskInput["count"], taskInput["n"] = 1, 1
 	taskInput["size"] = catalog.resolveEcomSize(item.Ratio, resolution)
+	if mod, ok := catalog.ModuleByID(item.ModuleID); ok && mod.ExtraKey != "" {
+		// 尺寸图/接口图/参数表必须以文字呈现用户给的资料，
+		// 不能被「禁止添加文字」的通用策略压制。
+		taskInput["needs_text"] = true
+	}
 	taskInput["_workflow_project"] = publicID
 	taskInput["_skip_billing"] = true
 	if len(references) > 0 {
@@ -514,6 +534,9 @@ func ecomFactoryGenerate(ctx context.Context, pool *pgxpool.Pool, baseURL, token
 			return "", taskNo, err
 		}
 		forecast := estimateModelCostByIDWorker(ctx, pool, modelID, taskInput, 0, 0, 0, 0)
+		// 固定预估按「假定输出 token」算，与实际 token 计费会偏离（本项目实测 1.00~2.14 算力/张）。
+		// 用本单已完成任务的平均实扣校正，避免预算闸门误判「剩余预算不足」。
+		forecast = adaptiveEcomForecast(ctx, pool, p.ProjectID, forecast)
 		if budget > 0 {
 			spent, err := productSpent(ctx, pool, p.ProjectID)
 			if err == nil && !productBudgetAllows(spent, forecast, budget) {
@@ -707,6 +730,7 @@ func ecomProjectRunning(ctx context.Context, pool *pgxpool.Pool, projectID int64
 }
 
 func finishEcomFactory(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPayload, publicID string, reserved float64, outputs map[string]interface{}, state *ecomFactoryState, message string) error {
+	message = sanitizeUserFacingError(message)
 	if state != nil {
 		ecomRecalcState(state)
 		if !ecomProjectRunning(ctx, pool, p.ProjectID) {
@@ -755,4 +779,17 @@ func finishEcomFactory(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPa
 		}
 		return err
 	})
+}
+
+// adaptiveEcomForecast 用本单已完成任务的平均实扣校正单张预估。
+// 图片模型按真实 token 计费，固定预估会在多图任务里累积偏差，
+// 进而让预算闸门误报「剩余预算不足以生成下一张图片」。
+func adaptiveEcomForecast(ctx context.Context, pool *pgxpool.Pool, projectID int64, estimate float64) float64 {
+	var avg float64
+	err := pool.QueryRow(ctx, `SELECT COALESCE(AVG(actual_cost),0) FROM tasks
+		WHERE workflow_project_id=$1 AND status='succeeded' AND actual_cost > 0`, projectID).Scan(&avg)
+	if err != nil || avg <= estimate {
+		return estimate
+	}
+	return avg
 }

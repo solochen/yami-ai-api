@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="CT">
+  <defs>
+    <linearGradient id="ct-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1C1917"/>
+      <stop offset="1" stop-color="#2B2522"/>
+    </linearGradient>
+    <linearGradient id="ct-core" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8FA8FF"/>
+      <stop offset="1" stop-color="#4C6EF5"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#ct-bg)"/>
+  <g transform="rotate(-35 32 30)">
+    <path d="M40 30a8 8 0 1 1-8-8" stroke="#4C6EF5" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.5"/>
+    <circle cx="40" cy="30" r="6.5" fill="url(#ct-core)"/>
+    <path d="M34 30H12" stroke="url(#ct-core)" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+    <path d="M33 26.5H18" stroke="#8FA8FF" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+    <path d="M33 33.5H22" stroke="#8FA8FF" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+  </g>
+  <text x="32" y="58" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="1.5" fill="#F5F0EA">CT</text>
+</svg>

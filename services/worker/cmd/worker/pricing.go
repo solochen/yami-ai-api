@@ -526,7 +526,16 @@ func chargeWorkflowWithSettlement(
 	finalize func(pgx.Tx) error,
 ) error {
 	var currentActual, currentProvider float64
-	if err := pool.QueryRow(ctx, `SELECT COALESCE(actual_cost,0),COALESCE(provider_cost,0) FROM workflow_projects WHERE id=$1`, projectID).Scan(&currentActual, &currentProvider); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT COALESCE(actual_cost,0) FROM workflow_projects WHERE id=$1`, projectID).Scan(&currentActual); err != nil {
+		return err
+	}
+	// 已结算的上游成本必须从结算明细累计：workflow_projects.provider_cost 在收尾时
+	// 不会被回写，重跑时会把「累计成本」当成「本次增量」，导致 settlement item
+	// 不平衡（provider 重复计入）而让收尾事务回滚，项目卡在 running。
+	if err := pool.QueryRow(ctx, `SELECT COALESCE(SUM(i.provider_cost_compute),0)
+		FROM billing_settlement_items i
+		JOIN billing_settlements s ON s.id=i.settlement_id
+		WHERE s.ref_type='workflow' AND s.ref_id=$1 AND s.status='settled'`, publicID).Scan(&currentProvider); err != nil {
 		return err
 	}
 	deltaProvider := numericMicrosWorker(charge.ProviderCost - currentProvider)

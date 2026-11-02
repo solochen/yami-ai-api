@@ -153,7 +153,9 @@ export function GalleryPanel({
       .then((models) => {
         if (!active) return;
         const available = (models || []).filter((model) => model.is_enabled !== false && model.category !== "multi_collab");
-        setReferenceModelCode((available.find((model) => model.code === "gpt-image-2") || available[0])?.code);
+        // 默认参考图模型：优先选代号化后的图像主力型号，接口返回的 code 可能是别名。
+        const preferred = available.find((model) => model.code === "hl-image-2" || model.code === "gpt-image-2");
+        setReferenceModelCode((preferred || available[0])?.code);
       })
       .catch(() => { if (active) setReferenceModelCode(undefined); });
     return () => { active = false; };

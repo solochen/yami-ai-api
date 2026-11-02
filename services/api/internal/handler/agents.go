@@ -139,6 +139,15 @@ func (h *Handler) RetryAgentProjectNode(c *gin.Context) {
 	h.retryAgentProject(c, true)
 }
 
+// RetryAgentDetailSection 触发单模块重生成（只重跑指定模块并重新拼接长图）。
+func (h *Handler) RetryAgentDetailSection(c *gin.Context) {
+	if err := h.agents.RetryDetailSection(c.Request.Context(), c.GetInt64("user_id"), c.Param("id"), c.Param("section")); err != nil {
+		util.BadRequest(c, err.Error())
+		return
+	}
+	util.OK(c, nil)
+}
+
 func (h *Handler) retryAgentProject(c *gin.Context, retryNode bool) {
 	var req struct {
 		Confirmed          bool   `json:"confirmed"`

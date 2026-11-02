@@ -21,11 +21,12 @@ func Created(c *gin.Context, data interface{}) {
 }
 
 func Fail(c *gin.Context, status int, code int, message string) {
-	c.JSON(status, APIResponse{Code: code, Message: message})
+	// 统一出口：任何错误文案都可能夹带上游地址/厂商名，返回前先脱敏。
+	c.JSON(status, APIResponse{Code: code, Message: SanitizeMessage(message)})
 }
 
 func FailWithData(c *gin.Context, status int, code int, message string, data interface{}) {
-	c.JSON(status, APIResponse{Code: code, Message: message, Data: data})
+	c.JSON(status, APIResponse{Code: code, Message: SanitizeMessage(message), Data: data})
 }
 
 func BadRequest(c *gin.Context, message string) {

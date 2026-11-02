@@ -32,6 +32,7 @@ func NewModelService(db *pgxpool.Pool, routeCipherKey ...string) *ModelService {
 type ModelDTO struct {
 	ID            int64                  `json:"id"`
 	Code          string                 `json:"code"`
+	PublicAlias   *string                `json:"public_alias,omitempty"`
 	DisplayName   string                 `json:"display_name"`
 	Category      string                 `json:"category"`
 	IconURL       *string                `json:"icon_url,omitempty"`
@@ -45,8 +46,17 @@ type ModelDTO struct {
 	SortOrder     int                    `json:"sort_order"`
 }
 
+// PublicCode is the identifier exposed to end users. Models that opt into
+// branding aliases answer to the alias, every other model answers to its code.
+func (m ModelDTO) PublicCode() string {
+	if m.PublicAlias != nil && strings.TrimSpace(*m.PublicAlias) != "" {
+		return *m.PublicAlias
+	}
+	return m.Code
+}
+
 func (s *ModelService) ListPublic(ctx context.Context, category string) ([]ModelDTO, error) {
-	q := `SELECT id, code, display_name, category, icon_url, description, tags, runtime_rule, input_schema, default_params, price_rule, is_enabled, sort_order
+	q := `SELECT id, code, public_alias, display_name, category, icon_url, description, tags, runtime_rule, input_schema, default_params, price_rule, is_enabled, sort_order
 		FROM models WHERE is_enabled=true`
 	args := []interface{}{}
 	if category != "" && category != "all" {
@@ -84,8 +94,8 @@ func (s *ModelService) ListPublic(ctx context.Context, category string) ([]Model
 }
 
 func (s *ModelService) GetByCode(ctx context.Context, code string, publicOnly bool) (*ModelDTO, error) {
-	q := `SELECT id, code, display_name, category, icon_url, description, tags, runtime_rule, input_schema, default_params, price_rule, is_enabled, sort_order
-		FROM models WHERE code=$1`
+	q := `SELECT id, code, public_alias, display_name, category, icon_url, description, tags, runtime_rule, input_schema, default_params, price_rule, is_enabled, sort_order
+		FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1))`
 	if publicOnly {
 		q += ` AND is_enabled=true
 			AND (NOT EXISTS (SELECT 1 FROM model_routes configured_route WHERE configured_route.model_id=models.id)
@@ -94,7 +104,7 @@ func (s *ModelService) GetByCode(ctx context.Context, code string, publicOnly bo
 	var m ModelDTO
 	var tags, runtime, schema, defaults, price []byte
 	err := s.db.QueryRow(ctx, q, code).Scan(
-		&m.ID, &m.Code, &m.DisplayName, &m.Category, &m.IconURL, &m.Description,
+		&m.ID, &m.Code, &m.PublicAlias, &m.DisplayName, &m.Category, &m.IconURL, &m.Description,
 		&tags, &runtime, &schema, &defaults, &price, &m.IsEnabled, &m.SortOrder)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -154,13 +164,13 @@ func (s *ModelService) GetFullByCode(ctx context.Context, code string) (*ModelFu
 	var m ModelFull
 	var tags, schema, defaults, price, extra, runtime []byte
 	err := s.db.QueryRow(ctx, `
-		SELECT id, code, display_name, new_api_model, new_api_endpoint, request_mode, category,
+		SELECT id, code, public_alias, display_name, new_api_model, new_api_endpoint, request_mode, category,
 			icon_url, description, tags, input_schema, default_params, new_api_extra_params, price_rule, runtime_rule,
 			retention_days, is_enabled, sort_order
-		FROM models WHERE code=$1 AND is_enabled=true
+		FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1)) AND is_enabled=true
 			AND (NOT EXISTS (SELECT 1 FROM model_routes configured_route WHERE configured_route.model_id=models.id)
 				OR EXISTS (SELECT 1 FROM model_routes enabled_route WHERE enabled_route.model_id=models.id AND enabled_route.is_enabled=true))`, code).Scan(
-		&m.ID, &m.Code, &m.DisplayName, &m.NewAPIModel, &m.NewAPIEndpoint, &m.RequestMode, &m.Category,
+		&m.ID, &m.Code, &m.PublicAlias, &m.DisplayName, &m.NewAPIModel, &m.NewAPIEndpoint, &m.RequestMode, &m.Category,
 		&m.IconURL, &m.Description, &tags, &schema, &defaults, &extra, &price, &runtime,
 		&m.RetentionDays, &m.IsEnabled, &m.SortOrder)
 	if err != nil {
@@ -2067,7 +2077,7 @@ func scanModels(rows pgx.Rows) ([]ModelDTO, error) {
 	for rows.Next() {
 		var m ModelDTO
 		var tags, runtime, schema, defaults, price []byte
-		if err := rows.Scan(&m.ID, &m.Code, &m.DisplayName, &m.Category, &m.IconURL, &m.Description,
+		if err := rows.Scan(&m.ID, &m.Code, &m.PublicAlias, &m.DisplayName, &m.Category, &m.IconURL, &m.Description,
 			&tags, &runtime, &schema, &defaults, &price, &m.IsEnabled, &m.SortOrder); err != nil {
 			return nil, err
 		}

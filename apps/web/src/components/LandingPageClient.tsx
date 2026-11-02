@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Bot, Boxes, Check, Clock3, Code2, Compass, Copy, Download, Headphones, ImageIcon, KeyRound, Mail, MessageCircle, MessagesSquare, Phone, Play, Send, UserRound, Wand2, X } from "lucide-react";
-import { siAlibabacloud, siAnthropic, siDeepseek, siFlux, siGooglegemini, siHuggingface, siKuaishou, type SimpleIcon } from "simple-icons";
+import { siAlibabacloud, siDeepseek, siKuaishou, type SimpleIcon } from "simple-icons";
 import { LoginModal } from "@/components/LoginModal";
 import { SiteBrand, useSiteBranding } from "@/components/SiteBrand";
 import { UILanguageSelector } from "@/components/UILanguageSelector";
@@ -14,37 +14,27 @@ import { hasUserSession } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { loadReferenceGalleryManifest, randomReferenceCases, referenceImageURL, referenceTagEntries, referenceTaxonomyLabel, type ReferenceGalleryItem } from "@/components/workbench/galleryReference";
 
-const MODEL_LOGOS = ["GPT", "Claude", "Gemini", "Sora", "Flux", "Kling", "MJ", "Qwen", "DeepSeek", "Runway"];
+const MODEL_LOGOS = ["HL", "CT", "NV", "PS", "MS", "Kling", "Qwen", "DeepSeek", "Wanxiang"];
 type TickerLogo = { name: string; color: string; icon?: SimpleIcon; mark?: string; variant?: "ring" | "spark" | "rune" | "waves" };
 const MODEL_TICKER: TickerLogo[] = [
-  { name: "OpenAI", mark: "∞", color: "#10A37F", variant: "ring" },
-  { name: "Claude", icon: siAnthropic, color: `#${siAnthropic.hex}` },
-  { name: "Gemini", icon: siGooglegemini, color: `#${siGooglegemini.hex}` },
+  { name: "HL 系列", mark: "HL", color: "#FF8711", variant: "ring" },
+  { name: "CT 系列", mark: "CT", color: "#4C6EF5", variant: "spark" },
+  { name: "NV 系列", mark: "NV", color: "#12B886", variant: "waves" },
+  { name: "PS 系列", mark: "PS", color: "#845EF7", variant: "rune" },
+  { name: "MS 系列", mark: "MS", color: "#F06595", variant: "spark" },
   { name: "DeepSeek", icon: siDeepseek, color: `#${siDeepseek.hex}` },
   { name: "Qwen", icon: siAlibabacloud, color: `#${siAlibabacloud.hex}` },
-  { name: "Flux", icon: siFlux, color: `#${siFlux.hex}` },
-  { name: "Kling", icon: siKuaishou, color: `#${siKuaishou.hex}` },
-  { name: "Hugging Face", icon: siHuggingface, color: `#${siHuggingface.hex}` },
-  { name: "Runway", mark: "R", color: "#00D8FF", variant: "waves" },
-  { name: "Midjourney", mark: "M", color: "#F5F7FB", variant: "rune" },
-  { name: "Stable Diffusion", mark: "S", color: "#2563EB", variant: "spark" },
-  { name: "Pika", mark: "P", color: "#FF4FD8", variant: "spark" },
-  { name: "Sora", mark: "S", color: "#F8FAFC", variant: "waves" },
-  { name: "Luma", mark: "L", color: "#7DD3FC", variant: "spark" },
-  { name: "Veo", mark: "V", color: "#34D399", variant: "ring" },
-  { name: "MiniMax", mark: "M", color: "#A78BFA", variant: "rune" },
-  { name: "Doubao", mark: "D", color: "#FB7185", variant: "spark" },
   { name: "GLM", mark: "G", color: "#60A5FA", variant: "ring" },
-  { name: "PixVerse", mark: "P", color: "#F97316", variant: "waves" },
+  { name: "Doubao", mark: "D", color: "#FB7185", variant: "spark" },
+  { name: "Kling", icon: siKuaishou, color: `#${siKuaishou.hex}` },
+  { name: "MiniMax", mark: "M", color: "#A78BFA", variant: "rune" },
   { name: "Hailuo", mark: "H", color: "#FACC15", variant: "spark" },
-  { name: "Grok", mark: "G", color: "#CBD5E1", variant: "rune" },
-  { name: "Hunyuan", mark: "H", color: "#38BDF8", variant: "ring" },
-  { name: "Ideogram", mark: "I", color: "#F472B6", variant: "spark" },
-  { name: "Recraft", mark: "R", color: "#A3E635", variant: "waves" },
   { name: "Wanxiang", mark: "W", color: "#818CF8", variant: "spark" },
   { name: "Kimi", mark: "K", color: "#22D3EE", variant: "ring" },
-  { name: "Mistral", mark: "M", color: "#F59E0B", variant: "rune" },
-  { name: "Perplexity", mark: "P", color: "#14B8A6", variant: "waves" },
+  { name: "Seedream", mark: "S", color: "#F97316", variant: "waves" },
+  { name: "Hunyuan", mark: "H", color: "#38BDF8", variant: "ring" },
+  { name: "PixVerse", mark: "P", color: "#F472B6", variant: "waves" },
+  { name: "Vidu", mark: "V", color: "#34D399", variant: "rune" },
 ];
 
 const LANDING_GALLERY_LIMIT = 12;

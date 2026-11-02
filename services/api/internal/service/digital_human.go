@@ -21,6 +21,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/starai/api/internal/billing"
+	"github.com/starai/api/internal/util"
 	"golang.org/x/net/websocket"
 )
 
@@ -484,8 +485,8 @@ func (s *ChatService) StartDigitalHumanSession(ctx context.Context, userID int64
 		avatar["idle_action"] = true
 	}
 	body := map[string]any{
-		"call_mode": viduMode,
-		"avatar":    avatar,
+		"call_mode":            viduMode,
+		"avatar":               avatar,
 		"audio":                map[string]any{"enable_transcription": true},
 		"llm":                  map[string]any{"max_tokens": 200, "temperature": 0.7},
 		"idle_timeout_seconds": 600,
@@ -1037,11 +1038,12 @@ func viduErrorMessage(payload []byte) string {
 		Reason  string `json:"reason"`
 	}
 	if json.Unmarshal(payload, &parsed) == nil {
+		// 上游业务错误原文可能带厂商名/地址，返回给用户前必须脱敏。
 		if parsed.Message != "" {
-			return "数字人服务拒绝了这次通话：" + parsed.Message
+			return "数字人服务拒绝了这次通话：" + util.SanitizeMessage(parsed.Message)
 		}
 		if parsed.Reason != "" {
-			return "数字人服务拒绝了这次通话：" + parsed.Reason
+			return "数字人服务拒绝了这次通话：" + util.SanitizeMessage(parsed.Reason)
 		}
 	}
 	return "数字人服务拒绝了这次通话"

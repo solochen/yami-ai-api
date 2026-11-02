@@ -7,7 +7,7 @@ import { useI18n } from "@/i18n/I18nProvider";
 import {
   ECOM_BATCH, ECOM_LANGUAGES, ECOM_LIMITS, ECOM_PLATFORMS, ECOM_RATIOS, ECOM_RESOLUTIONS,
   ECOM_SUITES, ECOM_VISUAL_STYLES, ECOM_MODULES, ECOM_STATUS_LABELS, ECOM_BATCH_STATUS_LABELS,
-  buildPlan, buildRefinePrompt, moduleById, suiteById, type EcomFormState,
+  buildPlan, buildRefinePrompt, moduleById, suiteById, type EcomFormState, type EcomModule,
 } from "@/lib/ecomFactory";
 
 type Project = { public_id: string; status: string; inputs: Record<string, any>; outputs: Record<string, any>; estimated_cost?: number; actual_cost?: number; error_message?: string | null };
@@ -55,6 +55,7 @@ export function EcomFactoryWorkspace({ workflowCode, workflowName, project, onPr
   const [batchKeepKeys, setBatchKeepKeys] = useState<string[]>([...ECOM_BATCH.defaultKeepKeys]);
   const [batchChangeKeys, setBatchChangeKeys] = useState<string[]>([...ECOM_BATCH.defaultChangeKeys]);
   const [quickPrompt, setQuickPrompt] = useState("");
+  const [moduleExtras, setModuleExtras] = useState<Record<string, string>>({});
   const [reverseBusy, setReverseBusy] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -80,15 +81,24 @@ export function EcomFactoryWorkspace({ workflowCode, workflowName, project, onPr
     visualStyle, customStyle, extraPrompt, copyEnabled,
     hasAssets: productAssets.length + referenceAssets.length > 0,
     batchPrompt, batchStrategy, batchSimilarity, batchVariation, batchKeepKeys, batchChangeKeys,
-  }), [productName, sellingPoints, audience, scenario, platform, language, visualStyle, customStyle, extraPrompt, copyEnabled, productAssets.length, referenceAssets.length, batchPrompt, batchStrategy, batchSimilarity, batchVariation, batchKeepKeys, batchChangeKeys]);
+    moduleExtras,
+  }), [productName, sellingPoints, audience, scenario, platform, language, visualStyle, customStyle, extraPrompt, copyEnabled, productAssets.length, referenceAssets.length, batchPrompt, batchStrategy, batchSimilarity, batchVariation, batchKeepKeys, batchChangeKeys, moduleExtras]);
 
   const plan = useMemo(() => buildPlan(form, mode, {
     selectedModuleIds, selectedSuite: suiteId, ratio, countPerModule, batchCount,
   }), [form, mode, selectedModuleIds, suiteId, ratio, countPerModule, batchCount]);
 
+  // 模块级必填资料：选中带 extraKey 的模块（尺寸/接口/参数）时资料必填，且需基于真实商品图。
+  const selectedExtraModules = mode === "suite"
+    ? selectedModuleIds.map(id => moduleById(id)).filter((m): m is EcomModule => !!m?.extraKey)
+    : [];
+  const missingExtraModules = selectedExtraModules.filter(m => !(moduleExtras[m.extraKey || ""] || "").trim());
+
   const canSubmit = !running && !busy && plan.length > 0 && (
     mode === "batch" ? batchPrompt.trim().length > 0
-      : productAssets.length > 0 || productName.trim() !== "" || sellingPoints.trim() !== ""
+      : (productAssets.length > 0 || productName.trim() !== "" || sellingPoints.trim() !== "")
+        && missingExtraModules.length === 0
+        && (selectedExtraModules.length === 0 || productAssets.length > 0)
   );
 
   const showToast = useCallback((text: string) => {
@@ -118,6 +128,13 @@ export function EcomFactoryWorkspace({ workflowCode, workflowName, project, onPr
     setCustomStyle(str(inputs.customStyle));
     setCopyEnabled(inputs.copyEnabled === true);
     setExtraPrompt(str(inputs.extraPrompt));
+    if (inputs.moduleExtras && typeof inputs.moduleExtras === "object") {
+      const restored: Record<string, string> = {};
+      for (const [k, v] of Object.entries(inputs.moduleExtras as Record<string, unknown>)) {
+        if (typeof v === "string" && v.trim()) restored[k] = v;
+      }
+      setModuleExtras(restored);
+    }
     if (str(inputs.selectedSuite) && suiteById(str(inputs.selectedSuite))) setSuiteId(str(inputs.selectedSuite));
     if (Array.isArray(inputs.selectedModuleIds) && inputs.selectedModuleIds.length) setSelectedModuleIds(inputs.selectedModuleIds.map(String));
     if (str(inputs.ratio) && (ECOM_RATIOS as readonly string[]).includes(str(inputs.ratio))) setRatio(str(inputs.ratio));
@@ -193,6 +210,9 @@ export function EcomFactoryWorkspace({ workflowCode, workflowName, project, onPr
     audience: audience.trim(), scenario: scenario.trim(),
     platform, language, visualStyle, customStyle: customStyle.trim(),
     extraPrompt: extraPrompt.trim(), copyEnabled,
+    moduleExtras: Object.fromEntries(
+      Object.entries(moduleExtras).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v !== "")
+    ),
     selectedSuite: suiteId, selectedModuleIds,
     ratio, resolution, countPerModule,
     batchPrompt: batchPrompt.trim(), batchCount, batchStrategy, batchSimilarity, batchVariation,
@@ -205,6 +225,15 @@ export function EcomFactoryWorkspace({ workflowCode, workflowName, project, onPr
 
   const submit = async () => {
     if (!canSubmit) {
+      if (mode !== "batch" && missingExtraModules.length > 0) {
+        const m = missingExtraModules[0];
+        setError(`请先填写「${m.label}」的${m.extraLabel || "模块资料"}，或取消勾选该模块`);
+        return;
+      }
+      if (mode !== "batch" && selectedExtraModules.length > 0 && productAssets.length === 0) {
+        setError("尺寸图、接口图和参数表需基于真实商品图生成，请先上传至少 1 张商品图");
+        return;
+      }
       setError(mode === "batch" ? "请先填写批量生成提示词" : "请先补充商品图、商品信息或选择生成模块");
       return;
     }
@@ -515,12 +544,40 @@ export function EcomFactoryWorkspace({ workflowCode, workflowName, project, onPr
                     <button key={m.id} type="button" onClick={() => toggleModule(m.id)}
                       className={`flex flex-col rounded-xl border px-3 py-2 text-left transition ${active ? "border-transparent text-white shadow-sm" : "border-gray-200 text-gray-700 hover:border-primary/50 dark:border-white/10 dark:text-gray-200"}`}
                       style={active ? { backgroundColor: m.accent } : undefined}>
-                      <span className="text-sm font-semibold">{m.shortLabel}</span>
+                      <span className="text-sm font-semibold">
+                        {m.shortLabel}
+                        {m.extraKey && <sup className={`ml-1 text-[10px] font-medium ${active ? "text-white/90" : "text-primary"}`}>需资料</sup>}
+                      </span>
                       <span className={`text-[11px] ${active ? "text-white/85" : "text-gray-400"}`}>{m.channel}</span>
                     </button>
                   );
                 })}
               </div>
+            </section>
+          )}
+
+          {mode === "suite" && selectedExtraModules.length > 0 && (
+            <section className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white/70 p-4 dark:border-white/10 dark:bg-white/5">
+              <div className={sectionTitle}>模块资料 · 选中以下模块时必填</div>
+              {selectedExtraModules.map(m => {
+                const value = moduleExtras[m.extraKey || ""] || "";
+                const missing = !value.trim();
+                return (
+                  <label key={m.id} className="flex flex-col gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    <span>
+                      {m.label} · {m.extraLabel}
+                      <b className={missing ? "ml-1.5 font-medium text-red-500" : "ml-1.5 font-medium text-emerald-600 dark:text-emerald-400"}>{missing ? "必填" : "已填写"}</b>
+                    </span>
+                    <textarea
+                      className={`${field} ${missing ? "border-red-300 focus:ring-red-200 dark:border-red-500/40" : ""}`}
+                      rows={3}
+                      placeholder={m.extraHint}
+                      value={value}
+                      onChange={e => setModuleExtras(prev => ({ ...prev, [m.extraKey || ""]: e.target.value }))} />
+                  </label>
+                );
+              })}
+              <p className="text-[11px] leading-relaxed text-gray-400">尺寸、接口与参数数据将以文本逐字渲染进图片，请提交前核对无误；这些模块需基于真实商品图生成。</p>
             </section>
           )}
 

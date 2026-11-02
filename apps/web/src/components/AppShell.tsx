@@ -4,18 +4,18 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bot, ChevronLeft, Compass, CreditCard, FileText, Home, LayoutGrid, Menu, Search, Settings, WalletCards, Wrench, X } from "lucide-react";
+import { Bot, ChevronLeft, Compass, CreditCard, FileText, Home, LayoutGrid, Menu, Search, Settings, WalletCards, X } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { api, apiCached, apiForLocaleCached } from "@/lib/api";
 import type { Model, User, Wallet } from "@starai/shared-types";
 import { clsx } from "clsx";
-import { agentDisplayCategory, AGENT_CATEGORIES, AGENT_CATEGORY_TAG, CATEGORIES, CATEGORY_TAG, MODEL_ICONS } from "./workbench/categoryMeta";
+import { BrandIcon } from "@/components/icons/brandIcons";
+import { agentBrowseMeta, agentDisplayCategory, AGENT_CATEGORIES, AGENT_CATEGORY_TAG, CATEGORIES, CATEGORY_TAG, MODEL_ICONS } from "./workbench/categoryMeta";
 import { DEFAULT_SITE_DESCRIPTION, SiteBrand, useSiteBranding } from "./SiteBrand";
 import { ReferralShareButton } from "./ReferralShareButton";
 import { useI18n } from "@/i18n/I18nProvider";
 import { WorkbenchTopActions } from "./WorkbenchTopActions";
 import { AgentIcon } from "./workbench/AgentIcon";
-import { ToolboxFilters, ToolboxPanel, type ToolboxAgent, type ToolboxCategory } from "./workbench/ToolboxPanel";
 import { galleryLanguageLabel, referenceTaxonomyLabel, type GalleryLanguage } from "./workbench/galleryReference";
 
 function WorkspaceLoading() {
@@ -36,10 +36,10 @@ const CreativeAgentWorkspace = dynamic(() => loadCreativeAgentWorkspace().then(m
 const DigitalHumanWorkspace = dynamic(() => import("./workbench/DigitalHumanWorkspace").then(module => module.DigitalHumanWorkspace), { loading: WorkspaceLoading });
 
 const PRIMARY_NAV = [
-  { id: "models", label: "大模型", icon: LayoutGrid },
-  { id: "agents", label: "智能体", icon: Bot },
-  { id: "toolbox", label: "工具箱", icon: Wrench },
-  { id: "gallery", label: "灵感广场", icon: Compass },
+  { id: "models", label: "大模型", icon: "nav.models" },
+  { id: "agents", label: "智能体", icon: "nav.agents" },
+  { id: "gallery", label: "灵感广场", icon: "nav.gallery" },
+  { id: "api", label: "开放 API", icon: "nav.api" },
 ] as const;
 
 const SUBPAGE_LINKS = [
@@ -53,7 +53,7 @@ const SUBPAGE_LINKS = [
   { href: "/app/api-docs", label: "API 文档", shortLabel: "API", icon: FileText },
 ] as const;
 
-type Section = "models" | "agents" | "toolbox" | "gallery";
+type Section = "models" | "agents" | "gallery";
 const INFINITE_CANVAS_CODE = "infinite_canvas";
 const VIRAL_REMAKE_CODE = "viral_remake";
 const ONE_CLICK_VIRAL_REMAKE_CODE = "one_click_viral_remake";
@@ -74,9 +74,11 @@ const CANVAS_WORKFLOW_CODES = new Set([
 ]);
 
 const MODEL_VENDORS: { id: string; label: string; pattern: RegExp }[] = [
-  { id: "openai", label: "OpenAI", pattern: /openai|\bgpt-|sora/i },
-  { id: "anthropic", label: "Anthropic", pattern: /anthropic|claude/i },
-  { id: "google", label: "Google", pattern: /google|gemini|\bveo\b/i },
+  { id: "hl", label: "HL 系列", pattern: /\bhl[- ]/i },
+  { id: "ct", label: "CT 系列", pattern: /\bct[- ]/i },
+  { id: "nv", label: "NV 系列", pattern: /\bnv[- ]/i },
+  { id: "ps", label: "PS 系列", pattern: /\bps[- ]/i },
+  { id: "ms", label: "MS 系列", pattern: /\bms[- ]/i },
   { id: "qwen", label: "Qwen", pattern: /\bqwen\b/i },
   { id: "zai", label: "Z.ai", pattern: /z-ai|\bglm\b/i },
   { id: "deepseek", label: "DeepSeek", pattern: /deepseek/i },
@@ -85,10 +87,6 @@ const MODEL_VENDORS: { id: string; label: string; pattern: RegExp }[] = [
   { id: "bytedance", label: "ByteDance", pattern: /bytedance|seedream|seedance|字节/i },
   { id: "alibaba", label: "Alibaba", pattern: /alibaba|\bwan\b|happyhorse/i },
   { id: "kling", label: "Kling", pattern: /kling|kwaivgi/i },
-  { id: "runway", label: "Runway", pattern: /runway|\baleph\b|gen-4/i },
-  { id: "bfl", label: "Black Forest Labs", pattern: /black-forest|flux/i },
-  { id: "xai", label: "xAI", pattern: /\bx-?ai\b|grok/i },
-  { id: "suno", label: "Suno", pattern: /suno/i },
 ];
 
 function modelVendorId(model: { code: string; display_name: string; tags?: string[] }) {
@@ -113,6 +111,7 @@ interface AgentItem {
   description?: string;
   icon?: string;
   category?: string;
+  display_config?: unknown;
   nodes: { id: string; name: string }[];
 }
 
@@ -187,7 +186,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isMobile = useIsMobile();
 
-  const [section, setSection] = useState<Section>(selectedAgentCode ? "agents" : pathname === "/app/toolbox" ? "toolbox" : "models");
+  const [section, setSection] = useState<Section>(selectedAgentCode ? "agents" : "models");
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [modelVendor, setModelVendor] = useState("all");
@@ -204,9 +203,6 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
   const [agentsLoaded, setAgentsLoaded] = useState(false);
   const [agentSearch, setAgentSearch] = useState("");
   const [agentCategory, setAgentCategory] = useState("all");
-  const [toolboxAgents, setToolboxAgents] = useState<ToolboxAgent[]>([]);
-  const [toolboxCategory, setToolboxCategory] = useState<ToolboxCategory>("all");
-  const [toolboxQuery, setToolboxQuery] = useState("");
   const [activeAgentCode, setActiveAgentCode] = useState<string | undefined>(selectedAgentCode);
 
   const [galleryTags, setGalleryTags] = useState<GalleryTag[]>([]);
@@ -243,7 +239,11 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
 
   const primaryNavLabel = useCallback(
     (id: string) =>
-      id === "models" ? t("nav.models") : id === "agents" ? t("nav.agents") : id === "toolbox" ? t("nav.toolbox") : id === "gallery" ? t("nav.gallery") : id,
+      id === "models" ? t("nav.models")
+        : id === "agents" ? t("nav.agents")
+          : id === "gallery" ? t("nav.gallery")
+            : id === "api" ? t("nav.openApi")
+              : id,
     [t]
   );
 
@@ -424,18 +424,10 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
     return () => { active = false; };
   }, [isWorkbench, section, isMobile, locale]);
 
+  // 工具箱已并入智能体，旧链接统一回到工作台，避免 404 或空白页。
   useEffect(() => {
-    if (pathname === "/app/toolbox") setSection("toolbox");
-  }, [pathname]);
-
-  useEffect(() => {
-    if (!isWorkbench || section !== "toolbox") return;
-    let active = true;
-    apiForLocaleCached<{ items: ToolboxAgent[] }>("/api/agents", locale)
-      .then((result) => { if (active) setToolboxAgents(Array.isArray(result?.items) ? result.items : []); })
-      .catch(() => { if (active) setToolboxAgents([]); });
-    return () => { active = false; };
-  }, [isWorkbench, locale, section]);
+    if (pathname === "/app/toolbox") router.replace("/app");
+  }, [pathname, router]);
 
   useEffect(() => {
     if (!isWorkbench || section !== "gallery" || galleryMode !== "community") return;
@@ -473,7 +465,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
     const source = agentsLoaded ? agents : [canvasAgent, ...agents.filter((item) => item.code !== INFINITE_CANVAS_CODE)];
     return source.filter((a) => {
       if (a.code === GENERAL_CREATIVE_AGENT_CODE) return false;
-      if (agentCategory !== "all" && agentDisplayCategory(a.code, a.category) !== agentCategory) return false;
+      if (agentCategory !== "all" && agentDisplayCategory(a.code, a.category, a.display_config) !== agentCategory) return false;
       if (q && !a.name.toLowerCase().includes(q) && !a.description?.toLowerCase().includes(q)) return false;
       return true;
     });
@@ -485,14 +477,6 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
     const q = search.trim().toLowerCase();
     return !q || `${creativeAgent.name} ${creativeAgent.description || ""} agent 通用智能体`.toLowerCase().includes(q);
   }, [category, creativeAgent, modelVendor, search]);
-
-  const showApiDocEntry = useMemo(() => {
-    if (!apiDocsVisible) return false;
-    if (agentCategory !== "all" && agentCategory !== "api") return false;
-    const q = agentSearch.trim().toLowerCase();
-    if (!q) return true;
-    return "开放api文档 api文档 open api documentation 开发者接口".includes(q);
-  }, [agentCategory, agentSearch, apiDocsVisible]);
 
   const useGalleryTemplate = (code: string | undefined, prompt: string) => {
     setSection("models");
@@ -524,8 +508,6 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
             const agent = agents.find((a) => a.code === activeAgentCode);
             return agent ? td(`agent.${agent.code}.name`, agent.name) : t("nav.agents");
           })()
-        : section === "toolbox"
-          ? t("nav.toolbox")
         : t("nav.gallery");
 
   const renderSidebarBody = (opts?: { compact?: boolean; showFooter?: boolean }) => {
@@ -535,7 +517,6 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
     <div className="mcdl-sidebar-body flex flex-col h-full min-h-0">
       <div className="mcdl-sidebar-nav px-2.5 py-3.5 grid grid-cols-4 gap-1 shrink-0">
         {PRIMARY_NAV.map((item) => {
-          const Icon = item.icon;
           const active = item.id === section;
           return (
             <button
@@ -547,6 +528,11 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                 if (item.id === "agents") preloadAgentWorkspace(activeAgentCode || INFINITE_CANVAS_CODE);
               }}
               onClick={() => {
+                if (item.id === "api") {
+                  router.push("/app/api-docs");
+                  closeDrawer();
+                  return;
+                }
                 setSection(item.id as Section);
                 if (item.id === "models") {
                   setActiveAgentCode(undefined);
@@ -565,12 +551,6 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                   preloadAgentWorkspace(code || INFINITE_CANVAS_CODE);
                   router.push(`/app/agents/${encodeURIComponent(code || INFINITE_CANVAS_CODE)}`);
                 }
-                if (item.id === "toolbox") {
-                  setSection("toolbox");
-                  router.push("/app/toolbox");
-                  closeDrawer();
-                  return;
-                }
                 if (item.id === "gallery") {
                   router.push("/app");
                 }
@@ -581,7 +561,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                 active ? "bg-primary/10 text-primary font-medium" : "text-gray-400 hover:bg-gray-50"
               )}
             >
-              <Icon size={20} />
+              <BrandIcon name={item.icon} className="h-[22px] w-[22px]" />
               {!compact && <span className="w-full break-words text-center leading-4">{primaryNavLabel(item.id)}</span>}
             </button>
           );
@@ -664,7 +644,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                 )}
               >
                 <div className="flex gap-2">
-                <div className="tech-icon flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-200 bg-gray-950 text-lg text-amber-300 shadow-sm dark:border-amber-400/20"><AgentIcon code={creativeAgent.code} value={creativeAgent.icon} fallback="✦" alt={td(`agent.${creativeAgent.code}.name`, creativeAgent.name)} /></div>
+                <div className="tech-icon agent-icon-tile flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border"><AgentIcon code={creativeAgent.code} value={creativeAgent.icon} fallback="✦" alt={td(`agent.${creativeAgent.code}.name`, creativeAgent.name)} /></div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-1">
                       <span className="tech-title min-w-0 flex-1 line-clamp-2 text-xs font-semibold leading-4 text-gray-900 dark:text-gray-100" title={td(`agent.${creativeAgent.code}.name`, creativeAgent.name)}>{td(`agent.${creativeAgent.code}.name`, creativeAgent.name)}</span>
@@ -733,10 +713,7 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
       {section === "agents" && (
         <>
           <div className="px-2.5 pb-1">
-            <div
-              className="grid gap-1"
-              style={{ gridTemplateColumns: `repeat(${AGENT_CATEGORIES.length}, minmax(0, 1fr))` }}
-            >
+            <div className="flex flex-wrap gap-1">
               {AGENT_CATEGORIES.map((cat) => (
                 <button
                   key={cat.code}
@@ -749,13 +726,14 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                     setAgentCategory(cat.code);
                   }}
                   className={clsx(
-                    "px-1 py-1.5 rounded-full text-[11px] leading-none text-center truncate transition",
+                    "inline-flex shrink-0 items-center gap-1 px-2 py-1.5 rounded-full text-[11px] leading-none whitespace-nowrap transition",
                     agentCategory === cat.code
-                      ? "bg-gray-900 text-white"
-                      : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                      ? "bg-gray-900 text-white dark:bg-primary/15 dark:text-primary"
+                      : "bg-gray-50 text-gray-500 hover:bg-gray-100 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10"
                   )}
                   title={t(cat.labelKey)}
                 >
+                  <BrandIcon name={cat.icon} className="h-3.5 w-3.5 shrink-0" />
                   {t(cat.labelKey)}
                 </button>
               ))}
@@ -773,39 +751,15 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-2.5 space-y-2 min-h-0">
-            {showApiDocEntry && (
-              <button
-                key="api-doc-entry"
-                data-active="false"
-                onClick={() => {
-                  router.push("/app/api-docs");
-                  closeDrawer();
-                }}
-                className="tech-list-card w-full text-left p-3 rounded-2xl transition duration-200 bg-sky-50/80 border-2 border-sky-100 hover:bg-white hover:border-sky-200 dark:bg-white/5 dark:border-white/10 dark:hover:bg-white/10 dark:hover:border-white/20"
-              >
-                <div className="flex gap-3">
-                  <div className="tech-icon w-10 h-10 rounded-xl bg-sky-900 text-white flex items-center justify-center text-xs font-bold shrink-0 dark:bg-sky-500/20 dark:text-sky-200">
-                    API
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-semibold text-sm text-gray-900 truncate dark:text-gray-100">{t("nav.openApiDocs")}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 bg-sky-100 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300">
-                        API
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-1 line-clamp-2 leading-relaxed">
-                      {t("nav.openApiDocsDesc")}
-                    </p>
-                  </div>
-                </div>
-              </button>
-            )}
             {filteredAgents.map((a) => {
               const selected = a.code === activeAgentCode;
-              const displayCategory = agentDisplayCategory(a.code, a.category);
+              const displayCategory = agentDisplayCategory(a.code, a.category, a.display_config);
+              const browse = agentBrowseMeta(a);
               const agentName = a.code === INFINITE_CANVAS_CODE ? t("canvas.title") : td(`agent.${a.code}.name`, a.name);
-              const agentDesc = a.code === INFINITE_CANVAS_CODE ? t("canvas.description") : td(`agent.${a.code}.description`, a.description || "");
+              const agentDesc = a.code === INFINITE_CANVAS_CODE
+                ? t("canvas.description")
+                : td(`agent.${a.code}.description`, browse?.subtitle || a.description || "");
+              const recommended = Array.isArray(browse?.badges) && browse!.badges!.includes("recommended");
               return (
                 <button
                   key={a.code}
@@ -827,12 +781,15 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                   )}
                 >
                   <div className="flex gap-2">
-                    <div className="tech-icon w-10 h-10 rounded-xl bg-gray-900 text-white flex items-center justify-center text-lg shrink-0 overflow-hidden">
+                    <div className="tech-icon agent-icon-tile flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border">
                       <AgentIcon code={a.code} value={a.icon} alt={agentName} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-1">
                         <span className="tech-title min-w-0 flex-1 line-clamp-2 text-xs font-semibold leading-4 text-gray-900 dark:text-gray-100" title={agentName}>{agentName}</span>
+                        {recommended && (
+                          <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{t("common.recommended")}</span>
+                        )}
                         {(() => {
                           const tag = AGENT_CATEGORY_TAG[displayCategory];
                           return tag ? (
@@ -848,21 +805,11 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                 </button>
               );
             })}
-            {filteredAgents.length === 0 && !showApiDocEntry && (
+            {filteredAgents.length === 0 && (
               <div className="text-center text-xs text-gray-400 py-8">{t("common.noAgents")}</div>
             )}
           </div>
         </>
-      )}
-
-      {section === "toolbox" && (
-        <ToolboxFilters
-          agents={toolboxAgents}
-          category={toolboxCategory}
-          query={toolboxQuery}
-          onCategory={setToolboxCategory}
-          onQuery={setToolboxQuery}
-        />
       )}
 
       {section === "gallery" && (
@@ -1236,10 +1183,6 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                   {renderSidebarBody({ showFooter: false })}
                 </div>
               ))}
-
-            {section === "toolbox" && (
-              <ToolboxPanel agents={toolboxAgents} category={toolboxCategory} query={toolboxQuery} />
-            )}
 
             {section === "gallery" && (
               <GalleryPanel

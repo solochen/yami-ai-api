@@ -8,7 +8,7 @@ const REFERENCE_RAW_ROOT =
   "https://raw.githubusercontent.com/freestylefly/awesome-gpt-image-2/main/data";
 // Version the browser cache with the current product name so a previously
 // cached empty catalog cannot hide newly published reference cases.
-const REFERENCE_CACHE_KEY = "yihangai:reference-gallery:v3";
+const REFERENCE_CACHE_KEY = "yihangai:reference-gallery:v4";
 const REFERENCE_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 let referenceManifestPromise: Promise<ReferenceGalleryManifest> | null = null;
@@ -104,7 +104,8 @@ const LANGUAGE_LABELS: Record<string, Record<GalleryLanguage, string>> = {
 
 export function referenceImageURL(path: string) {
   const value = String(path || "").trim();
-  if (!value || /^https?:\/\//i.test(value)) return value;
+  // 绝对地址与站内相对路径（/media/...）都直接使用；仅裸文件名才回落到 GitHub 原始地址。
+  if (!value || /^(https?:\/\/|\/)/i.test(value)) return value;
   return `${REFERENCE_RAW_ROOT}/${value.replace(/^\/?(?:data\/)?/, "").replace(/^images\//, "images/")}`;
 }
 

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="HL">
+  <defs>
+    <linearGradient id="hl-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1C1917"/>
+      <stop offset="1" stop-color="#2B2522"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#hl-bg)"/>
+  <circle cx="32" cy="30" r="7.5" fill="#FF8711"/>
+  <g stroke="#FF8711" stroke-width="2" stroke-linecap="round" opacity="0.85">
+    <path d="M32 14v4"/>
+    <path d="M32 42v4"/>
+    <path d="M16 30h4"/>
+    <path d="M44 30h4"/>
+    <path d="M20.7 18.7l2.8 2.8"/>
+    <path d="M40.5 38.5l2.8 2.8"/>
+    <path d="M43.3 18.7l-2.8 2.8"/>
+    <path d="M23.5 38.5l-2.8 2.8"/>
+  </g>
+  <text x="32" y="58" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="1.5" fill="#F5F0EA">HL</text>
+</svg>

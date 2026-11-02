@@ -190,6 +190,8 @@ func (s *OpsService) ListNotifications(ctx context.Context, userID int64) ([]Not
 			return nil, 0, err
 		}
 		n.CreatedAt = created.Format(time.RFC3339)
+		// 通知内容来自 worker 的失败文案，历史数据可能夹带上游地址。
+		n.Content = util.SanitizeMessage(n.Content)
 		items = append(items, n)
 	}
 	var unread int

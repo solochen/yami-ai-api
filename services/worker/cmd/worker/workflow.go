@@ -745,11 +745,12 @@ func processSimpleAgentWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL
 	candidateID := stringAny(confirmed["candidate_id"])
 	finalPrompt := firstNonEmpty(stringAny(confirmed["prompt"]), stringAny(confirmed["final_prompt"]), selectedAnalysisPrompt(analysis, candidateID), firstUserPrompt(inputs))
 	generationInputs := mergeAgentGenerationInputs(inputs, analysis, candidateID, confirmed)
-	if _, done := outputs["media_tasks"]; done && stringAny(outputs["current_step"]) == "result" {
+	if _, done := outputs["media_tasks"]; done && stringAny(outputs["current_step"]) == "result" && !hasRegenerateDetailSections(generationInputs) {
 		return completeSimpleAgentWorkflow(ctx, pool, p, publicID, estimated, outputs)
 	}
 
-	if stringAny(runtimeCfg["generation_type"]) != "video" && isCommerceScene(stringAny(generationInputs["creative_scene"])) {
+	// 单模块重生成只补一张图，规划与校对在上一次已完成，不能重复跑（重复校对可能失败并使整页作废）。
+	if stringAny(runtimeCfg["generation_type"]) != "video" && isCommerceScene(stringAny(generationInputs["creative_scene"])) && !hasRegenerateDetailSections(generationInputs) {
 		resolved, resolveErr := resolveCommerceBeforeGeneration(ctx, pool, baseURL, token, p.ProjectID, runtimeCfg, generationInputs, analysis, confirmed, finalPrompt, outputs)
 		if resolveErr != "" {
 			return failWorkflow(ctx, pool, p, publicID, estimated, "生图前需求校对失败："+resolveErr)
@@ -797,7 +798,7 @@ func processSimpleAgentWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL
 		edited := firstNonEmpty(stringAny(confirmed["prompt"]), stringAny(confirmed["final_prompt"]))
 		changed := edited != "" && edited != selectedAnalysisPrompt(analysis, candidateID)
 		changed = changed || (candidateID != "" && candidateID != stringAny(analysis["recommendation"]))
-		if changed && !boolAny(generationInputs["_commerce_resolved"]) {
+		if changed && !boolAny(generationInputs["_commerce_resolved"]) && !hasRegenerateDetailSections(generationInputs) {
 			generationInputs["user_prompt"] = firstNonEmpty(stringAny(inputs["user_prompt"]), firstUserPrompt(inputs)) + "\n用户已确认的整页修改要求（请重新规划每个模块）：\n" + finalPrompt
 			revision := fmt.Sprintf("%x", sha256.Sum256([]byte(candidateID+"\n"+finalPrompt)))
 			if stringAny(outputs["detail_revision"]) != revision {
@@ -815,6 +816,10 @@ func processSimpleAgentWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL
 		previousDetailPage, _ := mapAny(outputs["detail_page"])
 		mediaTasks, detailPage, errMsg = runAgentDetailPageTasks(ctx, pool, baseURL, token, p.ProjectID, p.UserID, publicID, runtimeCfg, generationInputs, analysis, finalPrompt, previousDetailPage)
 		outputs["detail_page"] = detailPage
+		// 单模块重生成已完成，清掉标记，避免下次普通重试再次强制重跑该模块。
+		if errMsg == "" && hasRegenerateDetailSections(generationInputs) {
+			_, _ = pool.Exec(ctx, `UPDATE workflow_projects SET inputs = inputs - 'regenerate_detail_sections' WHERE id=$1`, p.ProjectID)
+		}
 	} else {
 		mediaTasks, errMsg = runAgentMediaTasks(ctx, pool, baseURL, token, p.ProjectID, p.UserID, publicID, runtimeCfg, generationInputs, finalPrompt)
 	}
@@ -2379,7 +2384,7 @@ func executeWorkerLLMWithMedia(ctx context.Context, pool *pgxpool.Pool, baseURL,
 				allowed = override
 			}
 			if !allowed {
-				failures = append(failures, fmt.Sprintf("线路 %s 未启用图片理解，已跳过", route.UpstreamModel))
+				failures = append(failures, "该线路未启用图片理解，已跳过")
 				continue
 			}
 		}
@@ -2436,7 +2441,7 @@ func executeWorkerLLMWithMedia(ctx context.Context, pool *pgxpool.Pool, baseURL,
 				if gatewayErrorText(responseBody) != "" {
 					logWorkerRouteAttempt(ctx, pool, requestID, model.ID, route.ID, attempt, "HTTP_200_ERROR_BODY", status, latencyMS)
 					markWorkerRouteFailure(ctx, pool, route.ID, poolEnabled)
-					failures = append(failures, fmt.Sprintf("%s (HTTP 200 错误体): %s", firstNonEmpty(route.UpstreamModel, model.Code), gatewayErrorText(responseBody)))
+					failures = append(failures, fmt.Sprintf("线路 %d (HTTP 200 错误体): %s", route.ID, gatewayErrorText(responseBody)))
 					break
 				}
 				markWorkerRouteSuccess(ctx, pool, route.ID)
@@ -2465,7 +2470,7 @@ func executeWorkerLLMWithMedia(ctx context.Context, pool *pgxpool.Pool, baseURL,
 			if canFailover {
 				markWorkerRouteFailure(ctx, pool, route.ID, poolEnabled)
 			}
-			failures = append(failures, fmt.Sprintf("%s (HTTP %d): %s", firstNonEmpty(route.UpstreamModel, model.Code), status, message))
+			failures = append(failures, fmt.Sprintf("线路 %d (HTTP %d): %s", route.ID, status, message))
 			if !canFailover {
 				return workerLLMResult{}, fmt.Errorf("上游拒绝请求：HTTP %d %s", status, message)
 			}
@@ -2478,7 +2483,7 @@ func executeWorkerLLMWithMedia(ctx context.Context, pool *pgxpool.Pool, baseURL,
 	if len(failures) == 0 {
 		return workerLLMResult{}, errors.New("没有可用线路，线路可能已禁用、正在冷却或被其他请求探测")
 	}
-	return workerLLMResult{}, errors.New(strings.Join(failures, "；"))
+	return workerLLMResult{}, errors.New(redactUpstreamText(strings.Join(failures, "；")))
 }
 
 func workerLLMRequestTimeout(ctx context.Context, defaultTimeout time.Duration, routeTimeoutSeconds int) time.Duration {
@@ -2603,9 +2608,10 @@ asset_notes 必须按参考图序号区分商品依据与人物/姿态依据，�
 		detailPlan = `
 	这是商品详情长图任务。除 candidates 外必须额外返回 design_system 和 detail_sections，数量严格遵循 detail_section_count（4–8，未提供时5）。默认五张按“商品首屏 → 有依据的购买理由 → 可见细节证据 → 真实使用情境 → 商品识别收尾”组织；规格、多色可选、包装与品牌模块仅在用户资料或参考图明确证明时替换对应模块。每个模块只表达一个核心信息，不重复主图。按品类调整，服饰不套用护肤功效，普通商品不虚构内部原理。候选方案是整页视觉方向，不能把“材质特写”和“功能展示”当作互斥方案。
 	design_system 是全页唯一的视觉系统，结构为：{"theme":"具体创意概念","palette":{"background":"#RRGGBB","primary":"#RRGGBB","accent":"#RRGGBB","text":"#RRGGBB"},"background":"统一背景与渐变规则","surface":"卡片材质、圆角和阴影规则","decorations":"贯穿全页的线条、光斑或几何母题","icon_style":"统一的无字图标风格","typography":"后期排版的字体气质与层级","lighting":"统一光线方向和质感","product_treatment":"商品尺度、抠图或场景融合规则","page_flow":"模块上下边缘回到同一基础底色，装饰走势可连续衔接"}。颜色必须使用明确十六进制值，不用“高级感”等空泛词。所有模块必须逐项沿用同一设计系统，不能更换色板、卡片材质、图标语言、装饰母题、光线或商品处理方式；变化只来自景别、左右布局和信息节奏。每个模块上下边缘约6%–8%使用palette.background基础底色，不放商品、文字卡片或硬边框，拼接后必须像同一张连续长页而不是多张海报堆叠。
-	每个 image_prompt 规划一张完整的电商视觉模块底图，而不是裸摄影素材。允许生成与design_system一致的渐变、空白信息卡片、无字功能图标、光斑、线条、几何装饰和局部特写框；这些元素必须服务当前已确认卖点，不得捏造认证、参数或功效。禁止九宫格、联系表或把整页缩进一张图；仅细节证据模块可使用有明确层级的2–3个局部近景，且只能展示参考图直接可见的部位。首屏用完整商品或上身大图，细节用局部特写，场景用完整场景，阅读节奏有疏密变化。没有规格依据时用已观察到的外观细节收尾，不制作空参数表。
+	每个 image_prompt 规划一张完整的电商视觉模块底图，而不是裸摄影素材。以商业摄影质感为主：真实棚拍布光、可信材质与自然落影；装饰只用 design_system 的色板、极淡渐变与必要的光晕/线条延续页面节奏，不要图标阵列、卡片墙、贴纸边框或网格。装饰只服务当前已确认卖点，不得捏造认证、参数或功效。禁止九宫格、联系表或把整页缩进一张图；仅细节证据模块可使用有明确层级的2–3个局部近景，且只能展示参考图直接可见的部位。首屏用完整商品或上身大图，细节用局部特写，场景用完整场景，阅读节奏有疏密变化。没有规格依据时用已观察到的外观细节收尾，不制作空参数表。
 	copy_title 与 copy_points 必须是可直接用于排版的真实文案，不是“核心卖点”等占位指令；无依据时留空，禁止伪造销量、对比数据、效果或赠品。用户已明确提供商品名称时，首屏 copy_title 必须逐字使用该名称；目标受众、发布渠道和视觉风格只是创作条件，不得扩写成“首选”“必备”“推荐”等商品卖点。标题控制在12字内，说明最多2条、每条20字内；不写“新款上市”“优质面料”“触感舒适”等未经证实的套话。模型底图不得绘制这些文案；系统会在copy_placement对应的干净安全区准确排版。
 	每个模块结构：{"id":"detail_01","type":"hero|benefit|material|feature|usage|specification|closing","title":"模块标题","objective":"本模块目的","layout":"hero_center|split_left|split_right|detail_grid|scene_full|closing_center","copy_placement":"top|left|right|bottom","copy_title":"成图标题","copy_points":["已确认卖点"],"image_prompt":"描述商品、完整模块构图、共享设计系统、装饰和与copy_placement一致的无字安全区；不要求图片模型绘制文字"}。
+	image_prompt 按「主体与可见特征 → 景别 → 构图与相机角度 → 布光 → 材质质感 → 背景 → 文字留白位置」顺序写成可执行的摄影指令，使用具体参数（如 45° 左上柔光、浅景深、主体占画面 60%），不要堆"高级感/大气/质感"等形容词。参考图可见的结构、接口、Logo 与颜色必须写进 image_prompt；看不见的部位不描述成已知事实。
 	必须保持商品外观、颜色、包装、Logo位置和比例跨模块一致；不得编造用户未提供的成分、尺寸、容量、认证或功效。没有可靠参数时改用外观细节收尾，不制作规格模块或空白参数表。功效、触感和成分文案必须逐字引用用户提供的完整事实句；不能从图片推出亲肤、透气、保暖、弹性、适合季节等结论。`
 	}
 	if creativeScene == "auto" {
@@ -2716,6 +2722,20 @@ func agentCreativeSceneInstruction(code string) string {
 	}
 }
 
+// commercePhotographySpec 把"材质和光影是灵魂"落成可执行参数：
+// 只堆形容词的提示词会让图片看起来廉价，具体镜头/布光/材质描述才会出商业摄影质感。
+func commercePhotographySpec(sceneCode string) string {
+	switch sceneCode {
+	case "main_image", "":
+		return "PHOTOGRAPHY SPEC（商业产品棚拍）：镜头 50–85mm 定焦视角、f/8 左右使主体全清晰，轻微真实景深；布光 45° 左上柔光箱主光 + 右侧白色反光板补光 + 暗部有细节，商品与地面/背景之间自然接触落影，方向统一；材质按真实表面还原——金属拉丝与镜面高光、玻璃通透与折射、织物纤维、塑料哑光，禁止塑料感、平涂、贴纸感和过度锐化；背景默认纯白或极浅中性灰（#FFFFFF–#F2F2F2）且干净无杂物，用户明确要求场景或深色背景时才改变；商品占画面 55%–75%，居中或三分构图并留出平台安全边距。"
+	case "scene_image":
+		return "PHOTOGRAPHY SPEC（生活方式商业摄影）：镜头 35–50mm 纪实视角、f/2.8 左右浅景深；光线为自然窗光或柔和环境光，主体与场景亮度平衡、不出现硬闪；商品表面质感优先于环境装饰；商品是视觉主体、占画面 40%–60%，环境只提供真实使用情境；手部/身体与商品接触关系自然，落影与地面材质一致，不出现悬浮或穿模。"
+	case "marketing_poster":
+		return "PHOTOGRAPHY SPEC（广告级静物）：中长焦压缩背景、主体轮廓清晰；影棚硬光与柔光组合制造质感对比，高光与反射明确；构图单一视觉焦点，标题安全区干净可读；整体像品牌广告大片，不堆促销贴片、不铺满文案。"
+	}
+	return ""
+}
+
 func agentGenerationParamSummary(inputs map[string]interface{}) string {
 	items := []string{}
 	if s := generationLanguageLabel(inputs); s != "" {
@@ -2772,6 +2792,11 @@ func agentGenerationParamSummary(inputs map[string]interface{}) string {
 
 func agentPromptWithScene(prompt string, inputs map[string]interface{}) string {
 	if boolAny(inputs["_commerce_resolved"]) {
+		// 校对后的候选提示词已经含商品细节，但商业摄影的镜头/布光/材质参数
+		// 仍需固定注入，否则出图容易退回平涂或廉价质感。
+		if spec := commercePhotographySpec(stringAny(inputs["creative_scene"])); spec != "" {
+			prompt = strings.TrimSpace(prompt) + "\n\n" + spec
+		}
 		return applyImageGenerationPolicies(prompt, inputs)
 	}
 	sceneCode := stringAny(inputs["creative_scene"])
@@ -2786,6 +2811,9 @@ func agentPromptWithScene(prompt string, inputs map[string]interface{}) string {
 		if sceneCode == "main_image" || sceneCode == "scene_image" || sceneCode == "marketing_poster" || sceneCode == "" {
 			sections = append(sections, commerceTransformationInstruction)
 		}
+	}
+	if spec := commercePhotographySpec(sceneCode); spec != "" {
+		sections = append(sections, spec)
 	}
 	if cleanPrompt := strings.TrimSpace(prompt); cleanPrompt != "" {
 		sections = append(sections, cleanPrompt)
@@ -2809,6 +2837,15 @@ func applyImageGenerationPolicies(prompt string, inputs map[string]interface{}) 
 	}
 	if strings.Contains(cleanPrompt, "TEXT RENDERING POLICY:") {
 		return cleanPrompt
+	}
+	if boolAny(inputs["needs_text"]) {
+		// 尺寸/接口/参数表这类模块，文字本身就是交付物：改用「只渲染给定资料」的策略，
+		// 否则会被默认的「禁止添加任何文字」压制。
+		policy := "TEXT RENDERING POLICY: The text given in the module data is required content. Render every label, number, unit and parameter verbatim, keep each character accurate, and never invent, translate, reorder or omit entries. Do not add marketing copy, slogans, watermarks, QR codes or any text beyond the provided data."
+		if cleanPrompt == "" {
+			return policy
+		}
+		return policy + "\n\n" + cleanPrompt
 	}
 	if generationRequestsAddedText(cleanPrompt, inputs) {
 		return applyGenerationLanguage(cleanPrompt, inputs)
@@ -4197,6 +4234,9 @@ func agentContentImageCards(post, inputs map[string]interface{}, basePrompt stri
 }
 
 func runAgentDetailPageTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, token string, projectID, userID int64, publicID string, runtimeCfg, inputs, analysis map[string]interface{}, basePrompt string, previousPage map[string]interface{}) ([]map[string]interface{}, map[string]interface{}, string) {
+	// 用户在结果页点「重新生成此模块」时，只强制重跑指定的模块，
+	// 其余模块继续按签名复用，最后重新拼接长图，避免整页重做。
+	forced := regenerateDetailSectionSet(inputs)
 	modelCode := firstNonEmpty(stringAny(inputs["image_model_code"]), stringAny(runtimeCfg["generation_model_code"]))
 	if modelCode == "" {
 		return nil, map[string]interface{}{"status": "failed"}, "未配置生成模型"
@@ -4242,20 +4282,22 @@ func runAgentDetailPageTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, t
 		}
 		signature := detailSectionSignature(modelCode, taskInput)
 		section["signature"] = signature
-		if previous, ok := reusableDetailSection(previousPage, stringAny(section["id"]), signature); ok {
-			output := map[string]interface{}{
-				"image_url":        stringAny(previous["image_url"]),
-				"source_image_url": stringAny(previous["source_image_url"]),
-				"images":           []map[string]interface{}{{"url": stringAny(previous["image_url"])}},
+		if !forced[stringAny(section["id"])] {
+			if previous, ok := reusableDetailSection(previousPage, stringAny(section["id"]), signature); ok {
+				output := map[string]interface{}{
+					"image_url":        stringAny(previous["image_url"]),
+					"source_image_url": stringAny(previous["source_image_url"]),
+					"images":           []map[string]interface{}{{"url": stringAny(previous["image_url"])}},
+				}
+				reused := map[string]interface{}{
+					"task_no": firstNonEmpty(stringAny(previous["task_no"]), "reused_"+stringAny(section["id"])),
+					"status":  "succeeded", "progress": 100, "output": output,
+					"detail_section": section, "reused": true,
+				}
+				jobs[i] = detailJob{reused: reused, signature: signature}
+				appendWorkflowMediaTask(ctx, pool, projectID, reused)
+				continue
 			}
-			reused := map[string]interface{}{
-				"task_no": firstNonEmpty(stringAny(previous["task_no"]), "reused_"+stringAny(section["id"])),
-				"status":  "succeeded", "progress": 100, "output": output,
-				"detail_section": section, "reused": true,
-			}
-			jobs[i] = detailJob{reused: reused, signature: signature}
-			appendWorkflowMediaTask(ctx, pool, projectID, reused)
-			continue
 		}
 		taskEstimated := estimateModelCostByIDWorker(ctx, pool, modelID, taskInput, 0, 0, 0, 0)
 		err := insertWorkflowMediaTask(ctx, pool, projectID, userID, modelID, taskNo, "image", taskInput, taskEstimated)
@@ -4275,6 +4317,19 @@ func runAgentDetailPageTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, t
 		}
 		if job.failed != nil {
 			return []map[string]interface{}{job.failed}, 0, stringAny(job.failed["error_message"])
+		}
+		// 详情模块是逐个生成的长流程，必须在这里响应取消，
+		// 否则用户点停止后仍会把剩余模块全部跑完再结束。
+		var projectStatus string
+		if err := pool.QueryRow(ctx, `SELECT status FROM workflow_projects WHERE id=$1`, projectID).Scan(&projectStatus); err == nil {
+			if projectStatus == "canceling" || projectStatus == "canceled" {
+				canceledItem := map[string]interface{}{
+					"task_no": job.taskNo, "status": "canceled", "progress": 100,
+					"error_message": "用户已停止", "detail_section": section,
+				}
+				appendWorkflowMediaTask(ctx, pool, projectID, canceledItem)
+				return []map[string]interface{}{canceledItem}, 0, "用户已停止生成"
+			}
 		}
 		_ = processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{
 			TaskNo: job.taskNo, UserID: userID, ModelID: modelID, ModelCode: modelCode,
@@ -4356,6 +4411,38 @@ func runAgentDetailPageTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, t
 		}
 	}
 	return results, detailPage, ""
+}
+
+// hasRegenerateDetailSections 判断本次是否需要强制重跑指定详情模块。
+func hasRegenerateDetailSections(inputs map[string]interface{}) bool {
+	return len(regenerateDetailSectionSet(inputs)) > 0
+}
+
+func regenerateDetailSectionSet(inputs map[string]interface{}) map[string]bool {
+	set := map[string]bool{}
+	raw, ok := inputs["regenerate_detail_sections"]
+	if !ok || raw == nil {
+		return set
+	}
+	switch items := raw.(type) {
+	case []interface{}:
+		for _, item := range items {
+			if id := strings.TrimSpace(stringAny(item)); id != "" {
+				set[id] = true
+			}
+		}
+	case []string:
+		for _, id := range items {
+			if id = strings.TrimSpace(id); id != "" {
+				set[id] = true
+			}
+		}
+	case string:
+		if id := strings.TrimSpace(items); id != "" {
+			set[id] = true
+		}
+	}
+	return set
 }
 
 func detailSectionSignature(modelCode string, taskInput map[string]interface{}) string {
@@ -4514,6 +4601,38 @@ func normalizeDetailLayout(value, fallback string) string {
 	}
 }
 
+// detailProductBasis 生成"商品视觉依据"说明。有参考图时必须明确告诉图片模型
+// 图已随消息附上，不能沿用分析阶段早期的"无参考图"结论（否则模型会按文字臆造商品）。
+func detailProductBasis(inputs map[string]interface{}, notes string) string {
+	count := len(referenceImageURLs(inputs))
+	if count > 0 {
+		basis := fmt.Sprintf("参考图共 %d 张，已随本次消息附上：第 1 张为商品外观与结构的主要视觉真值，其余图片补充其他角度与可见细节。必须以附图为准锁定品类、结构、比例、颜色、材质、接口/开关布局、Logo 与丝印位置；不得按文字描述臆造参考图未展示的外观。", count)
+		if trimmed := strings.TrimSpace(notes); trimmed != "" && !claimsMissingReference(trimmed) {
+			basis += "\n可见特征记录：" + trimmed
+		}
+		return basis
+	}
+	if trimmed := strings.TrimSpace(notes); trimmed != "" {
+		return trimmed
+	}
+	return "未提供参考图：按用户已确认的品类与描述呈现，属概念视觉，不得声称还原实物。"
+}
+
+// claimsMissingReference 识别分析模型"看不到图"的结论。
+func claimsMissingReference(notes string) bool {
+	lower := strings.ToLower(notes)
+	for _, marker := range []string{
+		"未在本引擎中实际可见", "参考图片数量标记为0", "无法读取", "无法查看", "无法识别图片",
+		"未接收到可读", "看不到", "未能读取", "未提供可读视觉描述", "cannot view", "cannot access",
+		"unable to view", "unable to access",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func detailSectionGenerationPrompt(_ string, section map[string]interface{}, index, total int, inputs map[string]interface{}) string {
 	moduleInputs := copyMap(inputs)
 	moduleInputs["count"], moduleInputs["n"] = 1, 1
@@ -4546,13 +4665,17 @@ DETAIL PAGE MODULE %d/%d（页面顺序，不画入图片）
 当前模块画面：%s
 模块设计约束：%s
 
-	把本模块设计成可直接与前后模块衔接的电商成品视觉：允许并鼓励使用 DESIGN SYSTEM 中统一的品牌渐变、空白圆角信息卡片、无字功能图标、光斑、线条、几何装饰、局部特写框和前后景层次。装饰只服务当前已确认卖点，不得捏造认证、参数、功能或比较结果。不要每张图重新选择艺术风格。
+	商业摄影质感优先：按真实棚拍标准执行布光与材质——主光方向统一、柔光箱质感、暗部有细节不过曝、商品与背景接触处有自然落影、材质反射与高光可信（金属是金属、玻璃是玻璃、织物有纤维纹理），轻微景深与真实镜头感，禁止塑料感、贴纸感、平涂矢量感和过度锐化。
+	装饰克制：只用 DESIGN SYSTEM 的色板、极淡渐变与必要的光晕/线条延续页面节奏；不要贴纸式圆角卡片墙、图标阵列、边框、网格或促销贴片。文字安全区用自然留白或极淡同色块呈现，宁可留白也不要堆装饰。
+	商品是第一视觉焦点：景别、构图与光线服务商品本身，商品必须清晰、完整、边缘干净、比例可信；不得为了"设计感"遮挡、变形或以装饰抢主体。
+
+	把本模块设计成可直接与前后模块衔接的电商成品视觉，装饰只服务当前已确认卖点，不得捏造认证、参数、功能或比较结果。不要每张图重新选择艺术风格。
 	模块上下边缘约6%%–8%%回到 DESIGN SYSTEM 的同一基础底色，不放商品、文字卡片或硬边框；装饰走势在边缘自然淡出，使零间距纵向拼接后像一张连续长页，不像多张不同海报粗暴拼接。
 
 
 	%s 底图不绘制任何新增文字、字母、数字、乱码、尺寸线、箭头或促销口号；无字图标和纯图形装饰可以使用。已有商品标识只按参考图忠实保留。
 
-	以参考图为商品视觉真值；商品保真只锁定商品款式和可见细节，不锁定参考图原来的背景和摆放。严格保持同一商品的结构、比例、颜色、纹理、Logo位置，以及同一人物身份和身体比例；当前模块要求人物穿着、佩戴、手持或使用商品时，必须实现自然接触，不得退回无人静物照。不得创造新颜色、新款式、包装盒、吊牌、赠品或品牌道具。除细节模块允许的2–3个有层级特写外，不做多格拼图、九宫格、联系表、小图墙或重复商品阵列。`, index+1, total, agentGenerationParamSummary(moduleInputs), stringAny(inputs["_detail_product"]), stringAny(inputs["_detail_style"]), layout, placement, firstNonEmpty(stringAny(section["image_prompt"]), stringAny(section["objective"])), visualGuard, copyAreaInstruction)
+	以参考图为商品视觉真值；商品保真只锁定商品款式和可见细节，不锁定参考图原来的背景和摆放。严格保持同一商品的结构、比例、颜色、纹理、Logo位置，以及同一人物身份和身体比例；当前模块要求人物穿着、佩戴、手持或使用商品时，必须实现自然接触，不得退回无人静物照。不得创造新颜色、新款式、包装盒、吊牌、赠品或品牌道具。除细节模块允许的2–3个有层级特写外，不做多格拼图、九宫格、联系表、小图墙或重复商品阵列。`, index+1, total, agentGenerationParamSummary(moduleInputs), detailProductBasis(inputs, stringAny(inputs["_detail_product"])), stringAny(inputs["_detail_style"]), layout, placement, firstNonEmpty(stringAny(section["image_prompt"]), stringAny(section["objective"])), visualGuard, copyAreaInstruction)
 	if userPrompt := strings.TrimSpace(stringAny(inputs["user_prompt"])); userPrompt != "" && !boolAny(inputs["_commerce_resolved"]) {
 		prompt += "\n\n用户明确要求（只应用与当前模块有关的内容）：" + userPrompt
 	}
@@ -4919,6 +5042,8 @@ func saveWorkflowOutputs(ctx context.Context, pool *pgxpool.Pool, projectID int6
 		}
 		outputs["media_tasks"] = merged
 	}
+	// outputs 会原样返回给前端：清洗嵌套的错误文案，并移除仅内部使用的上游字段。
+	outputs = sanitizeUserFacingJSON(outputs).(map[string]interface{})
 	pool.Exec(ctx, `UPDATE workflow_projects SET outputs=$1, updated_at=now() WHERE id=$2`, mustJSON(outputs), projectID)
 }
 
@@ -5130,10 +5255,15 @@ func isSupportedMediaReference(value string) bool {
 		return false
 	}
 	lower := strings.ToLower(value)
+	// 站内素材存为 /media/<bucket>/<key> 相对地址（迁移 169），
+	// 这类地址必须算作有效参考图，否则分析阶段会认为"没有参考图"，
+	// 进而把"按概念画"写进后续每张图的提示词。
+	// 只认 /media/ 前缀：其他相对路径（如 /assets/*.svg 样式封面）不是商品素材。
 	return strings.HasPrefix(lower, "http://") ||
 		strings.HasPrefix(lower, "https://") ||
 		strings.HasPrefix(lower, "data:") ||
-		strings.HasPrefix(lower, "asset://")
+		strings.HasPrefix(lower, "asset://") ||
+		strings.HasPrefix(value, "/media/")
 }
 
 func isRetryableComicMediaError(message string) bool {
@@ -5587,6 +5717,8 @@ func failWorkflow(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPayload
 	if stopped, stopErr := stopWorkflowIfRequested(ctx, pool, p, publicID, estimated); stopped {
 		return stopErr
 	}
+	// 前端会把 error_message 原样展示，落库前必须抹掉上游地址/厂商名。
+	msg = sanitizeUserFacingError(msg)
 	chargeResult, costErr := workflowSettlementCharge(ctx, pool, p.ProjectID)
 	if costErr != nil {
 		return failWorkflowWithoutCost(ctx, pool, p, publicID, estimated, costErr.Error())
@@ -5623,6 +5755,7 @@ func failWorkflow(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPayload
 }
 
 func failWorkflowWithoutCost(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPayload, publicID string, estimated float64, msg string) error {
+	msg = sanitizeUserFacingError(msg)
 	releaseErr := unfreezeBillingWithFinalize(ctx, pool, p.UserID, estimated, "workflow", publicID, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
 			UPDATE workflow_projects
@@ -5693,6 +5826,9 @@ func cancelWorkflow(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPaylo
 	if err != nil {
 		return fmt.Errorf("workflow %s cancel billing: %w", publicID, err)
 	}
+	// 尚未开始的排队任务不会再被执行，直接标记取消，避免前端一直转圈。
+	_, _ = pool.Exec(ctx, `UPDATE tasks SET status='canceled', error_code='USER_CANCELED', error_message='用户已停止，未执行的任务已取消', finished_at=now(), updated_at=now()
+		WHERE workflow_project_id=$1 AND status='pending'`, p.ProjectID)
 	log.Printf("Workflow project %s canceled by user (cost=%.4f)", publicID, actual)
 	return nil
 }

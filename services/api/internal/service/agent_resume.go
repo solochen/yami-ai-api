@@ -121,7 +121,7 @@ func (s *AgentService) validateComicRemainingModels(ctx context.Context, inputs 
 		if strings.TrimSpace(code) == "" {
 			return fmt.Errorf("剩余 %s 阶段未配置模型", category)
 		}
-		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE code=$1 AND category=$2 AND is_enabled=true)`, code, category).Scan(&exists); err != nil {
+		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1)) AND category=$2 AND is_enabled=true)`, code, category).Scan(&exists); err != nil {
 			return err
 		}
 		if !exists {

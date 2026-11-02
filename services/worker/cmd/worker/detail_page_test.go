@@ -49,10 +49,27 @@ func TestDetailSectionPromptEnforcesSingleDesignedModule(t *testing.T) {
 		6,
 		map[string]interface{}{"creative_scene": "detail_image", "creative_scene_label": "商品详情图"},
 	)
-	for _, expected := range []string{"DETAIL PAGE MODULE 3/6", "视觉真值", "底图不绘制任何新增文字", "DESIGN SYSTEM", "2–3个有主次的局部特写卡片", "品牌渐变", "无字功能图标", "连续长页", "不得创造新颜色", "包装盒", "数量=1", "商品详情图"} {
+	for _, expected := range []string{"DETAIL PAGE MODULE 3/6", "商品视觉依据", "底图不绘制任何新增文字", "DESIGN SYSTEM", "2–3个有主次的局部特写卡片", "商业摄影质感优先", "材质反射与高光可信", "连续长页", "不得创造新颜色", "包装盒", "数量=1", "商品详情图"} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt missing %q: %s", expected, prompt)
 		}
+	}
+}
+
+// 带参考图时提示词必须声明"图已附上"，不能沿用分析阶段的"无参考图"结论。
+func TestDetailSectionPromptDeclaresAttachedReferences(t *testing.T) {
+	prompt := detailSectionGenerationPrompt("", map[string]interface{}{
+		"type": "hero", "image_prompt": "商品首屏",
+	}, 0, 4, map[string]interface{}{
+		"creative_scene":   "detail_image",
+		"reference_images": []interface{}{"/media/bucket/a.jpg", "/media/bucket/b.jpg"},
+		"_detail_product":  "参考图未在本引擎中实际可见（参考图片数量标记为0）",
+	})
+	if !strings.Contains(prompt, "参考图共 2 张") {
+		t.Fatalf("prompt did not declare attached references: %s", prompt)
+	}
+	if strings.Contains(prompt, "参考图片数量标记为0") {
+		t.Fatalf("prompt leaked stale no-reference note: %s", prompt)
 	}
 }
 
@@ -181,7 +198,7 @@ func TestDetailFallbackHasUniqueEvidenceBasedModules(t *testing.T) {
 
 func TestCommerceAnalysisRequiresGroundedClaimsAndDetailCopy(t *testing.T) {
 	prompt := buildAgentAnalysisSystemPrompt("image", "ecommerce_image", 3, "detail_image")
-	for _, want := range []string{"missing_information", "不能改变商品事实", "detail_section_count", "design_system", "page_flow", "copy_placement", "空白信息卡片", "无字功能图标", "连续长页", "2–3个局部近景", "不制作空参数表", "无依据时留空"} {
+	for _, want := range []string{"missing_information", "不能改变商品事实", "detail_section_count", "design_system", "page_flow", "copy_placement", "商业摄影质感为主", "极淡渐变", "连续长页", "2–3个局部近景", "不制作空参数表", "无依据时留空", "主体与可见特征 → 景别"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("missing %s", want)
 		}

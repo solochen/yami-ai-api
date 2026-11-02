@@ -34,7 +34,7 @@ const virtualTryOnExtra: Record<string, string> = {
   "上传人物照": "Upload ảnh của mọi người",
   "上传人物照和服装图，立即开始试穿": "Tải ảnh người và quần áo lên và bắt đầu thử ngay lập tức",
   "上传人物照和服装图，生成自然试穿效果": "Tải ảnh người và quần áo lên để tạo hiệu ứng mặc thử tự nhiên",
-  "上传人物照片和服装商品图，使用 Nano Banana、GPT Image 2 或 Gemini 多参考图模型，快速生成自然的视觉试穿效果。": "Tải lên ảnh người và ảnh sản phẩm quần áo, đồng thời sử dụng các mẫu hình ảnh đa tham chiếu Nano Banana, GPT Image 2 hoặc Gemini để nhanh chóng tạo hiệu ứng thử hình ảnh tự nhiên.",
+  "上传人物照片和服装商品图，使用 NV Image 或 HL Image 多参考图模型，快速生成自然的视觉试穿效果。": "Tải ảnh người và ảnh sản phẩm quần áo lên, dùng mô hình ảnh đa tham chiếu NV Image hoặc HL Image để nhanh chóng tạo hiệu ứng thử đồ tự nhiên.",
   "设置参数": "Đặt tham số",
   "使用流程": "Quá trình sử dụng",
   "使用清晰的单件平铺图或商品图": "Sử dụng hình ảnh gạch nguyên khối hoặc hình ảnh sản phẩm rõ ràng",

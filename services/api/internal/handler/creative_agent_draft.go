@@ -900,7 +900,7 @@ func (h *Handler) confirmedAgentDraft(c *gin.Context, conversationID string, ver
 		} else {
 			result, err := h.tasks.Get(c.Request.Context(), c.GetInt64("user_id"), d.ExecutionRef)
 			if err == nil {
-				util.OK(c, result)
+				util.OK(c, sanitizeTaskForResponse(result))
 				return nil, false
 			}
 		}

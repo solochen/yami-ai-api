@@ -265,7 +265,8 @@ func mergeWorkMetadata(meta map[string]interface{}, taskOutput []byte) map[strin
 			continue
 		}
 		if v, ok := out[key]; ok {
-			meta[key] = v
+			// 作品元数据会公开展示：清掉媒体项里夹带的上游地址/模型代号。
+			meta[key] = util.SanitizeJSON(v)
 		}
 	}
 	return meta

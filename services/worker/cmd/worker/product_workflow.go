@@ -377,6 +377,7 @@ func productGenerate(ctx context.Context, pool *pgxpool.Pool, baseURL, token str
 }
 
 func finishProductWorkflow(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPayload, publicID string, reserved, _ float64, outputs map[string]interface{}, message string) error {
+	message = sanitizeUserFacingError(message)
 	chargeResult, err := workflowSettlementCharge(ctx, pool, p.ProjectID)
 	if err != nil {
 		return failWorkflowWithoutCost(ctx, pool, p, publicID, reserved, err.Error())

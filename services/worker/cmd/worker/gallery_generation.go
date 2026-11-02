@@ -223,6 +223,7 @@ func processGalleryGenerationTask(ctx context.Context, pool *pgxpool.Pool, baseU
 }
 
 func failGalleryGenerationTask(ctx context.Context, pool *pgxpool.Pool, taskID int64, code, message string, retry bool) error {
+	message = sanitizeUserFacingError(message)
 	if retry && !isFinalAsynqAttempt(ctx) {
 		_, _ = pool.Exec(ctx, `UPDATE gallery_generation_tasks SET status='queued',retry_count=retry_count+1,error_code=$2,error_message=$3,updated_at=now() WHERE id=$1 AND status IN ('queued','submitting','processing')`, taskID, code, message)
 		return &RetryableError{Code: code, Message: message}

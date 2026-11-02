@@ -72,20 +72,39 @@ func (c *LocalClient) ReadAll(ctx context.Context, objectName string, maxBytes i
 }
 
 func (c *LocalClient) ObjectKeyFromURL(rawURL string) string {
-	u, err := url.Parse(strings.TrimSpace(rawURL))
+	raw := strings.TrimSpace(rawURL)
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
 	if err != nil {
 		return ""
 	}
 	base, _ := url.Parse(c.publicURL)
-	if base == nil || base.Host == "" || !strings.EqualFold(u.Host, base.Host) {
-		return ""
+	basePath := ""
+	if base != nil {
+		basePath = strings.Trim(strings.TrimPrefix(base.Path, "/"), "/")
 	}
 	path := strings.Trim(strings.TrimPrefix(u.Path, "/"), "/")
-	basePath := strings.Trim(strings.TrimPrefix(base.Path, "/"), "/")
+	if u.Host != "" {
+		if base != nil && base.Host != "" {
+			if !strings.EqualFold(u.Host, base.Host) {
+				return ""
+			}
+		} else if basePath == "" || !strings.HasPrefix(path, basePath+"/") {
+			// publicURL 无 host 时，只接受带代理前缀的绝对地址。
+			return ""
+		}
+	}
+	// 相对媒体地址（/media/<key>）也要能反查对象 key。
 	if basePath != "" {
 		path = strings.TrimPrefix(path, basePath+"/")
 	}
+	path = strings.Trim(path, "/")
 	if _, err := c.safePath(path); err != nil {
+		return ""
+	}
+	if path == "" {
 		return ""
 	}
 	return path

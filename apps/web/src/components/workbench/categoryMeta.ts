@@ -23,27 +23,57 @@ export const MODEL_ICONS: Record<string, string> = {
   audio: "\u{1F3B5}",
 };
 
+// 智能体按「任务」分类（原工具箱的分类法，合并后成为唯一一套）。
 export const AGENT_CATEGORIES = [
-  { code: "all", label: "\u5168\u90e8", labelKey: "nav.all" },
-  { code: "image", label: "\u56fe\u7247", labelKey: "nav.image" },
-  { code: "video", label: "\u89c6\u9891", labelKey: "nav.video" },
-  { code: "tool", label: "\u5de5\u5177", labelKey: "category.tool" },
-  { code: "api", label: "API", labelKey: "category.api" },
-  { code: "mine", label: "\u6211\u7684", labelKey: "nav.mine" },
+  { code: "all", label: "\u5168\u90e8", labelKey: "nav.all", icon: "chip.all" },
+  { code: "video", label: "\u89c6\u9891\u5904\u7406", labelKey: "agentCategory.video", icon: "chip.video" },
+  { code: "image", label: "\u56fe\u7247\u5904\u7406", labelKey: "agentCategory.image", icon: "chip.image" },
+  { code: "content", label: "\u5185\u5bb9\u521b\u4f5c", labelKey: "agentCategory.content", icon: "chip.content" },
+  { code: "ai_create", label: "AI \u521b\u4f5c", labelKey: "agentCategory.ai_create", icon: "chip.aiCreate" },
+  { code: "assistant", label: "AI \u52a9\u624b", labelKey: "agentCategory.assistant", icon: "chip.assistant" },
+  { code: "mine", label: "\u6211\u7684", labelKey: "nav.mine", icon: "chip.mine" },
 ] as const;
 
 export const AGENT_CATEGORY_TAG: Record<string, { label: string; labelKey: string; className: string }> = {
-  image: { label: "\u56fe\u7247", labelKey: "nav.image", className: "bg-primary/10 text-primary" },
-  video: { label: "\u89c6\u9891", labelKey: "nav.video", className: "bg-purple-50 text-purple-600" },
+  image: { label: "\u56fe\u7247\u5904\u7406", labelKey: "agentCategory.image", className: "bg-primary/10 text-primary" },
+  video: { label: "\u89c6\u9891\u5904\u7406", labelKey: "agentCategory.video", className: "bg-purple-50 text-purple-600" },
+  content: { label: "\u5185\u5bb9\u521b\u4f5c", labelKey: "agentCategory.content", className: "bg-indigo-50 text-indigo-600" },
+  ai_create: { label: "AI \u521b\u4f5c", labelKey: "agentCategory.ai_create", className: "bg-rose-50 text-rose-600" },
+  assistant: { label: "AI \u52a9\u624b", labelKey: "agentCategory.assistant", className: "bg-amber-50 text-amber-600" },
   multi_collab: { label: "\u591a\u6a21\u578b", labelKey: "category.multiCollab", className: "bg-indigo-50 text-indigo-600" },
   api: { label: "API", labelKey: "category.api", className: "bg-sky-50 text-sky-600" },
   tool: { label: "\u5de5\u5177", labelKey: "category.tool", className: "bg-amber-50 text-amber-600" },
 };
 
-export function agentDisplayCategory(code: string, category?: string) {
-  if (["infinite_canvas", "content_image_post", "video_creation", "video_creation_v2"].includes(code)) return "tool";
-  if (!category || !AGENT_CATEGORY_TAG[category]) return "tool";
-  return category;
+const BROWSE_CATEGORIES = new Set(["video", "image", "content", "ai_create", "assistant"]);
+
+export type AgentBrowseMeta = {
+  category?: string;
+  subtitle?: string;
+  tags?: string[];
+  badges?: string[];
+  billing?: string;
+};
+
+// 智能体的展示配置统一放在 display_config.toolbox（历史键名，沿用以免改动后台表单）。
+export function agentBrowseMeta(agent: { display_config?: unknown }): AgentBrowseMeta | null {
+  const raw = (agent?.display_config as { toolbox?: AgentBrowseMeta & { enabled?: boolean } } | undefined)?.toolbox;
+  if (!raw || raw.enabled === false) return null;
+  return raw;
+}
+
+export function agentDisplayCategory(
+  code: string,
+  category?: string,
+  displayConfig?: unknown,
+) {
+  const browse = agentBrowseMeta({ display_config: displayConfig });
+  const browseCategory = String(browse?.category || "").trim();
+  if (BROWSE_CATEGORIES.has(browseCategory)) return browseCategory;
+  if (["infinite_canvas", "content_image_post", "video_creation", "video_creation_v2"].includes(code)) return "assistant";
+  if (category === "image") return "image";
+  if (category === "video") return "video";
+  return "assistant";
 }
 
 // Hero gradient themes for the agent workspace banner.

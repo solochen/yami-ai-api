@@ -236,6 +236,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			auth.GET("/agent-projects/:id/export", h.EcomFactoryExport)
 			auth.POST("/agent-projects/:id/breakdown-rewrite", h.RewriteViralBreakdown)
 			auth.POST("/agent-projects/:id/retry-node", h.RetryAgentProjectNode)
+			auth.POST("/agent-projects/:id/detail-sections/:section/retry", h.RetryAgentDetailSection)
 			auth.PATCH("/agent-projects/:id/comic/keyframes/:index", h.ReplaceComicProjectKeyframe)
 			auth.PATCH("/agent-projects/:id/comic/segments/:index", h.ReplaceComicProjectSegment)
 			auth.POST("/agent-projects/:id/steps/:step/confirm", h.ConfirmAgentProjectStep)
@@ -297,6 +298,23 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			adm.GET("/models/:id/routes", h.AdminListModelRoutes)
 			adm.GET("/models/:id/route-attempts", h.AdminListModelRouteAttempts)
 			adm.GET("/models/:id/route-profit", h.AdminModelRouteProfit)
+			adm.GET("/upstream-prices/providers", h.AdminListUpstreamProviders)
+			adm.PATCH("/upstream-prices/providers/:provider", superAdminOnly, h.AdminUpdateUpstreamProvider)
+			adm.POST("/upstream-prices/sync", superAdminOnly, h.AdminStartPriceSync)
+			adm.GET("/upstream-prices/sync-runs", h.AdminListPriceSyncRuns)
+			adm.GET("/upstream-prices/sync-runs/:id", h.AdminGetPriceSyncRun)
+			adm.GET("/upstream-prices/catalog", h.AdminListUpstreamPrices)
+			adm.GET("/upstream-prices/analysis", h.AdminPriceAnalysis)
+			adm.GET("/upstream-prices/models/:id", h.AdminPriceModelDetail)
+			adm.POST("/upstream-prices/manual", superAdminOnly, h.AdminUpsertManualPrice)
+			adm.POST("/upstream-prices/apply", superAdminOnly, h.AdminApplyRealCost)
+			adm.GET("/upstream-model-mappings", h.AdminListUpstreamMappings)
+			adm.PATCH("/upstream-model-mappings", superAdminOnly, h.AdminUpdateUpstreamMapping)
+			adm.GET("/model-routes/overview", h.AdminModelRouteOverview)
+			adm.GET("/models/:id/routes/:routeId/promote-preview", h.AdminPromotePreview)
+			adm.POST("/models/:id/routes/:routeId/promote", superAdminOnly, h.AdminPromoteModelRoute)
+			adm.GET("/model-route-switches", h.AdminListRouteSwitches)
+			adm.POST("/model-route-switches/:id/rollback", superAdminOnly, h.AdminRollbackModelRoute)
 			adm.POST("/models/:id/routes/test-all", superAdminOnly, h.AdminTestAllModelRoutes)
 			adm.POST("/models/:id/routes", superAdminOnly, h.AdminCreateModelRoute)
 			adm.PATCH("/models/:id/routes/:routeId", superAdminOnly, h.AdminUpdateModelRoute)
@@ -830,6 +848,11 @@ func (h *Handler) ListModels(c *gin.Context) {
 		localized[models[i].Code] = &models[i]
 	}
 	_ = h.contentI18n.ApplyBatch(c.Request.Context(), "model", locale, localized)
+	// Translations are keyed by the internal code, so the outward identifier is
+	// swapped in only after localized content has been applied.
+	for i := range models {
+		models[i].Code = models[i].PublicCode()
+	}
 	c.Header("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
 	c.Header("Vary", "Accept-Language, X-Locale")
 	util.OK(c, models)
@@ -846,7 +869,7 @@ func (h *Handler) OpenAPIListModels(c *gin.Context) {
 	data := make([]map[string]interface{}, 0, len(models))
 	for _, model := range models {
 		data = append(data, map[string]interface{}{
-			"id":       model.Code,
+			"id":       model.PublicCode(),
 			"object":   "model",
 			"owned_by": "starai",
 		})
@@ -861,6 +884,7 @@ func (h *Handler) GetModel(c *gin.Context) {
 		return
 	}
 	_ = h.contentI18n.Apply(c.Request.Context(), "model", m.Code, requestContentLocale(c), m)
+	m.Code = m.PublicCode()
 	c.Header("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
 	c.Header("Vary", "Accept-Language, X-Locale")
 	util.OK(c, m)
@@ -1708,7 +1732,7 @@ func boolValue(value interface{}) bool {
 
 func openAPIError(c *gin.Context, status int, code, message string) {
 	c.JSON(status, map[string]interface{}{"error": map[string]interface{}{
-		"type": code, "code": code, "message": message,
+		"type": code, "code": code, "message": util.SanitizeMessage(message),
 	}})
 }
 
@@ -1731,7 +1755,7 @@ func openAPIPlatformError(c *gin.Context, err *runtime.PlatformError) {
 // still running and already billed).
 func openAPIErrorWithFields(c *gin.Context, status int, code, message string, fields map[string]interface{}) {
 	body := map[string]interface{}{"error": map[string]interface{}{
-		"type": code, "code": code, "message": message,
+		"type": code, "code": code, "message": util.SanitizeMessage(message),
 	}}
 	for k, v := range fields {
 		if k != "error" {
@@ -2164,7 +2188,7 @@ func buildOpenAIStreamPayload(requestID, model string, delta map[string]interfac
 }
 
 func openAIStreamError(c *gin.Context, message string) {
-	data, _ := json.Marshal(map[string]interface{}{"error": map[string]interface{}{"type": "server_error", "code": "server_error", "message": message}})
+	data, _ := json.Marshal(map[string]interface{}{"error": map[string]interface{}{"type": "server_error", "code": "server_error", "message": util.SanitizeMessage(message)}})
 	_, _ = c.Writer.Write([]byte("data: " + string(data) + "\n\n"))
 }
 
@@ -5501,15 +5525,29 @@ func openAPITaskResponse(task *service.TaskDTO) map[string]interface{} {
 		out["upstream_task_id"] = *task.UpstreamTaskID
 	}
 	if task.Output != nil {
-		out["output"] = task.Output
+		// output 会原样返回给用户：移除仅内部使用的上游字段，并清洗历史脏错误文案。
+		out["output"] = util.SanitizeJSON(task.Output)
 	}
 	if task.ErrorCode != nil {
 		out["error_code"] = *task.ErrorCode
 	}
 	if task.ErrorMessage != nil {
-		out["error_message"] = *task.ErrorMessage
+		out["error_message"] = util.SanitizeMessage(*task.ErrorMessage)
 	}
 	return out
+}
+
+// sanitizeTaskForResponse 兜底清洗任务 DTO：错误文案脱敏 + 移除上游内部字段，
+// 覆盖改造前已经写进库里的历史数据。
+func sanitizeTaskForResponse(task *service.TaskDTO) *service.TaskDTO {
+	if task == nil {
+		return nil
+	}
+	task.ErrorMessage = util.SanitizeErrorText(task.ErrorMessage)
+	if task.Output != nil {
+		util.SanitizeJSON(task.Output)
+	}
+	return task
 }
 
 // openAPISyncWaitBudget decides how long a synchronous request may wait.
@@ -5736,6 +5774,9 @@ func (h *Handler) ListTasks(c *gin.Context) {
 		util.InternalError(c, err.Error())
 		return
 	}
+	for i := range items {
+		sanitizeTaskForResponse(&items[i])
+	}
 	util.OK(c, map[string]interface{}{"items": items, "total": total})
 }
 
@@ -5745,7 +5786,7 @@ func (h *Handler) GetTask(c *gin.Context) {
 		util.NotFound(c, "任务不存在")
 		return
 	}
-	util.OK(c, task)
+	util.OK(c, sanitizeTaskForResponse(task))
 }
 
 func (h *Handler) GetTaskStatuses(c *gin.Context) {
@@ -5760,6 +5801,9 @@ func (h *Handler) GetTaskStatuses(c *gin.Context) {
 	if err != nil {
 		util.BadRequest(c, err.Error())
 		return
+	}
+	for i := range items {
+		sanitizeTaskForResponse(&items[i])
 	}
 	util.OK(c, map[string]interface{}{"items": items})
 }

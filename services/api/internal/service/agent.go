@@ -549,7 +549,7 @@ func (s *AgentService) validateVideoUpscaleRequest(ctx context.Context, userID i
 		return errors.New("AI 视频高清尚未配置超分模型，请联系管理员")
 	}
 	var exists bool
-	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE code=$1 AND category='video' AND is_enabled=true)`, modelCode).Scan(&exists); err != nil {
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1)) AND category='video' AND is_enabled=true)`, modelCode).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {
@@ -728,7 +728,7 @@ func (s *AgentService) validatePhotoStudioRequest(ctx context.Context, runtimeCf
 		return errors.New("写真馆工作流尚未配置图片模型，请联系管理员")
 	}
 	var exists bool
-	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE code=$1 AND category='image' AND is_enabled=true)`, code).Scan(&exists); err != nil {
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1)) AND category='image' AND is_enabled=true)`, code).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {
@@ -815,7 +815,7 @@ func (s *AgentService) validateVirtualTryOnRequest(ctx context.Context, userID i
 	}
 	var storedCode, upstreamModel string
 	var runtimeRaw []byte
-	if err := s.db.QueryRow(ctx, `SELECT code, new_api_model, runtime_rule FROM models WHERE code=$1 AND category='image' AND is_enabled=true`, code).Scan(&storedCode, &upstreamModel, &runtimeRaw); err != nil {
+	if err := s.db.QueryRow(ctx, `SELECT code, new_api_model, runtime_rule FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1)) AND category='image' AND is_enabled=true`, code).Scan(&storedCode, &upstreamModel, &runtimeRaw); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("图片模型不存在、类型不匹配或已停用：%s", code)
 		}
@@ -849,7 +849,7 @@ func (s *AgentService) validateEnabledVideoModel(ctx context.Context, code, labe
 		return fmt.Errorf("%s工作流尚未配置视频模型，请联系管理员", label)
 	}
 	var exists bool
-	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE code=$1 AND category='video' AND is_enabled=true)`, code).Scan(&exists); err != nil {
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1)) AND category='video' AND is_enabled=true)`, code).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {
@@ -951,7 +951,7 @@ func (s *AgentService) validateComicDramaGenerationModels(ctx context.Context, i
 			return fmt.Errorf("AI 漫剧未配置%s模型", check.label)
 		}
 		var exists bool
-		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE code=$1 AND category=$2 AND is_enabled=true)`, code, check.category).Scan(&exists); err != nil {
+		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1)) AND category=$2 AND is_enabled=true)`, code, check.category).Scan(&exists); err != nil {
 			return err
 		}
 		if !exists {
@@ -964,7 +964,7 @@ func (s *AgentService) validateComicDramaGenerationModels(ctx context.Context, i
 			continue
 		}
 		var exists bool
-		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE code=$1 AND category='chat' AND is_enabled=true)`, code).Scan(&exists); err != nil {
+		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1)) AND category='chat' AND is_enabled=true)`, code).Scan(&exists); err != nil {
 			return err
 		}
 		if !exists {
@@ -1088,7 +1088,32 @@ func (s *AgentService) GetProject(ctx context.Context, userID int64, publicID st
 		return nil, err
 	}
 	p.NodeRuns = runs
+	sanitizeProjectForUser(&p)
 	return &p, nil
+}
+
+// sanitizeProjectForUser 兜底清洗项目 DTO 里可能残留的上游信息（历史脏数据）：
+// 错误文案脱敏 + 移除 upstream_content_url / upstream_model 等仅内部使用的字段。
+func sanitizeProjectForUser(p *WorkflowProjectDTO) {
+	if p == nil {
+		return
+	}
+	p.ErrorMessage = util.SanitizeErrorText(p.ErrorMessage)
+	if p.Outputs != nil {
+		util.SanitizeJSON(p.Outputs)
+	}
+	for i := range p.MediaTasks {
+		p.MediaTasks[i].ErrorMessage = util.SanitizeErrorText(p.MediaTasks[i].ErrorMessage)
+		if p.MediaTasks[i].Output != nil {
+			util.SanitizeJSON(p.MediaTasks[i].Output)
+		}
+	}
+	for i := range p.NodeRuns {
+		p.NodeRuns[i].Error = util.SanitizeErrorText(p.NodeRuns[i].Error)
+		if p.NodeRuns[i].Output != nil {
+			util.SanitizeJSON(p.NodeRuns[i].Output)
+		}
+	}
 }
 
 func (s *AgentService) listNodeRuns(ctx context.Context, projectID int64) ([]NodeRunDTO, error) {
@@ -1831,7 +1856,7 @@ func normalizeComicVideoResolution(value string) string {
 func (s *AgentService) estimateModelCostByCode(ctx context.Context, code string, params map[string]interface{}, promptTokens, outputTokens int) float64 {
 	var raw []byte
 	var category string
-	if err := s.db.QueryRow(ctx, `SELECT price_rule, category FROM models WHERE code=$1 AND is_enabled=true`, code).Scan(&raw, &category); err != nil {
+	if err := s.db.QueryRow(ctx, `SELECT price_rule, category FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1)) AND is_enabled=true`, code).Scan(&raw, &category); err != nil {
 		return 0
 	}
 	rule := map[string]interface{}{}
@@ -1996,6 +2021,88 @@ func (s *AgentService) retryProject(ctx context.Context, userID int64, publicID 
 		})
 		if cleanupErr != nil {
 			return fmt.Errorf("工作流重试入队失败: %v；回滚冻结额度失败: %w", err, cleanupErr)
+		}
+		return err
+	}
+	return nil
+}
+
+// RetryDetailSection 只重新生成商品详情页里的某一个模块，
+// 其余模块按签名复用，最后重新拼接长图，避免整页重做的成本与等待。
+func (s *AgentService) RetryDetailSection(ctx context.Context, userID int64, publicID, sectionID string) error {
+	sectionID = strings.TrimSpace(sectionID)
+	if sectionID == "" {
+		return errors.New("请选择要重新生成的模块")
+	}
+	var projectID int64
+	var status string
+	var inputsRaw, outputsRaw, runtimeRaw []byte
+	if err := s.db.QueryRow(ctx,
+		`SELECT p.id, p.status, p.inputs, p.outputs, w.runtime_config
+		 FROM workflow_projects p
+		 JOIN workflow_definitions w ON w.id=p.workflow_id
+		 WHERE p.public_id=$1 AND p.user_id=$2`, publicID, userID).
+		Scan(&projectID, &status, &inputsRaw, &outputsRaw, &runtimeRaw); err != nil {
+		return err
+	}
+	if status == "pending" || status == "running" || status == "canceling" || status == "waiting_confirm" {
+		return errors.New("当前任务尚未结束，无法单独重生成模块")
+	}
+	inputs, outputs, runtimeCfg := map[string]interface{}{}, map[string]interface{}{}, map[string]interface{}{}
+	_ = json.Unmarshal(inputsRaw, &inputs)
+	_ = json.Unmarshal(outputsRaw, &outputs)
+	_ = json.Unmarshal(runtimeRaw, &runtimeCfg)
+	detailPage, ok := outputs["detail_page"].(map[string]interface{})
+	if !ok {
+		return errors.New("当前项目没有可重生成的详情页模块")
+	}
+	sections, _ := detailPage["sections"].([]interface{})
+	found := false
+	for _, raw := range sections {
+		section, _ := raw.(map[string]interface{})
+		if section != nil && stringValue(section["id"]) == sectionID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return errors.New("详情模块不存在，请刷新后重试")
+	}
+	modelCode := strings.TrimSpace(stringValue(runtimeCfg["generation_model_code"]))
+	if modelCode == "" {
+		return errors.New("该智能体未配置生成模型，无法重生成模块")
+	}
+	estimated := s.estimateModelCostByCode(ctx, modelCode, map[string]interface{}{"n": 1, "count": 1}, 0, 0)
+	if estimated <= 0 {
+		estimated = 1
+	}
+	// 只保留本模块的标记，避免多次重试累积成整页重跑。
+	inputs["regenerate_detail_sections"] = []string{sectionID}
+	if err := s.billing.FreezeWithFinalize(ctx, userID, estimated, "workflow", publicID, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `
+			UPDATE workflow_projects
+			SET status='pending', inputs=$2, error_message=NULL, finished_at=NULL, updated_at=now()
+			WHERE id=$1 AND status IN ('succeeded','failed','canceled')`, projectID, mustAgentJSON(inputs))
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return errors.New("项目状态已变化，请刷新后重试")
+		}
+		return nil
+	}); err != nil {
+		if errors.Is(err, billing.ErrInsufficientBalance) {
+			return errors.New(billing.InsufficientBalanceMsg)
+		}
+		return err
+	}
+	if err := queue.EnqueueWorkflowTask(s.queue, queue.WorkflowTaskPayload{ProjectID: projectID, UserID: userID}); err != nil {
+		cleanupErr := s.billing.UnfreezeWithFinalize(ctx, userID, estimated, "workflow", publicID, func(tx pgx.Tx) error {
+			_, updateErr := tx.Exec(ctx, `UPDATE workflow_projects SET status='failed', error_message='模块重生成入队失败', finished_at=now(), updated_at=now() WHERE id=$1 AND status='pending'`, projectID)
+			return updateErr
+		})
+		if cleanupErr != nil {
+			return fmt.Errorf("模块重生成入队失败: %v；回滚冻结额度失败: %w", err, cleanupErr)
 		}
 		return err
 	}
@@ -2693,7 +2800,7 @@ func (s *AgentService) validateVideoUpscaleAdminModel(ctx context.Context, runti
 		return errors.New("请选择支持视频转视频/超分的模型")
 	}
 	var exists bool
-	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE code=$1 AND category='video' AND is_enabled=true)`, code).Scan(&exists); err != nil {
+	if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1)) AND category='video' AND is_enabled=true)`, code).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {

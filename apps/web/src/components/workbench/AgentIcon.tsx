@@ -1,3 +1,5 @@
+import { BrandIcon, hasBrandIcon } from "@/components/icons/brandIcons";
+
 import {
   BookOpenText,
   Calculator,
@@ -60,13 +62,18 @@ export function AgentIcon({
   alt?: string;
   className?: string;
 }) {
+  // 品牌图标优先：双色（品牌橙实心面 + 继承文字色的线稿），随容器文字色自动适配明暗主题。
+  if (code && hasBrandIcon(code)) {
+    return <BrandIcon name={code} title={alt || undefined} className={className || "h-[70%] w-[70%] min-h-4 min-w-4"} />;
+  }
+
   const SemanticIcon = code ? AGENT_ICON_BY_CODE[code] : undefined;
   if (SemanticIcon) {
     return (
       <SemanticIcon
         aria-hidden={alt ? undefined : true}
         aria-label={alt || undefined}
-        className={className || "h-[52%] w-[52%] min-h-4 min-w-4"}
+        className={className || "h-[70%] w-[70%] min-h-4 min-w-4"}
         role={alt ? "img" : undefined}
         strokeWidth={1.9}
       />

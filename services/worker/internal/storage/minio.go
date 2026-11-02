@@ -82,18 +82,36 @@ func (c *Client) ReadAll(ctx context.Context, objectName string, maxBytes int64)
 }
 
 func (c *Client) ObjectKeyFromURL(rawURL string) string {
-	u, err := url.Parse(strings.TrimSpace(rawURL))
+	raw := strings.TrimSpace(rawURL)
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
 	if err != nil {
 		return ""
 	}
 	base, _ := url.Parse(strings.TrimRight(c.publicURL, "/"))
-	if base == nil || base.Host == "" || !strings.EqualFold(u.Host, base.Host) {
-		return ""
+	basePath := ""
+	if base != nil {
+		basePath = strings.Trim(strings.TrimPrefix(base.Path, "/"), "/")
 	}
 	path := strings.TrimPrefix(u.Path, "/")
-	basePath := strings.Trim(strings.TrimPrefix(base.Path, "/"), "/")
+	if u.Host != "" {
+		// 绝对地址只在 publicURL 带 host 时可用，且必须同源；
+		// publicURL 无 host（如 /media）时只接受相对地址。
+		if base == nil || base.Host == "" || !strings.EqualFold(u.Host, base.Host) {
+			return ""
+		}
+	}
+	// 相对媒体地址（/media/<bucket>/<key>）同样要能反查对象 key，
+	// 否则上传素材在 worker 侧读取失败，参考图会整批丢失。
 	if basePath != "" {
 		path = strings.TrimPrefix(path, basePath+"/")
 	}
-	return strings.TrimPrefix(path, c.bucket+"/")
+	path = strings.TrimPrefix(path, c.bucket+"/")
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		return ""
+	}
+	return path
 }

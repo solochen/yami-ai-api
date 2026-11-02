@@ -198,7 +198,7 @@ func (s *AgentService) validateProductRequest(ctx context.Context, userID int64,
 		if code == "" {
 			return fmt.Errorf("商品精修尚未配置分析、编辑和验收模型，请联系管理员")
 		}
-		if err := s.db.QueryRow(ctx, `SELECT request_mode,runtime_rule,input_schema,default_params FROM models WHERE code=$1 AND is_enabled=true`, code).Scan(&mode, &rule, &schema, &defaults); err != nil {
+		if err := s.db.QueryRow(ctx, `SELECT request_mode,runtime_rule,input_schema,default_params FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1)) AND is_enabled=true`, code).Scan(&mode, &rule, &schema, &defaults); err != nil {
 			return fmt.Errorf("模型不可用：%s", code)
 		}
 		if field == "generation_model_code" {
@@ -206,7 +206,7 @@ func (s *AgentService) validateProductRequest(ctx context.Context, userID int64,
 				return fmt.Errorf("商品编辑必须绑定图片模型")
 			}
 			var compatible bool
-			if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models m WHERE m.code=$1 AND (
+			if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM models m WHERE (m.code=$1 OR (m.public_alias IS NOT NULL AND m.public_alias=$1)) AND (
               (NOT EXISTS(SELECT 1 FROM model_routes r WHERE r.model_id=m.id) AND m.runtime_rule#>>'{upstream,adapter}'='openai_images')
               OR EXISTS(SELECT 1 FROM model_routes r WHERE r.model_id=m.id AND r.is_enabled=true AND COALESCE(r.runtime_rule#>>'{upstream,adapter}',m.runtime_rule#>>'{upstream,adapter}')='openai_images')))`, code).Scan(&compatible); err != nil {
 				return err

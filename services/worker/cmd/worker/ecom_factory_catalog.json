@@ -5,7 +5,7 @@
     "maxReferenceImages": 6,
     "maxPlanItems": 24,
     "maxCountPerModule": 3,
-    "maxConcurrency": 8,
+    "maxConcurrency": 3,
     "maxBatchCount": 200,
     "quickMaxReferences": 3,
     "defaultMaxReferences": 8
@@ -27,6 +27,9 @@
     { "id": "texture-close", "label": "材质细节图", "shortLabel": "细节", "channel": "详情模块", "defaultRatio": "4:3", "goal": "突出材质、工艺、纹理、接口或细节优势。", "prompt": "生成商品材质细节图。使用近景或微距视角，突出纹理、工艺、接口、结构或手感，保留真实比例和材质，背景简洁，光线能展示细节层次。", "accent": "#8b5cf6" },
     { "id": "selling-grid", "label": "卖点模块图", "shortLabel": "卖点", "channel": "详情模块", "defaultRatio": "3:4", "goal": "把多个卖点整理成电商详情模块。", "prompt": "生成卖点模块图。使用清晰的信息层级表达 2 到 4 个核心卖点，商品图、图标式视觉元素和留白排版协调，适合详情页连续阅读。", "accent": "#ef4444" },
     { "id": "compare", "label": "对比说明图", "shortLabel": "对比", "channel": "详情模块/广告", "defaultRatio": "4:3", "goal": "表达使用前后、旧款新款或竞品差异。", "prompt": "生成对比说明图。采用左右或上下对比构图，突出使用前后、升级前后或不同方案的差异。画面要直观克制，避免虚假夸张。", "accent": "#14b8a6" },
+    { "id": "size-diagram", "label": "产品尺寸图", "shortLabel": "尺寸", "channel": "详情模块", "defaultRatio": "4:3", "goal": "用长宽高标注帮助用户确认商品实际尺寸。", "prompt": "生成电商详情页产品尺寸标注图。以商品实拍为主体，置于浅色干净背景，用带箭头的标注线从长、宽、高三个方向标注尺寸，数值和单位必须与提供的尺寸数据逐字一致，数字清晰、无变形、不遮挡商品；可在角落加「手工测量仅供参考」小字，整体风格对齐主流电商详情页尺寸模块。", "accent": "#2563eb", "extraKey": "sizeData", "extraLabel": "尺寸数据", "extraHint": "长×宽×高，单位 mm，可附备注。如：83×42×42（mm）；手工测量误差 1-2mm" },
+    { "id": "interface-diagram", "label": "接口定义图", "shortLabel": "接口", "channel": "详情模块", "defaultRatio": "4:3", "goal": "标注商品各接口、按键和插孔的名称与位置。", "prompt": "生成产品接口定义图。清晰展示商品主体，将提供的每个接口、按键、插孔用引线加名称标注，名称必须与接口清单逐字一致，引线端点对准商品上对应的物理位置，标注布局不交叉、不遮挡商品主体，浅色干净背景，适合电商详情页连续阅读。", "accent": "#7c3aed", "extraKey": "interfaceData", "extraLabel": "接口清单", "extraHint": "每行一个接口，可附位置说明。如：INPUT XLR 输入｜左侧面板" },
+    { "id": "spec-table", "label": "规格参数表", "shortLabel": "参数", "channel": "详情模块", "defaultRatio": "3:4", "goal": "把商品规格参数整理成清晰的两列表格。", "prompt": "生成电商详情页规格参数表图。用整齐的两列表格排版提供的参数，左列参数名、右列参数值，表头使用主题色、隔行浅色底纹，所有参数名称与数值必须与提供的数据逐字准确，字体清晰、行距均匀，适合移动端阅读；建议不超过 10 行，超出时优先保留最重要的参数。", "accent": "#db2777", "extraKey": "specData", "extraLabel": "参数内容", "extraHint": "每行一个参数「名称：值」。如：型号：CX10P（建议 ≤10 行）" },
     { "id": "seed-cover", "label": "种草封面", "shortLabel": "种草", "channel": "小红书/抖音封面", "defaultRatio": "3:4", "goal": "让商品像真实用户内容一样有点击欲。", "prompt": "生成社媒种草封面。画面真实自然，有轻内容感和分享感，商品融入生活场景，构图适合小红书或短视频封面，避免硬广堆砌。", "accent": "#ec4899" },
     { "id": "lifestyle", "label": "生活方式图", "shortLabel": "生活", "channel": "种草/品牌内容", "defaultRatio": "4:3", "goal": "塑造品牌调性和目标人群的生活画面。", "prompt": "生成生活方式广告图。以目标用户的日常空间、动作或情绪为核心，商品自然出现，整体像高质量品牌内容，真实、干净、有温度。", "accent": "#22c55e" },
     { "id": "live-sticker", "label": "直播贴片", "shortLabel": "贴片", "channel": "直播间/短视频挂件", "defaultRatio": "9:16", "goal": "为直播间生成可叠加的商品利益点画面。", "prompt": "生成直播间商品贴片图。竖屏构图，商品和利益点醒目，留出主播区域和按钮区域，视觉强但不遮挡主体，适合直播间或短视频叠加。", "accent": "#f97316" },
@@ -37,7 +40,7 @@
   ],
   "suites": [
     { "id": "launch", "label": "上新快发", "description": "主图、白底、场景、详情和种草一次配齐。", "moduleIds": ["main-square", "white-bg", "scene-hero", "detail-cover", "seed-cover"] },
-    { "id": "detail", "label": "详情页套装", "description": "详情首屏、材质、卖点、对比和场景承接转化。", "moduleIds": ["detail-cover", "texture-close", "selling-grid", "compare", "scene-hero"] },
+    { "id": "detail", "label": "详情页套装", "description": "详情首屏、材质、卖点、对比、场景，加上尺寸、接口与参数表。", "moduleIds": ["detail-cover", "texture-close", "selling-grid", "compare", "scene-hero", "size-diagram", "interface-diagram", "spec-table"] },
     { "id": "social", "label": "种草内容", "description": "面向小红书、抖音和直播间的内容图。", "moduleIds": ["seed-cover", "lifestyle", "live-sticker", "scene-hero"] },
     { "id": "clone", "label": "风格复刻", "description": "参考爆款样图生成同调性的商品系列图。", "moduleIds": ["style-clone", "color-series", "main-square", "shop-banner"] },
     { "id": "batch", "label": "参考图批量生成", "description": "多参考图加自定义指令，批量生成改款、融合和营销图。", "moduleIds": ["reference-batch"] }
@@ -78,6 +81,7 @@
         { "text": "视觉风格：{{visualStyle||高端商业摄影}}" },
         { "text": "画面任务：{{module.prompt}}" },
         { "text": "商业目标：{{module.goal}}" },
+        { "when": "moduleExtraSet", "text": "模块数据（必须逐字准确，不得改写、增删或臆造）：{{moduleExtra}}" },
         { "text": "版本方向：第 {{variantIndex}} 张，构图和道具可以有轻微差异，但商品身份必须一致。" },
         { "when": "hasAssets", "text": "严格参考已上传图片中的商品身份、外形、比例、材质、颜色和关键结构；参考图只用于构图、光影、风格和场景方向，不复制水印、人物身份或第三方品牌。" },
         { "when": "noAssets", "text": "无参考图时，根据商品信息生成可信的商业摄影画面，商品结构要合理，不要出现不可能的材质和形态。" },

@@ -134,7 +134,7 @@ func main() {
 		AccessKey: getenv("MINIO_ACCESS_KEY", "starai"),
 		SecretKey: getenv("MINIO_SECRET_KEY", "starai123"),
 		Bucket:    getenv("MINIO_BUCKET", "starai-works"),
-		PublicURL: getenv("MINIO_PUBLIC_URL", "http://localhost:9000"),
+		PublicURL: getenv("MINIO_PUBLIC_URL", "/media"),
 		UseSSL:    getenv("MINIO_USE_SSL", "false") == "true",
 	})
 	if storageCfg.Provider == "local" {
@@ -196,14 +196,24 @@ func main() {
 		if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 			return err
 		}
-		return processImageTask(ctx, pool, newAPIBase, newAPIToken, payload)
+		if err := processImageTask(ctx, pool, newAPIBase, newAPIToken, payload); err != nil {
+			// 生成成功后的收尾失败会触发重试；必须留痕，否则任务只停在 running 无任何线索。
+			log.Printf("Task %s processing failed: %v", payload.TaskNo, err)
+			return err
+		}
+		return nil
 	})
 	mux.HandleFunc(TypeWorkflowTask, func(ctx context.Context, t *asynq.Task) error {
 		var payload WorkflowTaskPayload
 		if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 			return err
 		}
-		return processWorkflowTask(ctx, pool, newAPIBase, newAPIToken, payload)
+		if err := processWorkflowTask(ctx, pool, newAPIBase, newAPIToken, payload); err != nil {
+			// 工作流收尾失败必须留痕：否则项目会停在 running，前端只看到「正在生成中」。
+			log.Printf("Workflow project %d processing failed: %v", payload.ProjectID, err)
+			return err
+		}
+		return nil
 	})
 	mux.HandleFunc(TypeComposeTask, func(ctx context.Context, t *asynq.Task) error {
 		var payload ComposeTaskPayload
@@ -337,7 +347,9 @@ routeLoop:
 		if route.ID > 0 {
 			_, _ = pool.Exec(ctx, `UPDATE tasks SET route_id=$1,updated_at=now() WHERE task_no=$2`, route.ID, p.TaskNo)
 		}
-		for retry := 0; retry <= route.MaxRetries; retry++ {
+		// 迭代上限额外放开容量重试的次数：普通失败都会 break，只有「并发/额度不足」
+		// 需要比线路 MaxRetries 多试几次，等在途请求结清。
+		for retry := 0; retry <= route.MaxRetries+maxUpstreamCapacityRetries; retry++ {
 			if attempt >= maxWorkerRouteAttempts {
 				break routeLoop
 			}
@@ -361,6 +373,16 @@ routeLoop:
 			lastRouteErr = callErr
 			if callErr == nil {
 				lastRouteErr = fmt.Errorf("upstream HTTP %d: %s", candidate.StatusCode, upstreamErrorMessage(candidate.ResponseBody))
+			}
+			// 上游按「在途请求总额度」限流：并发打满时部分请求会被拒。
+			// 这是典型的并发不足（不是参数错误），退避重试比直接失败更有意义。
+			// 注意：账户额度不足以覆盖本次最高预估费用时重试无意义，直接给出充值提示。
+			if kind := classifyUpstreamCapacity(candidate.StatusCode, candidate.ResponseBody); callErr == nil && kind != upstreamCapacityNone {
+				logWorkerRouteAttempt(ctx, pool, p.TaskNo, p.ModelID, route.ID, attempt, "capacity", candidate.StatusCode, latency)
+				if kind == upstreamCapacityConcurrency && retry < maxUpstreamCapacityRetries && waitWorkerCapacityRetry(ctx, retry) {
+					continue
+				}
+				return failTask(ctx, pool, p, "MODEL_PROVIDER_ERROR", upstreamCapacityMessage(kind))
 			}
 			if callErr == nil && !workerStatusCanFailover(candidate.StatusCode) {
 				logWorkerRouteAttempt(ctx, pool, p.TaskNo, p.ModelID, route.ID, attempt, "rejected", candidate.StatusCode, latency)
@@ -1407,6 +1429,7 @@ func executeWorkerGenerationAttempt(ctx context.Context, pool *pgxpool.Pool, p I
 			result.GenerationCount = 50
 		}
 		resolveImageGenerationInput(p.Input, route.RuntimeRule, endpoint, upstreamModel)
+		capReferenceInput(p.Input, imageReferenceLimit(route.RuntimeRule))
 		persistTaskInput(ctx, pool, p.TaskNo, p.Input)
 		if isGeminiNativeImageAPI(endpoint, upstreamModel) {
 			body, _ = json.Marshal(buildGeminiNativeImagePayload(ctx, upstreamModel, p.ModelCode, prompt, p.Input))
@@ -1416,6 +1439,8 @@ func executeWorkerGenerationAttempt(ctx context.Context, pool *pgxpool.Pool, p I
 			body, _ = json.Marshal(buildMappedImagePayload(ctx, p.ModelCode, upstreamModel, route.RuntimeRule, extraParams, p.Input))
 		} else if isOpenAIImagesAdapter(route.RuntimeRule) {
 			body, _ = json.Marshal(buildOpenAIImagesPayload(upstreamModel, p.ModelCode, prompt, result.GenerationCount, p.Input))
+		} else if isDashScopeImageAdapter(route.RuntimeRule) {
+			body, _ = json.Marshal(buildDashScopeImagePayload(upstreamModel, p.ModelCode, prompt, result.GenerationCount, p.Input))
 		} else if isOpenRouterImageAdapter(route.RuntimeRule) {
 			result.GenerationCount = clampOpenRouterImageCount(route.RuntimeRule, result.GenerationCount)
 			body, _ = json.Marshal(buildOpenRouterImagePayload(ctx, upstreamModel, p.ModelCode, prompt, result.GenerationCount, route.RuntimeRule, p.Input))
@@ -1443,10 +1468,14 @@ func executeWorkerGenerationAttempt(ctx context.Context, pool *pgxpool.Pool, p I
 				applyOpenAIImageOptions(imageBody, p.Input)
 			}
 			if refs, ok := p.Input["reference_images"]; ok {
+				normalized, refErr := normalizeReferenceImagesChecked(ctx, refs)
+				if refErr != nil {
+					return result, refErr
+				}
 				if isTencentImage {
-					imageBody["images"] = normalizeReferenceImages(ctx, refs)
+					imageBody["images"] = normalized
 				} else {
-					imageBody["image"] = normalizeReferenceImages(ctx, refs)
+					imageBody["image"] = normalized
 				}
 			}
 			body, _ = json.Marshal(imageBody)
@@ -1924,18 +1953,33 @@ func buildOpenRouterImagePayload(ctx context.Context, upstreamModel, modelCode, 
 		}
 	}
 	var references []map[string]interface{}
+	referenceBytes := 0
 	for _, ref := range referenceImageSources(input["reference_images"]) {
 		url := normalizeReferenceImage(ctx, ref)
 		if url == "" {
 			continue
 		}
+		referenceBytes += len(url)
 		references = append(references, map[string]interface{}{
 			"type":      "image_url",
 			"image_url": map[string]string{"url": url},
 		})
 	}
 	if len(references) > 0 {
-		payload["input_references"] = references
+		log.Printf("openrouter image payload: %d references, %.1f MB inline", len(references), float64(referenceBytes)/(1<<20))
+		// new-api（hub 网关）只透传 `image` 字段，`input_references` 会被它丢弃；
+		// 直连 OpenRouter 则相反。按线路声明的 reference_field 决定字段名。
+		if openRouterReferenceField(runtimeRule) == "image" {
+			urls := make([]string, 0, len(references))
+			for _, ref := range references {
+				if imageURL, ok := ref["image_url"].(map[string]string); ok {
+					urls = append(urls, imageURL["url"])
+				}
+			}
+			payload["image"] = urls
+		} else {
+			payload["input_references"] = references
+		}
 	}
 	return payload
 }
@@ -1989,6 +2033,58 @@ func isOpenAIImagesAdapter(runtimeRule map[string]interface{}) bool {
 func isOtuapiImageAdapter(runtimeRule map[string]interface{}) bool {
 	upstream, _ := runtimeRule["upstream"].(map[string]interface{})
 	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(upstream["adapter"])), "otuapi_image")
+}
+
+func isDashScopeImageAdapter(runtimeRule map[string]interface{}) bool {
+	upstream, _ := runtimeRule["upstream"].(map[string]interface{})
+	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(upstream["adapter"])), "dashscope_image")
+}
+
+// buildDashScopeImagePayload 构造阿里云百炼（DashScope 原生协议）的文生图请求体。
+// 该协议不支持 OpenAI 兼容模式：提示词位于 input.messages[].content[].text，
+// 尺寸用 "宽*高" 字符串，图片以 output.choices[].message.content[].image 返回
+// （响应侧由 extractMediaItems 的递归解析覆盖，无需单独处理）。
+func buildDashScopeImagePayload(upstreamModel, modelCode, prompt string, count int, input map[string]interface{}) map[string]interface{} {
+	model := strings.TrimSpace(upstreamModel)
+	if model == "" {
+		model = modelCode
+	}
+	params := map[string]interface{}{
+		"watermark":     false,
+		"prompt_extend": true,
+	}
+	if count > 0 {
+		params["n"] = count
+	}
+	if size := strings.TrimSpace(fmt.Sprint(input["size"])); size != "" && size != "<nil>" {
+		params["size"] = normalizeDashScopeImageSize(size)
+	}
+	if negative := strings.TrimSpace(stringAny(input["negative_prompt"])); negative != "" {
+		params["negative_prompt"] = negative
+	}
+	return map[string]interface{}{
+		"model": model,
+		"input": map[string]interface{}{
+			"messages": []interface{}{
+				map[string]interface{}{
+					"role":    "user",
+					"content": []interface{}{map[string]interface{}{"text": prompt}},
+				},
+			},
+		},
+		"parameters": params,
+	}
+}
+
+// normalizeDashScopeImageSize 把站内的档位/比例写法转成百炼要求的 "宽*高"。
+func normalizeDashScopeImageSize(size string) string {
+	switch strings.ToUpper(strings.TrimSpace(size)) {
+	case "1K":
+		return "1024*1024"
+	case "2K":
+		return "2048*2048"
+	}
+	return strings.ReplaceAll(strings.TrimSpace(size), "x", "*")
 }
 
 func omitOpenAIImageQuality(runtimeRule map[string]interface{}) bool {
@@ -2126,7 +2222,7 @@ func postOpenAIImagesUpstream(ctx context.Context, conn connectionConfig, endpoi
 	files := make([]multipartFile, 0, len(references))
 	fileField := openAIImageMultipartField(runtimeRule, conn.BaseURL, stringAny(payload["model"]), len(references))
 	for index, source := range references {
-		data, contentType, err := loadMediaBytes(ctx, normalizeReferenceImage(ctx, source))
+		data, contentType, err := loadReferenceImageBytes(ctx, source)
 		if err != nil || len(data) == 0 {
 			if err == nil {
 				err = errors.New("empty image")
@@ -2141,6 +2237,11 @@ func postOpenAIImagesUpstream(ctx context.Context, conn connectionConfig, endpoi
 		}
 		files = append(files, multipartFile{Field: fileField, Name: fmt.Sprintf("%d-%s", index+1, fileNameForMIME(contentType)), ContentType: contentType, Data: data})
 	}
+	total := 0
+	for _, file := range files {
+		total += len(file.Data)
+	}
+	log.Printf("openai images edit: %d reference files, %.1f MB", len(files), float64(total)/(1<<20))
 	if mask != "" {
 		data, _, err := loadMediaBytes(ctx, normalizeReferenceImage(ctx, mask))
 		if err != nil {
@@ -2260,6 +2361,74 @@ func waitWorkerRouteRetry(ctx context.Context, retry int) bool {
 	case <-timer.C:
 		return true
 	}
+}
+
+// 上游并发/额度限流：退避等待让在途请求结清后再试。
+const maxUpstreamCapacityRetries = 2
+
+func waitWorkerCapacityRetry(ctx context.Context, retry int) bool {
+	delay := time.Duration(2+3*retry) * time.Second
+	log.Printf("upstream capacity limited, backing off %s before retry %d", delay, retry+1)
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+// 上游额度类拒绝分两种：并发/在途占满（等一等能过），和账户额度不足以覆盖
+// 本次请求的最高预估费用（不充值过不去）。两者都要给用户中文可操作提示。
+type upstreamCapacityKind int
+
+const (
+	upstreamCapacityNone upstreamCapacityKind = iota
+	upstreamCapacityConcurrency
+	upstreamCapacityCredits
+)
+
+func classifyUpstreamCapacity(status int, body []byte) upstreamCapacityKind {
+	lower := strings.ToLower(string(body))
+	// 单张请求的最高预估费用超过账户余额：OpenRouter 按 worst-case 报价校验，
+	// 与实扣金额无关，余额不够时无论怎么重试都会失败。
+	for _, marker := range []string{
+		"maximum cost exceeds your available credits",
+		"maximum cost",
+		"add credits, or request fewer images",
+	} {
+		if strings.Contains(lower, marker) {
+			return upstreamCapacityCredits
+		}
+	}
+	for _, marker := range []string{
+		"exceed your available credits",
+		"exceeds your available credits",
+		"in-flight requests",
+		"insufficient_quota",
+		"insufficient quota",
+		"current in-flight",
+	} {
+		if strings.Contains(lower, marker) {
+			return upstreamCapacityConcurrency
+		}
+	}
+	if status == 429 {
+		return upstreamCapacityConcurrency
+	}
+	return upstreamCapacityNone
+}
+
+func upstreamCapacityLimited(status int, body []byte) bool {
+	return classifyUpstreamCapacity(status, body) != upstreamCapacityNone
+}
+
+func upstreamCapacityMessage(kind upstreamCapacityKind) string {
+	if kind == upstreamCapacityCredits {
+		return "上游额度不足：本张图片的最高预估费用超过上游账户剩余额度（与实际扣费无关）。请为上游账户充值，或改用更便宜的图片模型 / 降低清晰度后再试"
+	}
+	return "并发不足：上游账户的在途请求额度已占满（同时生成的图片过多或上游余额不足）。已自动重试仍失败，请稍后再试、减少同时生成的数量，或为上游账户充值"
 }
 
 const maxWorkerRouteAttempts = 8
@@ -2980,31 +3149,35 @@ func runBananaImageBatch(ctx context.Context, pool *pgxpool.Pool, conn connectio
 	return all, strings.Join(upstreamIDs, ","), nil
 }
 
+// normalizeReferenceImagesChecked 归一化后校验：输入端声明了参考图但一张都读不出来时
+// 直接失败，避免模型在无素材状态下自由发挥（会把商品画成完全不相关的品类）。
+func normalizeReferenceImagesChecked(ctx context.Context, refs interface{}) (interface{}, error) {
+	declared := len(referenceImageSources(refs))
+	normalized := normalizeReferenceImages(ctx, refs)
+	if declared > 0 && usableReferenceCount(normalized) == 0 {
+		return nil, errors.New("商品图读取失败：上传的参考图无法访问，已停止生成，避免产出与商品无关的图片")
+	}
+	return normalized, nil
+}
+
+// usableReferenceCount 统计真正可用的参考图：data URL 或公网地址。
+// 相对地址无法被上游解析，不计入。
+func usableReferenceCount(value interface{}) int {
+	count := 0
+	for _, s := range referenceImageSources(value) {
+		if strings.HasPrefix(s, "data:") || strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
+			count++
+		}
+	}
+	return count
+}
+
 func normalizeReferenceImages(ctx context.Context, refs interface{}) interface{} {
-	switch v := refs.(type) {
-	case string:
-		return normalizeReferenceImage(ctx, v)
-	case []string:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			if s := normalizeReferenceImage(ctx, item); s != "" {
-				out = append(out, s)
-			}
-		}
-		return out
-	case []interface{}:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			if s, ok := item.(string); ok {
-				if normalized := normalizeReferenceImage(ctx, s); normalized != "" {
-					out = append(out, normalized)
-				}
-			}
-		}
-		return out
-	default:
+	sources := referenceImageSources(refs)
+	if sources == nil {
 		return refs
 	}
+	return normalizeReferenceList(ctx, sources)
 }
 
 func normalizeVideoReferenceImages(ctx context.Context, refs interface{}) interface{} {
@@ -3092,19 +3265,35 @@ func normalizeReferenceImageDiag(ctx context.Context, src string) (string, strin
 	if src == "" || strings.HasPrefix(src, "data:image/") {
 		return src, ""
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", src, nil)
-	if err != nil {
-		return src, ""
-	}
-	// 参考图规范化同样需要超时，不可达的 URL 不能让任务挂死。
-	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
 	var data []byte
 	headerType := ""
-	if err == nil {
-		defer resp.Body.Close()
-		if resp.StatusCode < 400 {
-			headerType = resp.Header.Get("Content-Type")
-			data, err = io.ReadAll(io.LimitReader(resp.Body, (20<<20)+1))
+	var err error
+	if strings.HasPrefix(src, "/") {
+		// 相对媒体地址（/media/<bucket>/<key>）没有协议头，HTTP 取不到，
+		// 直接按对象 key 读取。
+		if objectStore != nil {
+			if objectKey := objectStore.ObjectKeyFromURL(src); objectKey != "" {
+				if s3Data, s3Err := objectStore.ReadAll(ctx, objectKey, 20<<20); s3Err == nil {
+					data = s3Data
+				} else {
+					log.Printf("normalizeReferenceImage: object %s read failed: %v", objectKey, s3Err)
+				}
+			}
+		}
+	} else {
+		req, reqErr := http.NewRequestWithContext(ctx, "GET", src, nil)
+		if reqErr != nil {
+			return src, ""
+		}
+		// 参考图规范化同样需要超时，不可达的 URL 不能让任务挂死。
+		resp, doErr := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+		err = doErr
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode < 400 {
+				headerType = resp.Header.Get("Content-Type")
+				data, err = io.ReadAll(io.LimitReader(resp.Body, (20<<20)+1))
+			}
 		}
 	}
 	if err != nil || len(data) == 0 || len(data) > 20<<20 {
@@ -3120,6 +3309,11 @@ func normalizeReferenceImageDiag(ctx context.Context, src string) (string, strin
 	}
 	if err != nil || len(data) == 0 {
 		log.Printf("normalizeReferenceImage: unreadable src=%s err=%v", src, err)
+		if strings.HasPrefix(src, "/") {
+			// 相对地址只有本服务能解析，上游一定取不到；丢弃比透传更安全，
+			// 否则会把无效地址发给上游并退化成纯文字生图。
+			return "", "素材读取失败"
+		}
 		return src, ""
 	}
 	if len(data) > 20<<20 {
@@ -3138,7 +3332,7 @@ func normalizeReferenceImageDiag(ctx context.Context, src string) (string, strin
 		log.Printf("normalizeReferenceImage: model-unsupported format %s src=%s", contentType, src)
 		return src, modelUnsupportedImageReason(isobmffBrand(data))
 	}
-	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data), ""
+	return referenceDataURL(data, contentType), ""
 }
 
 func validateOmniReferencePayload(payload map[string]interface{}) error {
@@ -3370,6 +3564,21 @@ func loadMediaBytes(ctx context.Context, src string) ([]byte, string, error) {
 		}
 		raw, err := base64.StdEncoding.DecodeString(src[comma+1:])
 		return raw, contentType, err
+	}
+	if strings.HasPrefix(src, "/") && objectStore != nil {
+		// 相对媒体地址（/media/<bucket>/<key>）没有协议头，HTTP 取不到，
+		// 直接按对象 key 读取（详情排版下载生成模块图走这里）。
+		if objectKey := objectStore.ObjectKeyFromURL(src); objectKey != "" {
+			data, err := objectStore.ReadAll(ctx, objectKey, 20<<20)
+			if err != nil {
+				return nil, "", err
+			}
+			contentType := http.DetectContentType(data[:min(len(data), 512)])
+			if !strings.HasPrefix(contentType, "image/") && !strings.HasPrefix(contentType, "video/") && !strings.HasPrefix(contentType, "audio/") && !strings.Contains(contentType, "octet-stream") {
+				contentType = "image/jpeg"
+			}
+			return data, contentType, nil
+		}
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", src, nil)
 	if err != nil {
@@ -3885,11 +4094,20 @@ func upstreamContentFailure(raw map[string]interface{}) string {
 	return ""
 }
 
+// humanizeUpstreamFailure 把上游原始错误翻译成用户能看懂的话，并在返回前统一脱敏：
+// 上游地址/域名/厂商名不能出现在终端用户看到的文案里。
 func humanizeUpstreamFailure(msg string) string {
+	return sanitizeUserFacingError(humanizeUpstreamFailureRaw(msg))
+}
+
+func humanizeUpstreamFailureRaw(msg string) string {
 	msg = strings.TrimSpace(msg)
 	lower := strings.ToLower(msg)
 	if lower == "not_found" || lower == "not found" || strings.Contains(lower, "task not found") {
 		return "上游已接收任务，但后续查询时任务不存在（NOT_FOUND）。可重试当前片段；若再次出现，请切换视频线路或检查该线路的任务查询接口"
+	}
+	if kind := classifyUpstreamCapacity(0, []byte(msg)); kind != upstreamCapacityNone {
+		return upstreamCapacityMessage(kind)
 	}
 	if strings.Contains(lower, "tls handshake timeout") {
 		return "连接上游时 TLS 握手超时，请检查服务器到上游的网络或代理"
@@ -4124,8 +4342,6 @@ func downloadRetryDelay(attempt, statusCode int) time.Duration {
 func downloadAuthenticatedMedia(ctx context.Context, conn connectionConfig, mediaURL string, maxBytes int64) ([]byte, string, error) {
 	client := &http.Client{Timeout: 15 * time.Minute}
 	const maxAttempts = 45
-	var resp *http.Response
-	var err error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, "GET", mediaURL, nil)
 		if err != nil {
@@ -4135,7 +4351,7 @@ func downloadAuthenticatedMedia(ctx context.Context, conn connectionConfig, medi
 		if sameOriginURL(mediaURL, conn.BaseURL) {
 			applyConnectionHeaders(req, conn)
 		}
-		resp, err = client.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			if attempt < maxAttempts {
 				time.Sleep(downloadRetryDelay(attempt, 0))
@@ -4155,32 +4371,56 @@ func downloadAuthenticatedMedia(ctx context.Context, conn connectionConfig, medi
 			time.Sleep(delay)
 			continue
 		}
-		break
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		msg := truncateText(string(body), 200)
-		if resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 524 {
-			return nil, "", fmt.Errorf("上游视频暂不可用(HTTP %d)，请稍后重试: %s", resp.StatusCode, msg)
+		if resp.StatusCode >= 400 {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+			resp.Body.Close()
+			msg := truncateText(string(body), 200)
+			if resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 524 {
+				return nil, "", fmt.Errorf("上游视频暂不可用(HTTP %d)，请稍后重试: %s", resp.StatusCode, msg)
+			}
+			return nil, "", fmt.Errorf("下载上游视频 HTTP %d: %s", resp.StatusCode, msg)
 		}
-		return nil, "", fmt.Errorf("下载上游视频 HTTP %d: %s", resp.StatusCode, msg)
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+		contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
+		resp.Body.Close()
+		if readErr != nil {
+			// 网关/APISIX 偶发在传输中途断开（unexpected EOF / connection reset），
+			// 图片已经生成并计费，必须重试下载而不是直接判失败。
+			if attempt < maxAttempts && isRetryableDownloadError(readErr) {
+				delay := downloadRetryDelay(attempt, 0)
+				log.Printf("download %s read failed (attempt %d/%d), retry in %s: %v",
+					truncateText(mediaURL, 60), attempt, maxAttempts, delay, readErr)
+				time.Sleep(delay)
+				continue
+			}
+			return nil, "", readErr
+		}
+		if int64(len(data)) > maxBytes {
+			return nil, "", fmt.Errorf("视频超过大小限制(%dMB)", maxBytes>>20)
+		}
+		if len(data) == 0 {
+			return nil, "", fmt.Errorf("上游返回空视频")
+		}
+		if contentType == "" || strings.HasPrefix(contentType, "application/json") || data[0] == '{' {
+			return nil, "", fmt.Errorf("上游未返回视频文件: %s", truncateText(string(data), 200))
+		}
+		return data, contentType, nil
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
-	if err != nil {
-		return nil, "", err
+	return nil, "", fmt.Errorf("下载上游视频失败：重试次数已用尽")
+}
+
+// isRetryableDownloadError 判断下载中断是否值得重试（传输中途断开，而非请求参数错误）。
+func isRetryableDownloadError(err error) bool {
+	if err == nil {
+		return false
 	}
-	if int64(len(data)) > maxBytes {
-		return nil, "", fmt.Errorf("视频超过大小限制(%dMB)", maxBytes>>20)
+	msg := strings.ToLower(err.Error())
+	for _, marker := range []string{"unexpected eof", "connection reset", "broken pipe", "eof", "timeout", "connection refused", "tls handshake", "server closed"} {
+		if strings.Contains(msg, marker) {
+			return true
+		}
 	}
-	if len(data) == 0 {
-		return nil, "", fmt.Errorf("上游返回空视频")
-	}
-	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
-	if contentType == "" || strings.HasPrefix(contentType, "application/json") || data[0] == '{' {
-		return nil, "", fmt.Errorf("上游未返回视频文件: %s", truncateText(string(data), 200))
-	}
-	return data, contentType, nil
+	return false
 }
 
 func isHardDownload404(statusCode int, body []byte) bool {
@@ -4611,7 +4851,7 @@ func upstreamErrorMessage(body []byte) string {
 			return humanizeUpstreamFailure(msg)
 		}
 		if code := firstString(baseResp, "status_code", "code"); code != "" && code != "0" {
-			return "上游模型服务返回错误：" + code
+			return "上游模型服务返回错误：" + sanitizeUserFacingError(code)
 		}
 	}
 	if msg := firstString(raw, "message", "error_message", "fail_reason", "error"); msg != "" {
@@ -4738,6 +4978,9 @@ func failTaskWithStatusCode(ctx context.Context, pool *pgxpool.Pool, p ImageTask
 			StatusCode: statusCode,
 		}
 	}
+
+	// 面向用户的文案：剥掉上游地址/厂商名；上面的重试判定仍用原始错误。
+	msg = sanitizeUserFacingError(msg)
 
 	// Permanent error - mark task as failed
 	var estimated float64

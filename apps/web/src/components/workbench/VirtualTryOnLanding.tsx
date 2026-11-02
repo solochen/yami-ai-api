@@ -42,8 +42,9 @@ function isTryOnModel(model: ModelItem, defaultCode?: string) {
   if (model.code === defaultCode) return true;
   const imageRule = model.runtime_rule?.image || {};
   if (Number(imageRule.max_reference_images || model.runtime_rule?.max_reference_images || 0) >= 2) return true;
-  const text = `${model.code} ${model.display_name || ""} ${(model.tags || []).join(" ")} ${JSON.stringify(model.runtime_rule || {})}`.toLowerCase();
-  return text.includes("nano_banana") || text.includes("nano banana") || text.includes("gpt-image-2") || text.includes("gemini");
+  const text = `${model.code} ${model.display_name || ""} ${(model.tags || []).join(" ")}`.toLowerCase();
+  // 首选按能力配置判断；代号前缀只作兜底，不再依赖上游厂商命名。
+  return text.includes("nv-image") || text.includes("hl-image") || text.includes("seedream") || text.includes("qwen-image");
 }
 
 function imageURL(task: MediaTask) {

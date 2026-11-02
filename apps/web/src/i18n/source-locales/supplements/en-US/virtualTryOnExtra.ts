@@ -34,7 +34,7 @@ const virtualTryOnExtra: Record<string, string> = {
   "上传人物照": "Upload photos of people",
   "上传人物照和服装图，立即开始试穿": "Upload photos of people and clothing and start trying them on immediately",
   "上传人物照和服装图，生成自然试穿效果": "Upload photos of people and clothing to generate natural try-on effects",
-  "上传人物照片和服装商品图，使用 Nano Banana、GPT Image 2 或 Gemini 多参考图模型，快速生成自然的视觉试穿效果。": "Upload photos of people and images of clothing products, and use Nano Banana, GPT Image 2 or Gemini multi-reference image models to quickly generate natural visual try-on effects.",
+  "上传人物照片和服装商品图，使用 NV Image 或 HL Image 多参考图模型，快速生成自然的视觉试穿效果。": "Upload photos of people and images of clothing products, and use NV Image or HL Image multi-reference image models to quickly generate natural visual try-on effects.",
   "设置参数": "Set parameters",
   "使用流程": "Usage process",
   "使用清晰的单件平铺图或商品图": "Use clear single-piece tile images or product images",

@@ -166,7 +166,7 @@ func resolveCommerceScene(analysis, inputs map[string]interface{}) string {
 func validateCommerceAnalysis(analysis, inputs map[string]interface{}) error {
 	if len(referenceImageURLs(inputs)) > 0 {
 		notes := strings.ToLower(stringAny(analysis["asset_notes"]))
-		for _, unavailable := range []string{"无法直接读取", "无法读取", "无法查看", "无法识别图片", "未能读取", "未提供可读视觉描述", "沿用用户确认描述", "看不到", "cannot view", "cannot access", "unable to view", "unable to access"} {
+		for _, unavailable := range []string{"无法直接读取", "无法读取", "无法查看", "无法识别图片", "未能读取", "未提供可读视觉描述", "沿用用户确认描述", "看不到", "未在本引擎中实际可见", "参考图片数量标记为0", "未接收到可读", "cannot view", "cannot access", "unable to view", "unable to access"} {
 			if strings.Contains(notes, unavailable) {
 				return fmt.Errorf("分析模型未能理解商品参考图，已停止生图；请检查分析模型及线路的实际视觉能力")
 			}

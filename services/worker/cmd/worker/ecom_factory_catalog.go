@@ -57,6 +57,11 @@ type ecomModule struct {
 	Goal         string `json:"goal"`
 	Prompt       string `json:"prompt"`
 	Accent       string `json:"accent"`
+	// ExtraKey/ExtraLabel/ExtraHint 声明模块级必填资料：选中该模块时用户
+	// 必须在 inputs.moduleExtras[ExtraKey] 提供文本（如尺寸数据、接口清单、参数行）。
+	ExtraKey   string `json:"extraKey,omitempty"`
+	ExtraLabel string `json:"extraLabel,omitempty"`
+	ExtraHint  string `json:"extraHint,omitempty"`
 }
 
 type ecomSuite struct {

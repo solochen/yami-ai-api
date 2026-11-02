@@ -94,7 +94,7 @@ services:
       MINIO_SECRET_KEY: starai123
       MINIO_BUCKET: starai-works
       MINIO_USE_SSL: "false"
-      MINIO_PUBLIC_URL: http://localhost:9000
+      MINIO_PUBLIC_URL: /media
       JWT_SECRET: dev-jwt-secret-starai
       ADMIN_JWT_SECRET: dev-admin-jwt-secret
       MODEL_ROUTE_CIPHER_KEY: dev-model-route-cipher-key
@@ -123,6 +123,7 @@ services:
       MINIO_SECRET_KEY: starai123
       MINIO_BUCKET: starai-works
       MINIO_USE_SSL: "false"
+      MINIO_PUBLIC_URL: /media
       NEW_API_BASE_URL: http://mock-new-api:3002
       NEW_API_TOKEN: change-me-dev-model-gateway-token
       MODEL_ROUTE_CIPHER_KEY: dev-model-route-cipher-key
@@ -149,6 +150,7 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: production
+      MEDIA_PROXY_TARGET: http://minio:9000
     depends_on:
       api:
         condition: service_started
@@ -172,6 +174,7 @@ services:
       INTERNAL_API_URL: http://api:8080
       NODE_ENV: production
       ADMIN_ASSET_PREFIX: /admin-assets
+      MEDIA_PROXY_TARGET: http://minio:9000
     depends_on:
       api:
         condition: service_started
