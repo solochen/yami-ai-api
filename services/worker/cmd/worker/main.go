@@ -1357,6 +1357,15 @@ func executeWorkerGenerationAttempt(ctx context.Context, pool *pgxpool.Pool, p I
 	}
 	extraParams["connection"] = effectiveConn
 	endpoint, upstreamModel := result.Endpoint, result.UpstreamModel
+	// 带参考图时切换到"支持参考图"的模型别名：网关按模型名选渠道，
+	// 从而做到文生图走便宜线路、图生图走 OpenRouter。
+	if isImage && !isVideo {
+		if override := referenceModelOverride(route.RuntimeRule, p.Input); override != "" {
+			log.Printf("reference present: upstream model %s -> %s (task=%s)", upstreamModel, override, p.TaskNo)
+			upstreamModel = override
+			result.UpstreamModel = override
+		}
+	}
 	var body []byte
 	if isVideo {
 		if endpoint == "" {

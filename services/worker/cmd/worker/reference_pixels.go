@@ -70,6 +70,29 @@ func openRouterReferenceField(runtimeRule map[string]interface{}) string {
 	return "input_references"
 }
 
+// referenceModelOverride 在请求带参考图时，把上游模型名换成"支持参考图"的别名。
+//
+// 背景：中转站不同线路能力不同（实测 ikunapi 的 99_线路4 会静默忽略参考图，
+// 只有 OpenRouter 支持图生图），而网关无法按请求体参数选渠道。这里由 worker
+// 按"有没有参考图"切换上游模型名，网关侧该别名只挂在支持参考图的渠道上，
+// 从而实现"文生图走便宜线路、图生图走 OpenRouter"。
+//
+// 配置位置：模型或线路的 runtime_rule.image.reference_model
+func referenceModelOverride(runtimeRule, input map[string]interface{}) string {
+	if len(referenceImageSources(input["reference_images"])) == 0 {
+		return ""
+	}
+	imageRule, _ := runtimeRule["image"].(map[string]interface{})
+	if imageRule == nil {
+		return ""
+	}
+	value := strings.TrimSpace(fmt.Sprint(imageRule["reference_model"]))
+	if value == "" || value == "<nil>" {
+		return ""
+	}
+	return value
+}
+
 // imageReferenceLimit 读取模型声明的参考图上限；0 表示未声明。
 func imageReferenceLimit(runtimeRule map[string]interface{}) int {
 	imageRule, _ := runtimeRule["image"].(map[string]interface{})
