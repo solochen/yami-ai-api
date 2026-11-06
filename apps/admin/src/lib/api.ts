@@ -1,4 +1,4 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 const ADMIN_TOKEN_KEY = "admin_token";
 const ADMIN_EMAIL_KEY = "admin_email";

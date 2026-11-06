@@ -37,6 +37,18 @@ func TestSettlementPreservesThousandthPrecision(t *testing.T) {
 	}
 }
 
+func TestWorkflowSettlementConsumesOnlyTheChargedReservation(t *testing.T) {
+	if got := consumedWorkflowFreezeAmount(0.296725, 0.292979); math.Abs(got-0.292979) > 1e-9 {
+		t.Fatalf("consumed freeze = %.6f, want 0.292979", got)
+	}
+	if got := consumedWorkflowFreezeAmount(0.296725, 0.4); math.Abs(got-0.296725) > 1e-9 {
+		t.Fatalf("consumed freeze above reservation = %.6f, want 0.296725", got)
+	}
+	if got := consumedWorkflowFreezeAmount(0.296725, 0); got != 0 {
+		t.Fatalf("zero charge consumed freeze = %.6f, want 0", got)
+	}
+}
+
 func TestCashReferralPercentUsesPaidCurrencyAmount(t *testing.T) {
 	if got := referralRewardAmount(10, "percent", "cash", 20, 2000); got != 2 {
 		t.Fatalf("reward = %v, want 2", got)

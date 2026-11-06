@@ -327,17 +327,17 @@ function Info({ label, value }: { label: string; value: string }) {
 function TransactionList({ items, cash }: { items: WalletTransaction[]; cash?: boolean }) {
   const { ts } = useI18n();
   return (
-    <div className="soft-card divide-y">
+    <div className="soft-card divide-y divide-gray-100 dark:divide-white/10">
       {items.length === 0 ? (
         <div className="p-6 text-center text-sm text-gray-400">{ts("暂无记录")}</div>
       ) : (
         items.map((tx) => (
-          <div key={tx.id} className="flex items-center justify-between gap-3 px-5 py-4">
+          <div key={tx.id} className="flex items-center justify-between gap-3 px-5 py-4 transition-colors hover:bg-gray-50/70 dark:hover:bg-white/[0.03]">
             <div className="min-w-0 flex-1">
               <div className="break-words text-sm font-medium">{tx.display_name || tx.remark || ts(TX_LABELS[tx.type] || tx.type)}</div>
               <div className="mt-0.5 text-xs text-gray-400">{new Date(tx.created_at).toLocaleString("zh-CN", { hour12: false })}</div>
             </div>
-            <div className={`text-sm font-semibold ${tx.direction === "in" ? "text-primary" : "text-gray-700"}`}>
+            <div className={`shrink-0 tabular-nums text-sm font-semibold ${tx.direction === "in" ? "text-primary" : "text-gray-700"}`}>
               {tx.direction === "in" ? "+" : "-"}
               {cash ? "¥" : ""}
               {tx.amount.toFixed(cash ? 2 : 4)}
@@ -352,14 +352,14 @@ function TransactionList({ items, cash }: { items: WalletTransaction[]; cash?: b
 function WithdrawalList({ items }: { items: WithdrawalRequest[] }) {
   const { ts } = useI18n();
   return (
-    <div className="soft-card divide-y">
+    <div className="soft-card divide-y divide-gray-100 dark:divide-white/10">
       {items.length === 0 ? (
         <div className="p-6 text-center text-sm text-gray-400">{ts("暂无提现记录")}</div>
       ) : (
         items.map((w) => (
-          <div key={w.id} className="flex items-center justify-between gap-3 px-5 py-4">
+          <div key={w.id} className="flex items-center justify-between gap-3 px-5 py-4 transition-colors hover:bg-gray-50/70 dark:hover:bg-white/[0.03]">
             <div>
-              <div className="text-sm font-medium">{ts(METHOD_LABELS[w.method] || w.method)} · ¥{w.amount.toFixed(2)}</div>
+              <div className="text-sm font-medium tabular-nums">{ts(METHOD_LABELS[w.method] || w.method)} · ¥{w.amount.toFixed(2)}</div>
               <div className="mt-0.5 text-xs text-gray-400">{new Date(w.created_at).toLocaleString("zh-CN", { hour12: false })}</div>
               {w.admin_note && <div className="mt-1 text-xs text-gray-500">{w.admin_note}</div>}
             </div>

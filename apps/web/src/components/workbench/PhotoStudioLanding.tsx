@@ -22,6 +22,8 @@ type LandingProps = {
 };
 type InputBarProps = {
   defaultModelCode?: string;
+  analysisModelCode?: string;
+  workflowFee?: number;
   error?: string;
   featureTags?: string[];
   onSubmit: (inputs: Record<string, any>) => void | Promise<void>;
@@ -165,7 +167,7 @@ export function PhotoStudioLanding({ workflowCode, workflowName, workflowDescrip
 }
 
 /** 底部常驻输入栏：参照电商一键出图，资产库引入用 ChatTopTools，提交后不跳转 */
-export function PhotoStudioInputBar({ defaultModelCode, error, featureTags, onSubmit }: InputBarProps) {
+export function PhotoStudioInputBar({ defaultModelCode, analysisModelCode, workflowFee = 0, error, featureTags, onSubmit }: InputBarProps) {
   const { t, ts } = useI18n();
   const [photo, setPhoto] = useState<ReferenceImagePick | null>(null);
   const [uploadError, setUploadError] = useState("");
@@ -178,6 +180,9 @@ export function PhotoStudioInputBar({ defaultModelCode, error, featureTags, onSu
   const [submitting, setSubmitting] = useState(false);
   const [models, setModels] = useState<{ code: string; display_name?: string; category?: string }[]>([]);
   const [model, setModel] = useState(defaultModelCode || "");
+  const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
+  const [estimateLoading, setEstimateLoading] = useState(false);
+  const [estimateError, setEstimateError] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
   const [bottom, setBottom] = useState<BottomBarState>({ channel_key: "price_first", fallback_enabled: true, web_search: false, timeout_sec: 30, asset_ids: [], files: [] });
 
@@ -190,6 +195,71 @@ export function PhotoStudioInputBar({ defaultModelCode, error, featureTags, onSu
       })
       .catch(() => setModels([]));
   }, [defaultModelCode]);
+
+  useEffect(() => {
+    if (!model || count <= 0) {
+      setEstimatedCost(null);
+      setEstimateError("");
+      setEstimateLoading(false);
+      return;
+    }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setEstimateLoading(true);
+      setEstimateError("");
+      const generationParams = {
+        count,
+        n: count,
+        aspect_ratio: "3:4",
+        quality: "medium",
+        image_size: "1K",
+        ...(photo ? { reference_images: [photo.url] } : {}),
+      };
+      const generationEstimate = api<{ estimated_cost: number }>(`/api/models/${encodeURIComponent(model)}/estimate`, {
+        method: "POST",
+        body: JSON.stringify({ params: generationParams }),
+      });
+      const analysisEstimate = analysisModelCode
+        ? api<{ estimated_cost: number }>(`/api/models/${encodeURIComponent(analysisModelCode)}/estimate`, {
+            method: "POST",
+            body: JSON.stringify({
+              params: {
+                _estimated_input_tokens: 500,
+                _estimated_output_tokens: 600,
+                count: 1,
+                n: 1,
+                ...(photo ? { reference_images: [photo.url] } : {}),
+              },
+            }),
+          })
+        : Promise.resolve({ estimated_cost: 0 });
+      void Promise.all([generationEstimate, analysisEstimate])
+        .then(([generation, analysis]) => {
+          if (!active) return;
+          const generationCost = Number(generation.estimated_cost);
+          const analysisCost = Number(analysis.estimated_cost);
+          const cost = generationCost + analysisCost + Math.max(0, Number(workflowFee) || 0);
+          if (![generationCost, analysisCost, cost].every(Number.isFinite) || cost <= 0) {
+            setEstimatedCost(null);
+            setEstimateError(ts("暂无可用报价"));
+            return;
+          }
+          setEstimatedCost(cost);
+        })
+        .catch((err) => {
+          if (!active) return;
+          setEstimatedCost(null);
+          setEstimateError(err instanceof Error ? err.message : ts("费用预估失败"));
+        })
+        .finally(() => {
+          if (active) setEstimateLoading(false);
+        });
+    }, 180);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [analysisModelCode, count, model, photo, ts, workflowFee]);
 
   const upload = async (file?: File) => {
     if (!file || uploading) return;
@@ -332,7 +402,10 @@ export function PhotoStudioInputBar({ defaultModelCode, error, featureTags, onSu
                 </div>
               )}
             </MediaOptionMenu>
-            <button type="button" onClick={submit} disabled={!photo || uploading || submitting} className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-white shadow-md disabled:opacity-40">{submitting ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={19} />}</button>
+            <span className="ml-auto shrink-0 text-[11px] text-gray-500 dark:text-gray-400" aria-live="polite">
+              {estimateLoading ? ts("正在估算费用") : estimatedCost != null ? `${ts("预估")} ${estimatedCost.toFixed(2)} ${ts("算力")}` : estimateError ? estimateError : ts("费用待估算")}
+            </span>
+            <button type="button" onClick={submit} disabled={!photo || uploading || submitting} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-white shadow-md disabled:opacity-40">{submitting ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={19} />}</button>
           </div>
         </div>
       </div>

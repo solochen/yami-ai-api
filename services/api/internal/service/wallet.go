@@ -43,6 +43,19 @@ func (s *WalletService) GetWallet(ctx context.Context, userID int64) (*WalletInf
 		return nil, err
 	}
 	w.CashBalance = cash
+	// Self-heal the denormalised frozen counter: the authoritative amount is the
+	// sum of active freeze rows. Drift would otherwise hide spendable balance.
+	if _, err := s.db.Exec(ctx, `UPDATE wallets SET frozen_compute=(
+		SELECT COALESCE(SUM(amount),0) FROM balance_freezes WHERE user_id=$1 AND status='frozen'
+	) WHERE user_id=$1 AND frozen_compute <> (
+		SELECT COALESCE(SUM(amount),0) FROM balance_freezes WHERE user_id=$1 AND status='frozen'
+	)`, userID); err == nil {
+		if err := s.db.QueryRow(ctx,
+			`SELECT compute_balance, frozen_compute, cash_balance FROM wallets WHERE user_id=$1`, userID,
+		).Scan(&w.ComputeBalance, &w.FrozenCompute, &cash); err == nil {
+			w.CashBalance = cash
+		}
+	}
 	return &w, nil
 }
 

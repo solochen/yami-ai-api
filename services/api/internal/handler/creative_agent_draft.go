@@ -204,6 +204,13 @@ func creativeAgentSlotPrompt(slots map[string]interface{}, mediaTypes ...string)
 	if base == "" {
 		base = stringAny(slots["prompt"])
 	}
+	mediaType := stringAny(slots["media_type"])
+	if len(mediaTypes) > 0 {
+		mediaType = mediaTypes[0]
+	}
+	if base == "" && mediaType == "music" {
+		base = stringAny(slots["music_prompt"])
+	}
 	if base == "" {
 		return ""
 	}
@@ -245,6 +252,8 @@ func (h *Handler) finalizeCreativeAgentDraft(ctx context.Context, userID int64, 
 	proposedWorkflow := creativeAgentWorkflowDefinition(workflowCatalog, proposedWorkflowCode)
 	// Discussion must not merge guessed slots or replace an executable proposal.
 	documentWrite := creativeAgentDocumentWriteTurn(d, text)
+	creativeAgentPromoteExplicitMedia(plan, text)
+	creativeAgentApplyPreferredType(plan, req.PreferredType, text)
 	if stringAny(plan["intent"]) == "chat" && stringAny(plan["action"]) == "chat" && !creativeAgentWritingRequest(text) && !documentWrite && !creativeAgentGenerationProhibited(text) {
 		d.Status = stringAny(d.Plan["draft_status"])
 		if d.Status == "" || d.Status == "planning" {
@@ -525,7 +534,9 @@ func (h *Handler) finalizeCreativeAgentDraft(ctx context.Context, userID int64, 
 					if key == "generation_prompt" {
 						labels = append(labels, "一个已填完整、没有占位符或多个候选的提示词")
 					} else if key == "prompt" {
-						labels = append(labels, "视频/素材的内容或文案")
+						labels = append(labels, creativeAgentPromptGapLabel(mediaType))
+					} else if key == "music_prompt" {
+						labels = append(labels, "曲风、情绪或使用场景")
 					} else if key == "aspect_ratio" {
 						labels = append(labels, "视频主要使用场景或画幅（官网展示通常建议 16:9 横屏，手机全屏短视频通常建议 9:16 竖屏；多平台请确定主要版本）")
 					} else if key == "document_source" {
@@ -614,14 +625,9 @@ func (h *Handler) finalizeCreativeAgentDraft(ctx context.Context, userID int64, 
 						plan[key] = d.Slots[key]
 					}
 				}
-				if stringAny(plan["intent"]) == "workflow" && workflowCode == "content_image_post" {
+				if stringAny(plan["intent"]) == "workflow" {
 					p := plan["params"].(map[string]interface{})
-					p["image_model_code"] = selected
-					p["creative_guidance"] = policy.CreationGuidance
-				} else if stringAny(plan["intent"]) == "workflow" {
-					p := plan["params"].(map[string]interface{})
-					p["image_model_code"], p["narration_model_code"] = stringAny(configured["image_model_code"]), stringAny(configured["speech_model_code"])
-					p["dialogue_model_codes"] = []string{stringAny(configured["analysis_model_code"])}
+					applyCreativeAgentWorkflowModels(p, configured, workflowCode, selected)
 					p["creative_guidance"] = policy.CreationGuidance
 				}
 				creativeAgentAttachModelQuote(h.models, confirmedModel, plan)
@@ -663,6 +669,94 @@ func (h *Handler) finalizeCreativeAgentDraft(ctx context.Context, userID int64, 
 		return nil, err
 	}
 	return plan, nil
+}
+
+// Empty admin slots stay absent so a canvas can use its own fallback.
+// Writing "" would look like an explicit model and block that fallback.
+func applyCreativeAgentWorkflowModels(params, configured map[string]interface{}, workflowCode, selected string) {
+	if params == nil {
+		return
+	}
+	if workflowCode == "content_image_post" {
+		if strings.TrimSpace(selected) != "" {
+			params["image_model_code"] = selected
+		}
+		return
+	}
+	if image := strings.TrimSpace(stringAny(configured["image_model_code"])); image != "" {
+		params["image_model_code"] = image
+	}
+	if speech := strings.TrimSpace(stringAny(configured["speech_model_code"])); speech != "" {
+		params["narration_model_code"] = speech
+	}
+	if analysis := strings.TrimSpace(stringAny(configured["analysis_model_code"])); analysis != "" {
+		params["dialogue_model_codes"] = []string{analysis}
+	}
+}
+
+func creativeAgentPromptGapLabel(mediaType string) string {
+	switch mediaType {
+	case "music":
+		return "曲风、情绪或使用场景"
+	case "speech":
+		return "要朗读的正文"
+	case "image":
+		return "图片内容"
+	default:
+		return "视频/素材的内容或文案"
+	}
+}
+
+// A model that answers "shall I generate?" in chat still has to produce a
+// confirmable plan when the user already asked for media.
+func creativeAgentPromoteExplicitMedia(plan map[string]interface{}, text string) bool {
+	media, ok := creativeAgentExplicitMedia(text)
+	if !ok || plan == nil {
+		return false
+	}
+	intent := strings.ToLower(strings.TrimSpace(stringAny(plan["intent"])))
+	if intent != "" && intent != "chat" && intent != "clarify" {
+		return false
+	}
+	plan["intent"] = media
+	if action := stringAny(plan["action"]); action == "" || action == "chat" {
+		plan["action"] = "update"
+	}
+	updates, _ := plan["slot_updates"].(map[string]interface{})
+	if updates == nil {
+		updates = map[string]interface{}{}
+	}
+	evidence, _ := plan["slot_evidence"].(map[string]interface{})
+	if evidence == nil {
+		evidence = map[string]interface{}{}
+	}
+	content := strings.TrimSpace(text)
+	if media == "speech" {
+		if spoken := creativeAgentSpokenText(text); spoken != "" {
+			content = spoken
+		}
+		if stringAny(updates["script"]) == "" {
+			updates["script"] = content
+			evidence["script"] = text
+		}
+	}
+	if media == "music" {
+		if stringAny(updates["music_prompt"]) == "" {
+			updates["music_prompt"] = content
+			evidence["music_prompt"] = text
+		}
+		if _, exists := updates["is_instrumental"]; !exists && regexp.MustCompile(`纯音乐|无歌词|不要歌词|不需要歌词|没有歌词`).MatchString(text) {
+			updates["is_instrumental"] = true
+			evidence["is_instrumental"] = text
+		}
+	}
+	if stringAny(updates["prompt"]) == "" && stringAny(updates["script"]) == "" && stringAny(updates["generation_prompt"]) == "" {
+		updates["prompt"] = content
+		evidence["prompt"] = text
+	}
+	plan["slot_updates"] = updates
+	plan["slot_evidence"] = evidence
+	return true
 }
 
 func creativeAgentRequestedImageCount(text string) int {
@@ -730,6 +824,40 @@ func creativeAgentChineseCount(raw string) int {
 	return 0
 }
 
+// A saved model selection stays in place when a check-only refresh omits a
+// replacement. An explicit code from the current custom picker replaces it.
+func creativeAgentKeepSavedModelUnlessReplaced(req *creativeAgentPlanRequest, d *service.AgentDraft) {
+	if req == nil || d == nil || d.Sources == nil || !req.CheckOnly {
+		return
+	}
+	if d.Sources["model_code"].Source != "selection" {
+		return
+	}
+	saved := stringAny(d.Slots["model_code"])
+	switch stringAny(d.Slots["media_type"]) {
+	case "text":
+		if strings.TrimSpace(req.ModelCode) == "" {
+			req.ModelCode = saved
+		}
+	case "video":
+		if strings.TrimSpace(req.VideoModelCode) == "" {
+			req.VideoModelCode = saved
+		}
+	case "image":
+		if strings.TrimSpace(req.ImageModelCode) == "" {
+			req.ImageModelCode = saved
+		}
+	case "speech":
+		if strings.TrimSpace(req.SpeechModelCode) == "" {
+			req.SpeechModelCode = saved
+		}
+	case "music":
+		if strings.TrimSpace(req.MusicModelCode) == "" {
+			req.MusicModelCode = saved
+		}
+	}
+}
+
 // Recalculate from persisted slots, without invoking an LLM or creating a task.
 func (h *Handler) CreativeAgentReplan(c *gin.Context) {
 	var req creativeAgentPlanRequest
@@ -758,21 +886,7 @@ func (h *Handler) CreativeAgentReplan(c *gin.Context) {
 		util.BadRequest(c, "请先说明希望生成的媒体类型")
 		return
 	}
-	// An explicit model selection persists unless the caller explicitly supplies a new selection.
-	if req.CheckOnly && d.Sources["model_code"].Source == "selection" {
-		switch stringAny(d.Slots["media_type"]) {
-		case "text":
-			req.ModelCode = stringAny(d.Slots["model_code"])
-		case "video":
-			req.VideoModelCode = stringAny(d.Slots["model_code"])
-		case "image":
-			req.ImageModelCode = stringAny(d.Slots["model_code"])
-		case "speech":
-			req.SpeechModelCode = stringAny(d.Slots["model_code"])
-		case "music":
-			req.MusicModelCode = stringAny(d.Slots["model_code"])
-		}
-	}
+	creativeAgentKeepSavedModelUnlessReplaced(&req, d)
 	req.Draft = d
 	if len(req.AssetIDs) > 0 {
 		for _, line := range h.assetContextLines(c.Request.Context(), c.GetInt64("user_id"), req.AssetIDs) {

@@ -14,6 +14,9 @@ func TestCreativeAgentWorkflowCatalogAndInputBoundary(t *testing.T) {
 		{Code: "general_creative_agent", Name: "Agent", IsEnabled: true},
 		{Code: "disabled", Name: "Disabled", IsEnabled: false},
 		{Code: "internal", Name: "Internal", IsEnabled: true, RuntimeConfig: map[string]interface{}{"agent_callable": false}},
+		{Code: "video_script_writer", Name: "脚本", IsEnabled: true, RuntimeConfig: map[string]interface{}{"agent_mode": "prompt_chat"}},
+		{Code: "renovation_budget_agent", Name: "预算", IsEnabled: true, RuntimeConfig: map[string]interface{}{"agent_mode": "renovation_budget"}},
+		{Code: "realtime_avatar", Name: "数字人", IsEnabled: true, RuntimeConfig: map[string]interface{}{"agent_mode": "realtime_avatar"}},
 		{
 			Code: "ecommerce_image", Name: "电商一键出图", Description: &description, Category: "image", IsEnabled: true,
 			RuntimeConfig: map[string]interface{}{"generation_type": "image"},

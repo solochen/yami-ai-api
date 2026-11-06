@@ -68,6 +68,22 @@ func TestPromptPacksAreComplete(t *testing.T) {
 	}
 }
 
+func TestVisualAssetExtractorRequiresExplicitInferenceMarkers(t *testing.T) {
+	pack, ok := PromptPackByCode("visual_asset_extractor")
+	if !ok {
+		t.Fatal("缺少视觉资产提取器提示词包")
+	}
+	for _, want := range []string{
+		"## 事实与推断边界",
+		"所有推断都要逐项标注",
+		"中文出图提示词和英文关键词也必须遵守同一规则",
+	} {
+		if !strings.Contains(pack.SystemPrompt, want) {
+			t.Fatalf("视觉资产提取器提示词缺少约束: %s", want)
+		}
+	}
+}
+
 func TestComposePromptAgentSystemPromptAppendsRulesOnce(t *testing.T) {
 	composed := composePromptAgentSystemPrompt("你是测试智能体。")
 	if !strings.Contains(composed, "## 通用输出纪律") {

@@ -290,33 +290,37 @@ export function RenovationBudgetWorkspace({ workflow }: { workflow: WorkflowLike
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex items-center gap-3 border-b border-gray-200/70 px-4 py-3 dark:border-white/10 md:px-6">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-          <Calculator size={18} className="text-primary" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{agentName}</h2>
-            {chatModelCode ? (
-              <span className="hidden shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 dark:bg-white/10 dark:text-gray-400 sm:inline">{chatModelCode}</span>
-            ) : null}
+      <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-3 border-b border-gray-200/70 px-4 py-3 dark:border-white/10 md:px-6 lg:pr-48">
+        <div className="flex min-w-0 flex-[1_1_14rem] items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+            <Calculator size={18} className="text-primary" />
           </div>
-          <p className="truncate text-xs text-gray-400">{subtitle}</p>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{agentName}</h2>
+              {chatModelCode ? (
+                <span className="hidden shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 dark:bg-white/10 dark:text-gray-400 sm:inline">{chatModelCode}</span>
+              ) : null}
+            </div>
+            <p className="truncate text-xs text-gray-400">{subtitle}</p>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => { setShowHistory((v) => !v); void loadHistory(); }}
-          className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-200 px-2.5 text-xs text-gray-500 transition hover:bg-gray-50 dark:border-white/10 dark:text-gray-400 dark:hover:bg-white/5"
-        >
-          <History size={13} />{ts("历史")}
-        </button>
-        <button
-          type="button"
-          onClick={startNewChat}
-          className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-2.5 text-xs font-medium text-white transition hover:opacity-90"
-        >
-          <Plus size={13} />{ts("新会话")}
-        </button>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => { setShowHistory((v) => !v); void loadHistory(); }}
+            className="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-gray-200 px-2.5 text-xs text-gray-500 transition hover:bg-gray-50 dark:border-white/10 dark:text-gray-400 dark:hover:bg-white/5"
+          >
+            <History size={13} />{ts("历史")}
+          </button>
+          <button
+            type="button"
+            onClick={startNewChat}
+            className="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg bg-primary px-2.5 text-xs font-medium text-white transition hover:opacity-90"
+          >
+            <Plus size={13} />{ts("新会话")}
+          </button>
+        </div>
       </header>
 
       {showHistory ? (

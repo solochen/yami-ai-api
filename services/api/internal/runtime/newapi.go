@@ -345,11 +345,16 @@ func applyAuthHeaders(req *http.Request, cfg RequestConfig) {
 	}
 }
 
+// PlatformError is the stable error envelope surfaced to clients. The JSON
+// tags matter: this struct is embedded directly in streamed payloads (for
+// example the multi-model collaboration `mm_done` results), so without them the
+// wire format leaks Go field names and clients reading `error.code` see
+// undefined.
 type PlatformError struct {
-	Code       string
-	Message    string
-	StatusCode int
-	Detail     string
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	StatusCode int    `json:"status_code,omitempty"`
+	Detail     string `json:"detail,omitempty"`
 }
 
 func (e *PlatformError) Error() string {

@@ -61,6 +61,26 @@ cp .env.example .env.production
 
 ## 本地一键启动
 
+macOS / Linux 日常前端开发（也支持 Windows Node.js）：
+
+```bash
+pnpm install
+pnpm dev
+```
+
+前台访问 [http://localhost:3000](http://localhost:3000)，后台访问 [http://localhost:3000/admin](http://localhost:3000/admin)。两个 Next.js 应用直接运行本地源码，保存页面或样式后会热更新，不需要重新构建 Docker。API、上传、媒体和流式响应也经过同一个入口。
+
+`pnpm dev` 使用已有的 Docker 后端镜像和数据卷，停止 Docker 中的生产前台、后台，并通过 `docker-compose.dev.yml` 收起多余端口（需要 Docker Compose 2.24.4+）。API `8080` 和对象存储 `9000` 仅监听本机回环地址，供开发代理内部使用；数据库、Redis、Mock 网关和已运行的 SearXNG 通过 Docker 网络连接。前台、后台开发进程使用本地 socket，不额外占用 TCP 端口。首次使用需要先按下方原有启动流程准备后端镜像和数据库。
+
+按 `Ctrl+C` 或运行 `pnpm dev:stop` 停止前端开发服务，Docker 后端继续运行。日志在启动终端输出。可用 `DEV_PORT` 改入口端口，`DEV_HOST` 改监听地址，`DEV_API_TARGET` / `DEV_MEDIA_TARGET` 改内部服务地址。开发输出保存在 `.next-dev`，与生产 `.next` 构建分开。
+
+切回 Docker 生产预览时运行：
+
+```bash
+pnpm dev:stop
+docker compose -f infra/docker/docker-compose.yml up -d --no-build
+```
+
 Windows / PowerShell：
 
 ```powershell
@@ -155,6 +175,22 @@ SEARXNG_SECRET=粘贴生成的随机值
 重新运行部署脚本后，在管理后台“系统配置 → Agent 联网搜索”选择 `SearXNG`，服务地址填写 `http://searxng:8080`。服务仅在 Docker 内网开放，默认限制为 1 CPU、768 MB 内存；搜索结果继续使用 YiHangAI Redis 缓存。
 
 本地开发可在 `.env.local` 设置 `SEARXNG_ENABLED=true`，重启 `scripts/dev.ps1` 后使用 `http://127.0.0.1:8888`。
+
+### 联网搜索主备方案
+
+“系统配置 → Agent 联网搜索 → 搜索服务商”支持单线路和多线路主备两类配置：
+
+| 取值 | 检索顺序 | 说明 |
+| --- | --- | --- |
+| `tavily` | Tavily | 单线路，最省事；上游异常时本轮降级为模型知识回答 |
+| `tavily_primary` | Tavily → SearXNG → Exa | **推荐生产**。Tavily 主用，SearXNG（免费自建）第二层，Exa 第三层；后两层留空即跳过 |
+| `hybrid` | SearXNG → Tavily | 免费自建优先、付费兜底；SearXNG 不可用时自动转 Tavily |
+| `searxng` | SearXNG | 纯自建，无兜底 |
+| `exa` / `brave` / `redfox` | 单一服务商 | 按所选服务商直连 |
+
+`tavily_primary` 的三层都失败时会返回明确的上游不可用错误（错误信息逐个列出失败层），不会静默返回空结果。选择该服务商时需要填写 Tavily API Key，并至少再配置一层备用（SearXNG 服务地址或 Exa API Key），否则保存会被拒绝。
+
+各层复用现有配置项，不需要新增密钥：Tavily 用 `web_search_api_key`，SearXNG 用 `web_search_base_url`，Exa 用 `web_search_exa_api_key`。无论命中哪一层，都共用同一份 Redis 结果缓存和每日额度。
 
 详细部署教程：
 

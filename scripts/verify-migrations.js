@@ -35,12 +35,20 @@ for (const [number, grouped] of byNumber) {
 }
 
 const manifestPath = path.join(dir, "checksums.sha256");
+// The manifest carries both the .up.sql and .down.sql digests, and its paths are
+// a mix of bare filenames (early migrations) and "infra/migrations/..." prefixed
+// paths (later ones). Only .up.sql entries are verified here, keyed by basename,
+// so rollback lines and the two path styles are both handled.
 const manifest = new Map(
-  fs.readFileSync(manifestPath, "utf8").trim().split(/\r?\n/).map((line) => {
-    const match = line.match(/^([a-f0-9]{64})\s{2}(.+\.up\.sql)$/);
-    if (!match) throw new Error(`invalid checksum line: ${line}`);
-    return [match[2], match[1]];
-  })
+  fs
+    .readFileSync(manifestPath, "utf8")
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => {
+      const match = line.match(/^([a-f0-9]{64})\s{2}(.+\.up\.sql)$/);
+      return match ? [path.basename(match[2]), match[1]] : null;
+    })
+    .filter(Boolean)
 );
 for (const up of ups) {
   const actual = crypto.createHash("sha256").update(fs.readFileSync(path.join(dir, up), "utf8").replace(/\r\n/g, "\n")).digest("hex");

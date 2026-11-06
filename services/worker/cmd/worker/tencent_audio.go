@@ -30,7 +30,8 @@ import (
 // 交给平台既有的媒体结果解析流程（storeBase64MediaResult / persistGeneratedMedia）。
 //
 // 用法：线路 runtime_rule 配 {"upstream":{"adapter":"tencent_audio"}}，
-// endpoint 配 /v1/t2a_v2（语音合成）或 /v1/music_generation（音乐生成），
+// endpoint 配 /v1/wand/minimax-tts/sync_tts（语音合成）或
+// /v1/wand/minimax-music/generation（音乐生成），
 // upstream_model 配 TokenHub 的模型 ID（minimax-speech-2.8-hd / minimax-music-v3.0）。
 
 func isTencentAudioAdapter(runtimeRule map[string]interface{}) bool {
@@ -41,25 +42,25 @@ func isTencentAudioAdapter(runtimeRule map[string]interface{}) bool {
 
 // buildTencentAudioPayload 把平台的输入映射成 TokenHub（MiniMax 原生）请求体。
 func buildTencentAudioPayload(modelCode, upstreamModel, prompt string, input map[string]interface{}) map[string]interface{} {
-	model := nonEmptyWorker(upstreamModel, modelCode)
+	model := tencentMiniMaxModel(nonEmptyWorker(upstreamModel, modelCode), stringAny(input["model_version"]))
 	text := strings.TrimSpace(prompt)
 	if text == "" {
 		text = strings.TrimSpace(stringAny(input["text"]))
 	}
-	if strings.TrimSpace(stringAny(input["model_version"])) != "" {
-		model = strings.TrimSpace(stringAny(input["model_version"]))
+	if text == "" {
+		text = strings.TrimSpace(stringAny(input["music_prompt"]))
 	}
 
 	if isTencentMusicModel(modelCode, input) {
 		payload := map[string]interface{}{
-			"model":          model,
-			"prompt":         text,
-			"output_format":  nonEmptyWorker(stringAny(input["output_format"]), "hex"),
-			"stream":         false,
-			"audio_setting":  tencentAudioSetting(input),
-			"is_instrumental": boolAnyDefault(input["is_instrumental"], false),
+			"model":            model,
+			"prompt":           text,
+			"output_format":    nonEmptyWorker(stringAny(input["output_format"]), "hex"),
+			"stream":           false,
+			"audio_setting":    tencentAudioSetting(input),
+			"is_instrumental":  boolAnyDefault(input["is_instrumental"], false),
 			"lyrics_optimizer": boolAnyDefault(input["lyrics_optimizer"], false),
-			"aigc_watermark": boolAnyDefault(input["aigc_watermark"], false),
+			"aigc_watermark":   boolAnyDefault(input["aigc_watermark"], false),
 		}
 		if lyrics := strings.TrimSpace(stringAny(input["lyrics"])); lyrics != "" {
 			payload["lyrics"] = lyrics
@@ -94,6 +95,23 @@ func buildTencentAudioPayload(modelCode, upstreamModel, prompt string, input map
 		payload["aigc_watermark"] = boolAnyDefault(value, false)
 	}
 	return payload
+}
+
+func tencentMiniMaxModel(upstream, version string) string {
+	version = strings.TrimSpace(version)
+	upstream = strings.TrimSpace(upstream)
+	switch version {
+	case "speech-2.8-hd", "speech-2.8-turbo", "speech-2.6-hd", "speech-2.6-turbo", "speech-02-hd", "speech-02-turbo":
+		return "minimax-" + version
+	case "music-3.0", "music-v3.0":
+		return "minimax-music-v3.0"
+	case "music-2.6", "music-v2.6":
+		return "minimax-music-v2.6"
+	}
+	if version != "" {
+		return version
+	}
+	return upstream
 }
 
 func isTencentMusicModel(modelCode string, input map[string]interface{}) bool {

@@ -707,6 +707,14 @@ func TestBuildMediaDownloadCandidatesPreferOriginalTaskID(t *testing.T) {
 	}
 }
 
+func TestBuildMediaDownloadCandidatesKeepsSingleV1(t *testing.T) {
+	conn := connectionConfig{BaseURL: "https://openrouter.ai/api/v1"}
+	got := buildMediaDownloadCandidates(conn, "https://cdn.example/video.mp4", "gen-vid-1")
+	if len(got) == 0 || got[0] != "https://openrouter.ai/api/v1/videos/gen-vid-1/content" {
+		t.Fatalf("candidates = %#v", got)
+	}
+}
+
 func TestShouldNotMirrorPublicCDNMediaURL(t *testing.T) {
 	conn := connectionConfig{BaseURL: "https://otuapi.com"}
 

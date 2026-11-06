@@ -35,6 +35,10 @@ const productPresets: { code: ProductPreset; label: string; description: string 
 
 function failureHelp(message: string) {
   if (/timeout|deadline exceeded|超时/i.test(message)) return "图片分析或生成服务响应超时。原图和要求已保留，无需重新上传；可稍后重试，或请管理员检查服务线路。";
+  // A transient upstream 5xx is not a configuration problem: the identical
+  // request usually succeeds on a fresh submit, so do not send the user to the
+  // administrator. Checked before the generic 模型/线路 rule below.
+  if (/upstream HTTP 5\d\d|do request failed|所有可用线路均调用失败|bad gateway|service unavailable|gateway timeout/i.test(message)) return "生成服务本次未返回结果（上游瞬时故障，未产生任何费用）。原图和要求已保留，无需重新上传，稍后直接重新提交即可；若连续多次失败再联系管理员检查线路。";
   if (/文件上传失败/.test(message)) return "图片编辑线路未接收本次修正附件。原图已保留，无需重新上传；新版每次只提交商品底图和一张必要参考图。";
   if (/保护区域无效|验收项缺少|protected_regions|checks\[|策划.*格式|编辑区域无效/.test(message)) return "系统未能正确定位商品细节，无需手动填写坐标。可以保留原图和要求重新生成；新版会先自动纠正一次方案。";
   if (/模型|线路|upstream|adapter|API|接口/.test(message)) return "生成服务未完成请求。请联系管理员检查模型线路，暂时不用修改图片或描述。";
@@ -111,10 +115,11 @@ function ProcessIcon({ status }: { status: string }) {
   return <Loader2 size={17} className="animate-spin text-primary" />;
 }
 
-export function ProductRefineWorkspace({ workflowCode, workflowName, project, pricing, imageModel, defaultReviewMode = "standard", submitting, error, onSubmit, onNewTask, onLoadHistory, onStop, onReview, onRefresh }: {
+export function ProductRefineWorkspace({ workflowCode, workflowName, project, pricing, pricingError, imageModel, defaultReviewMode = "standard", submitting, error, onSubmit, onNewTask, onLoadHistory, onStop, onReview, onRefresh }: {
   workflowCode: string; workflowName: string;
   project: Project | null; submitting: boolean; error: string;
   pricing?: { workflow_fee?: number; image_unit_fee?: number };
+  pricingError?: string;
   imageModel?: Model | null;
   defaultReviewMode?: "standard" | "strict";
   onSubmit: (inputs: Record<string, any>) => Promise<void>;
@@ -342,7 +347,12 @@ export function ProductRefineWorkspace({ workflowCode, workflowName, project, pr
       if (!repair) { setLocalError("请上传一张待修图片"); return; }
       if (!repair.edit_regions?.length) { setLocalError("请在待修图片上拖动框选至少一个问题区域"); return; }
     } else if (!submittedRefs.some(r => r.role === "product")) { setLocalError("请上传至少一张商品原图"); return; }
-    if (!(estimatedFee > 0)) { setLocalError("预计费用尚未加载，请刷新页面后重试"); return; }
+    if (!(estimatedFee > 0)) {
+      // Refreshing cannot fix a backend configuration gap, so show the reason the
+      // server reported instead of a misleading "please refresh" hint.
+      setLocalError(pricingError || "预计费用尚未加载，请稍后重试；若持续出现请联系管理员检查该工作流的模型与价格配置");
+      return;
+    }
     const submittedAspectRatio = submittedLocalRepair ? "auto" : sceneGeneration && !aspectRatioTouched ? "auto" : aspectRatio;
     await onSubmit({ prompt: prompt.trim(), product_preset: submittedPreset, deliverables: (deliverablesOverride ?? deliverables).trim(), product_references: submittedRefs, count: countOverride ?? count, max_repairs: 0, review_mode: reviewMode, aspect_ratio: submittedAspectRatio, quality });
     setSelected(0); setVersion(-1);
@@ -404,7 +414,7 @@ export function ProductRefineWorkspace({ workflowCode, workflowName, project, pr
         </fieldset>
         {(localError || error) && <p role="alert" className="rounded-lg bg-red-50 p-3 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-300">{localError || error}</p>}
         <footer className="space-y-3 border-t border-gray-100 pt-5 dark:border-white/10">
-          <div className="min-w-0"><p className="text-sm font-medium">{busy ? t("正在处理，请稍候") : estimatedFee > 0 ? `本次预计 ${estimatedFee.toFixed(2)} 算力` : t("正在读取预计费用")}</p><p className="mt-1 text-[11px] leading-5 text-gray-500 dark:text-gray-400">{busy ? t("完成后会自动显示结果") : estimatedFee > 0 ? `工作流 ${workflowFee.toFixed(2)} 算力 + ${count}张 × 图片单价 ${imageUnitFee.toFixed(2)} 算力；提交时按此预估冻结，完成后按可核验实际成本结算，差额退回。` : t("费用由后台工作流收费与图片模型单价计算。")}</p></div>
+          <div className="min-w-0"><p className={`text-sm font-medium ${!busy && estimatedFee <= 0 && pricingError ? "text-red-600 dark:text-red-400" : ""}`}>{busy ? t("正在处理，请稍候") : estimatedFee > 0 ? `本次预计 ${estimatedFee.toFixed(2)} 算力` : pricingError ? t("该工作流暂不可用") : t("正在读取预计费用")}</p><p className={`mt-1 text-[11px] leading-5 ${!busy && estimatedFee <= 0 && pricingError ? "text-red-600 dark:text-red-400" : "text-gray-500 dark:text-gray-400"}`}>{busy ? t("完成后会自动显示结果") : estimatedFee > 0 ? `工作流 ${workflowFee.toFixed(2)} 算力 + ${count}张 × 图片单价 ${imageUnitFee.toFixed(2)} 算力；提交时按此预估冻结，完成后按可核验实际成本结算，差额退回。` : pricingError || t("费用由后台工作流收费与图片模型单价计算。")}</p></div>
           {project && ["pending","running"].includes(project.status) ? <button type="button" onClick={() => void onStop()} className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-white/10"><Square size={13} />{ts("停止生成")}</button> : awaitingReview ? <p className="rounded-xl bg-primary/10 px-4 py-3 text-center text-xs leading-5 text-primary dark:bg-primary/10 dark:text-primary">{ts("图片制作已暂停；")}{reviewDeadlineLabel}{ts("前未操作将自动完成。")}</p> : <button type="button" disabled={busy} onClick={() => void submit()} className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-dark shadow-sm transition hover:brightness-95 disabled:opacity-50">{busy ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} />}{project ? t("重新分析并生成") : t("开始生成")}</button>}
         </footer>
       </aside>

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // photoStudioMigrationStyles 与迁移 082 input_schema 中的风格枚举保持一致
@@ -87,4 +90,47 @@ func TestBuildPhotoStudioPromptIDPhotoWithoutStyle(t *testing.T) {
 	if !strings.Contains(prompt, "RGB(67,142,219)") {
 		t.Fatalf("证件照缺少蓝底标准色值指令：%s", prompt)
 	}
+}
+
+func TestLoadEnabledWorkerMediaModelResolvesPublicAlias(t *testing.T) {
+	db := &fakeWorkerMediaModelDB{row: fakeWorkerMediaModelRow{}}
+	model, err := loadEnabledWorkerMediaModel(context.Background(), db, " hl-image-2 ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model.Code != "gpt-image-2" {
+		t.Fatalf("resolved code = %q, want canonical code gpt-image-2", model.Code)
+	}
+	if model.RequestMode != "images" {
+		t.Fatalf("request mode = %q, want images", model.RequestMode)
+	}
+	if !strings.Contains(db.query, "code=$1 OR public_alias=$1") {
+		t.Fatalf("lookup query does not accept public aliases: %s", db.query)
+	}
+	if len(db.args) != 1 || db.args[0] != "hl-image-2" {
+		t.Fatalf("lookup args = %#v, want the trimmed public alias", db.args)
+	}
+}
+
+type fakeWorkerMediaModelDB struct {
+	query string
+	args  []interface{}
+	row   pgx.Row
+}
+
+func (db *fakeWorkerMediaModelDB) QueryRow(_ context.Context, query string, args ...interface{}) pgx.Row {
+	db.query = query
+	db.args = args
+	return db.row
+}
+
+type fakeWorkerMediaModelRow struct{}
+
+func (fakeWorkerMediaModelRow) Scan(dest ...interface{}) error {
+	*dest[0].(*int64) = 64
+	*dest[1].(*string) = "gpt-image-2"
+	*dest[2].(*string) = "images"
+	*dest[3].(*[]byte) = []byte(`{"count":1}`)
+	*dest[4].(*[]byte) = []byte(`{"upstream":{"adapter":"openrouter_image"}}`)
+	return nil
 }

@@ -19,7 +19,7 @@ func (s *ModelService) publicPriceRule(
 	if model == nil {
 		return nil, errors.New("model not found")
 	}
-	if model.Category == "multi_collab" || model.Code == "multi_collab_chat" {
+	if IsMultiCollabModel(model) {
 		return map[string]interface{}{
 			"billing_type":    "model_actual",
 			"settlement_note": "按成员模型实际用量逐项结算",
@@ -57,6 +57,7 @@ func (s *ModelService) publicPriceRule(
 	if len(selected.UserPriceRule) > 0 {
 		rule = copyMap(selected.UserPriceRule)
 	}
+	finalUserPrice, _ := rule["user_price_is_final"].(bool)
 	billingType := strings.ToLower(strings.TrimSpace(stringValue(rule["billing_type"])))
 	price := map[string]interface{}{"billing_type": billingType}
 	// 峰谷计价的上游（如腾讯云 DeepSeek）在不同时段价格不同，前台展示按当前
@@ -65,7 +66,11 @@ func (s *ModelService) publicPriceRule(
 	convert := func(key, outputKey string) {
 		if raw, exists := rule[key]; exists {
 			cost := floatValue(raw) * timeMultiplier
-			charge, err := billing.CalculateCharge(cost, cfg.GrossMarginPercent)
+			margin := cfg.GrossMarginPercent
+			if finalUserPrice {
+				margin = 0
+			}
+			charge, err := billing.CalculateCharge(cost, margin)
 			if err == nil {
 				price[outputKey] = charge.UserCharge
 			}
@@ -74,14 +79,24 @@ func (s *ModelService) publicPriceRule(
 	switch billingType {
 	case "per_token":
 		convert("input_cost_per_m", "input_price_per_m")
+		convert("text_input_cost_per_m", "text_input_price_per_m")
+		convert("image_input_cost_per_m", "image_input_price_per_m")
 		convert("output_cost_per_m", "output_price_per_m")
+		convert("image_output_cost_per_m", "image_output_price_per_m")
+		convert("text_output_cost_per_m", "text_output_price_per_m")
 		convert("cache_read_cost_per_m", "cache_read_price_per_m")
+		convert("text_cache_read_cost_per_m", "text_cache_read_price_per_m")
 		convert("cache_write_cost_per_m", "cache_write_price_per_m")
 		convert("audio_input_cost_per_m", "audio_input_price_per_m")
 		convert("audio_output_cost_per_m", "audio_output_price_per_m")
 		price["input_price"] = microPerMillion(floatValue(price["input_price_per_m"]))
+		price["text_input_price"] = microPerMillion(floatValue(price["text_input_price_per_m"]))
+		price["image_input_price"] = microPerMillion(floatValue(price["image_input_price_per_m"]))
 		price["output_price"] = microPerMillion(floatValue(price["output_price_per_m"]))
+		price["image_output_price"] = microPerMillion(floatValue(price["image_output_price_per_m"]))
+		price["text_output_price"] = microPerMillion(floatValue(price["text_output_price_per_m"]))
 		price["cache_read_price"] = microPerMillion(floatValue(price["cache_read_price_per_m"]))
+		price["text_cache_read_price"] = microPerMillion(floatValue(price["text_cache_read_price_per_m"]))
 		price["cache_write_price"] = microPerMillion(floatValue(price["cache_write_price_per_m"]))
 		price["audio_input_price"] = microPerMillion(floatValue(price["audio_input_price_per_m"]))
 		price["audio_output_price"] = microPerMillion(floatValue(price["audio_output_price_per_m"]))
@@ -98,7 +113,11 @@ func (s *ModelService) publicPriceRule(
 			if rawMap, ok := rule[tier.costKey].(map[string]interface{}); ok {
 				converted := map[string]interface{}{}
 				for key, raw := range rawMap {
-					charge, err := billing.CalculateCharge(floatValue(raw)*timeMultiplier, cfg.GrossMarginPercent)
+					margin := cfg.GrossMarginPercent
+					if finalUserPrice {
+						margin = 0
+					}
+					charge, err := billing.CalculateCharge(floatValue(raw)*timeMultiplier, margin)
 					if err == nil {
 						converted[key] = charge.UserCharge
 					}

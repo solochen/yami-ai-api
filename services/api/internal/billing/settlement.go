@@ -104,6 +104,11 @@ func (s *Service) ChargeWithSettlement(
 				return err
 			}
 		}
+		if settlement.RefType == "workflow" && !settlement.ExternalRef {
+			if err = releaseTerminalWorkflowFreeze(ctx, tx, userID, settlement.RefID); err != nil {
+				return err
+			}
+		}
 		return tx.Commit(ctx)
 	}
 
@@ -127,7 +132,9 @@ func (s *Service) ChargeWithSettlement(
 		return errors.New("settlement charge cannot be negative")
 	}
 	newFrozen := frozen
-	if settlement.RefType != "workflow" {
+	if settlement.RefType == "workflow" && !settlement.ExternalRef {
+		newFrozen -= consumedWorkflowFreezeAmount(lockedAmount, charge)
+	} else if settlement.RefType != "workflow" {
 		newFrozen -= lockedAmount
 	}
 	if newFrozen < 0 {
@@ -215,7 +222,52 @@ func (s *Service) ChargeWithSettlement(
 			return err
 		}
 	}
+	if settlement.RefType == "workflow" && !settlement.ExternalRef {
+		if err = releaseTerminalWorkflowFreeze(ctx, tx, userID, settlement.RefID); err != nil {
+			return err
+		}
+	}
 	return tx.Commit(ctx)
+}
+
+func consumedWorkflowFreezeAmount(lockedAmount, charge float64) float64 {
+	if lockedAmount <= 0 || charge <= 0 {
+		return 0
+	}
+	if charge < lockedAmount {
+		return charge
+	}
+	return lockedAmount
+}
+
+func releaseTerminalWorkflowFreeze(ctx context.Context, tx pgx.Tx, userID int64, refID string) error {
+	var status string
+	if err := tx.QueryRow(ctx, `SELECT status FROM workflow_projects WHERE public_id=$1 AND user_id=$2 FOR UPDATE`, refID, userID).Scan(&status); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	if status != "succeeded" && status != "failed" && status != "canceled" {
+		return nil
+	}
+	remaining, err := sumLockedFreezes(ctx, tx, userID, "workflow", refID)
+	if err != nil || remaining <= 0 {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE wallets SET frozen_compute=GREATEST(frozen_compute-$1,0),updated_at=now() WHERE user_id=$2`, remaining, userID); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `UPDATE balance_freezes SET status='released',released_at=now() WHERE user_id=$1 AND ref_type='workflow' AND ref_id=$2 AND status='frozen'`, userID, refID)
+	return err
+}
+
+// microUnits converts a credit amount into integer micro-credits. All amounts
+// that reach a settlement are produced by CalculateCharge, i.e. they are exact
+// multiples of 1e-6; converting to integers before comparing keeps the
+// aggregate/item reconciliation immune to float64 representation error.
+func microUnits(value float64) int64 {
+	return int64(math.Round(value * 1_000_000))
 }
 
 func validateSettlementItems(settlement Settlement) error {
@@ -227,7 +279,7 @@ func validateSettlementItems(settlement Settlement) error {
 		if strings.TrimSpace(item.Source) == "" {
 			return fmt.Errorf("settlement item %d source is required", index)
 		}
-		if item.ProviderCost < 0 || item.UserCharge < 0 || item.Commission < 0 {
+		if item.ProviderCost < 0 || item.UserCharge < 0 {
 			return fmt.Errorf("settlement item %d contains a negative amount", index)
 		}
 		if math.Abs(item.UserCharge-item.ProviderCost-item.Commission) > 0.000001 {
@@ -237,12 +289,23 @@ func validateSettlementItems(settlement Settlement) error {
 		userCharge += item.UserCharge
 		commission += item.Commission
 	}
-	if math.Abs(provider-settlement.ProviderCost) > 0.000001 ||
-		math.Abs(userCharge-settlement.UserCharge) > 0.000001 ||
-		math.Abs(commission-settlement.Commission) > 0.000001 {
+	// Compare in micro-credits. Callers may ceil the aggregate to whole micros
+	// (see service.numericMicros), so allow exactly one micro of rounding slack
+	// per aggregate while still catching any real reconciliation error.
+	if absMicros(provider, settlement.ProviderCost) > 1 ||
+		absMicros(userCharge, settlement.UserCharge) > 1 ||
+		absMicros(commission, settlement.Commission) > 1 {
 		return errors.New("settlement items do not match the aggregate charge")
 	}
 	return nil
+}
+
+func absMicros(a, b float64) int64 {
+	diff := microUnits(a) - microUnits(b)
+	if diff < 0 {
+		return -diff
+	}
+	return diff
 }
 
 func insertSettlementItems(ctx context.Context, tx pgx.Tx, settlementID int64, items []SettlementItem) error {

@@ -25,11 +25,18 @@ export interface BottomBarState {
   fallback_enabled: boolean;
   web_search: boolean;
   timeout_sec: number; // default 30
+  // Fusion (the summary model) is optional: it is the most expensive part of a
+  // collaboration turn, so the user can switch it off and read the individual
+  // answers only.
+  summary_enabled?: boolean;
   role_id?: number;
   role_name?: string;
   role_prompt?: string;
   role_icon_url?: string;
   asset_ids: string[]; // public_id[]
+  // Display names for asset_ids, so the composer can show a removable chip
+  // instead of silently carrying a previously picked asset into every message.
+  asset_labels?: Record<string, string>;
   files: { public_id: string; url: string; name: string }[];
 }
 
@@ -507,6 +514,8 @@ export function ChatTopTools({
   value,
   onChange,
   showUpload = true,
+  uploadDisabled = false,
+  uploadDisabledHint,
   showRole = true,
   referencePickMode = false,
   referenceImages = [],
@@ -518,6 +527,8 @@ export function ChatTopTools({
   value: BottomBarState;
   onChange: (next: BottomBarState) => void;
   showUpload?: boolean;
+  uploadDisabled?: boolean;
+  uploadDisabledHint?: string;
   showRole?: boolean;
   referencePickMode?: boolean;
   referenceImages?: ReferenceImagePick[];
@@ -526,7 +537,7 @@ export function ChatTopTools({
   assetLibraryLabel?: string;
   referenceAssetsOnly?: boolean;
 }) {
-  const { t, td } = useI18n();
+  const { t, td, ts } = useI18n();
   const kindText = useCallback((k?: string) => {
     const v = (k || "").toLowerCase();
     if (v === "image") return t("asset.image");
@@ -718,9 +729,18 @@ export function ChatTopTools({
     }
   };
 
-  const toggleAsset = (id: string) => {
+  const toggleAsset = (id: string, label?: string) => {
     const exists = value.asset_ids.includes(id);
-    set({ asset_ids: exists ? value.asset_ids.filter((x) => x !== id) : [...value.asset_ids, id] });
+    const labels = { ...(value.asset_labels || {}) };
+    if (exists) {
+      delete labels[id];
+    } else if (label) {
+      labels[id] = label;
+    }
+    set({
+      asset_ids: exists ? value.asset_ids.filter((x) => x !== id) : [...value.asset_ids, id],
+      asset_labels: labels,
+    });
   };
 
   const toggleRefPick = (item: ReferenceImagePick, locked?: boolean) => {
@@ -753,8 +773,11 @@ export function ChatTopTools({
       await deleteAsset(asset.public_id);
       assetCache.current.delete(asset.public_id);
       setAssetItems((items) => items.filter((item) => item.public_id !== asset.public_id));
+      const remainingLabels = { ...(value.asset_labels || {}) };
+      delete remainingLabels[asset.public_id];
       set({
         asset_ids: value.asset_ids.filter((id) => id !== asset.public_id),
+        asset_labels: remainingLabels,
         files: value.files.filter((file) => file.public_id !== asset.public_id),
       });
       setPickedRefs((items) => items.filter((item) => item.public_id !== asset.public_id && item.url !== asset.url));
@@ -882,10 +905,14 @@ export function ChatTopTools({
       {showUpload && (
         <>
           <button
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading || value.files.length >= 10}
-            className="relative h-9 max-sm:w-9 max-sm:px-0 max-sm:justify-center px-2 sm:px-3 rounded-xl bg-white border border-gray-100 text-gray-700 text-sm shadow-sm flex items-center gap-1.5 shrink-0 disabled:opacity-50"
-            title={`${t("asset.uploadAttachment")} ${value.files.length}/10`}
+            onClick={() => {
+              if (uploadDisabled) return;
+              fileRef.current?.click();
+            }}
+            disabled={uploading || value.files.length >= 10 || uploadDisabled}
+            className="relative h-9 max-sm:w-9 max-sm:px-0 max-sm:justify-center px-2 sm:px-3 rounded-xl bg-white border border-gray-100 text-gray-700 text-sm shadow-sm flex items-center gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={uploadDisabled ? uploadDisabledHint || ts("当前模型不支持图片理解，请切换支持图片的模型") : `${t("asset.uploadAttachment")} ${value.files.length}/10`}
+            aria-disabled={uploadDisabled}
           >
             <Upload size={16} className="text-gray-500 shrink-0" />
             <span className="hidden sm:inline whitespace-nowrap">{uploading ? t("common.uploading") : t("common.upload")}</span>
@@ -899,7 +926,12 @@ export function ChatTopTools({
             type="file"
             multiple
             className="hidden"
+            disabled={uploadDisabled}
             onChange={(e) => {
+              if (uploadDisabled) {
+                e.target.value = "";
+                return;
+              }
               onFiles(e.target.files);
               e.target.value = "";
             }}
@@ -1462,7 +1494,7 @@ export function ChatTopTools({
                           kind={kind}
                           selected={selected}
                           locked={deletingAssetId === a.public_id}
-                          onClick={() => toggleAsset(a.public_id)}
+                          onClick={() => toggleAsset(a.public_id, a.name || a.public_id)}
                           onPreview={kind === "image" && a.url ? () => setAssetPreview(a) : undefined}
                           onDelete={() => deleteUserAsset(a)}
                         />
@@ -1501,7 +1533,7 @@ export function ChatTopTools({
                           <button
                             type="button"
                             className="w-8 h-8 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:bg-white/10 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/15"
-                            onClick={() => toggleAsset(a.public_id)}
+                            onClick={() => toggleAsset(a.public_id, a.name || a.public_id)}
                             aria-label={t("common.remove")}
                             title={t("common.remove")}
                           >
@@ -1694,7 +1726,7 @@ export function ChatTopTools({
                   type="button"
                   className="h-11 px-8 rounded-2xl bg-primary text-dark font-semibold text-sm"
                   onClick={() => {
-                    toggleAsset(assetPreview.public_id);
+                    toggleAsset(assetPreview.public_id, assetPreview.name || assetPreview.public_id);
                     setAssetPreview(null);
                   }}
                 >

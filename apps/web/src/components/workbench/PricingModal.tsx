@@ -127,7 +127,17 @@ export function PricingModal({
     withoutVideo: scaledDynamicPrice(num(price?.rates_per_m_tokens?.[resolution]?.without_video), dynamicMultiplier),
     withVideo: scaledDynamicPrice(num(price?.rates_per_m_tokens?.[resolution]?.with_video), dynamicMultiplier),
   }));
-  const tokenRows = TOKEN_PRICE_ROWS.map((row) => ({
+  const modelTokenPriceRows = active?.category === "image"
+    ? [
+        { key: "text_input_price", label: "文本输入价格" },
+        { key: "image_input_price", label: "图片输入价格" },
+        { key: "text_cache_read_price", label: "文本缓存读取价格" },
+        { key: "cache_read_price", label: "图片缓存读取价格" },
+        { key: "image_output_price", label: "图片输出价格" },
+        { key: "text_output_price", label: "文本输出价格" },
+      ]
+    : TOKEN_PRICE_ROWS;
+  const tokenRows = modelTokenPriceRows.map((row) => ({
     ...row,
     label: ts(row.label),
     value: pricePerM(price, row.key),

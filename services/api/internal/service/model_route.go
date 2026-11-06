@@ -24,21 +24,21 @@ const (
 // PriceRule on ModelFull remains the user-facing price; CostRule is private
 // provider cost metadata used only for margin reporting.
 type ModelRoute struct {
-	ID                  int64                  `json:"id"`
-	ModelID             int64                  `json:"model_id"`
-	RouteName           string                 `json:"route_name"`
-	Provider            string                 `json:"provider"`
-	Protocol            string                 `json:"protocol"`
-	UpstreamModel       string                 `json:"upstream_model"`
-	Endpoint            string                 `json:"endpoint"`
-	BaseURL             string                 `json:"base_url"`
-	APIKey              string                 `json:"api_key,omitempty"`
-	AuthType            string                 `json:"auth_type"`
-	APIKeyHeader        string                 `json:"api_key_header"`
-	Headers             map[string]interface{} `json:"headers"`
-	ExtraParams         map[string]interface{} `json:"extra_params"`
-	RuntimeRule         map[string]interface{} `json:"runtime_rule"`
-	CostRule            map[string]interface{} `json:"cost_rule"`
+	ID            int64                  `json:"id"`
+	ModelID       int64                  `json:"model_id"`
+	RouteName     string                 `json:"route_name"`
+	Provider      string                 `json:"provider"`
+	Protocol      string                 `json:"protocol"`
+	UpstreamModel string                 `json:"upstream_model"`
+	Endpoint      string                 `json:"endpoint"`
+	BaseURL       string                 `json:"base_url"`
+	APIKey        string                 `json:"api_key,omitempty"`
+	AuthType      string                 `json:"auth_type"`
+	APIKeyHeader  string                 `json:"api_key_header"`
+	Headers       map[string]interface{} `json:"headers"`
+	ExtraParams   map[string]interface{} `json:"extra_params"`
+	RuntimeRule   map[string]interface{} `json:"runtime_rule"`
+	CostRule      map[string]interface{} `json:"cost_rule"`
 	// UserPriceRule 可选：用户售价的计价依据。为空时售价由 CostRule 推导；
 	// 配置后成本仍按 CostRule 记账（上游真实成本），而售价按本规则计算，
 	// 用于「上游成本恒定、但按另一套价格向用户收费」的场景。
@@ -527,7 +527,7 @@ func (s *ModelService) EnsureDefaultModelRoute(ctx context.Context, modelID int6
 	}
 	connection, _ := modelInput.NewAPIExtraParams["connection"].(map[string]interface{})
 	baseURL := strings.TrimSpace(stringValue(connection["base_url"]))
-	if baseURL == "" || modelInput.Category == "multi_collab" {
+	if baseURL == "" || IsMultiCollab(modelInput.Category, modelInput.Code) {
 		return nil
 	}
 	headers := mapValue(connection["headers"])
@@ -603,7 +603,7 @@ func (s *ModelService) SyncPrimaryModelRoute(ctx context.Context, modelID int64,
 		return err
 	}
 	connection, _ := modelInput.NewAPIExtraParams["connection"].(map[string]interface{})
-	if connection == nil || strings.TrimSpace(stringValue(connection["base_url"])) == "" || modelInput.Category == "multi_collab" {
+	if connection == nil || strings.TrimSpace(stringValue(connection["base_url"])) == "" || IsMultiCollab(modelInput.Category, modelInput.Code) {
 		return nil
 	}
 	apiKey := stringValue(connection["api_key"])
@@ -838,6 +838,13 @@ func (s *ModelService) MarkStreamRouteAttemptFailed(ctx context.Context, request
 	var pe *runtime.PlatformError
 	if errors.As(err, &pe) {
 		code = pe.Code
+		// MODEL_OUTPUT_LIMIT means the upstream call itself succeeded and only
+		// the answer was cut off by the output budget. Downgrading the attempt
+		// would hide the route from settlement lookups and make truncated
+		// replies impossible to bill (auto-continue / partial replies).
+		if code == "MODEL_OUTPUT_LIMIT" {
+			return
+		}
 	}
 	if !isRouteFailoverError(err) {
 		status = "rejected"
@@ -849,6 +856,24 @@ func (s *ModelService) MarkStreamRouteAttemptFailed(ctx context.Context, request
 func (s *ModelService) SuccessfulRouteForRequest(ctx context.Context, requestID string) (*ModelRoute, error) {
 	row := s.db.QueryRow(ctx, `SELECT `+modelRouteColumns+` FROM model_routes WHERE id=(
 		SELECT route_id FROM model_route_attempts WHERE request_id=$1 AND status='success' AND route_id IS NOT NULL ORDER BY attempt DESC LIMIT 1
+	)`, requestID)
+	route, err := scanModelRoute(row, s.routeCipherKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return route, err
+}
+
+// RouteForRequest returns the last route that actually served the request,
+// regardless of the attempt's final status. Settlement must use the route that
+// produced the tokens even when the attempt was later marked rejected (for
+// example a reply cut off by the output budget).
+func (s *ModelService) RouteForRequest(ctx context.Context, requestID string) (*ModelRoute, error) {
+	if strings.TrimSpace(requestID) == "" {
+		return nil, nil
+	}
+	row := s.db.QueryRow(ctx, `SELECT `+modelRouteColumns+` FROM model_routes WHERE id=(
+		SELECT route_id FROM model_route_attempts WHERE request_id=$1 AND route_id IS NOT NULL ORDER BY id DESC LIMIT 1
 	)`, requestID)
 	route, err := scanModelRoute(row, s.routeCipherKey)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -902,10 +927,30 @@ func estimateRuleCostBase(rule map[string]interface{}, params map[string]interfa
 	switch typeName {
 	case "per_token":
 		input := floatValue(rule["input_cost_per_m"])
+		textInput := floatValue(rule["text_input_cost_per_m"])
+		if textInput <= 0 {
+			textInput = input
+		}
+		imageInput := floatValue(rule["image_input_cost_per_m"])
+		if imageInput <= 0 {
+			imageInput = input
+		}
 		output := floatValue(rule["output_cost_per_m"])
+		imageOutput := floatValue(rule["image_output_cost_per_m"])
+		if imageOutput <= 0 {
+			imageOutput = output
+		}
+		textOutput := output
+		if configuredTextOutput, exists := rule["text_output_cost_per_m"]; exists {
+			textOutput = floatValue(configuredTextOutput)
+		}
 		audioInputCost := floatValue(rule["audio_input_cost_per_m"])
 		audioOutputCost := floatValue(rule["audio_output_cost_per_m"])
 		cacheRead := floatValue(rule["cache_read_cost_per_m"])
+		textCacheRead := floatValue(rule["text_cache_read_cost_per_m"])
+		if textCacheRead <= 0 {
+			textCacheRead = cacheRead
+		}
 		cacheWrite := floatValue(rule["cache_write_cost_per_m"])
 		if cacheRead <= 0 {
 			cacheRead = input
@@ -920,11 +965,20 @@ func estimateRuleCostBase(rule map[string]interface{}, params map[string]interfa
 			cacheWriteTokens = 0
 		}
 		audioInputTokens, audioOutputTokens := routeAudioTokenCounts(params)
+		imageInputTokens := firstPositiveIntValue(params, "_actual_image_input_tokens", "image_input_tokens", "estimated_image_input_tokens")
+		imageOutputTokens := firstPositiveIntValue(params, "_actual_image_output_tokens", "_estimated_image_output_tokens")
+		if imageOutputTokens <= 0 {
+			imageOutputTokens = estimatedImageOutputTokens(rule, params)
+		}
+		imageOutputIncluded, _ := params["_actual_image_output_tokens_included"].(bool)
 		if promptTokens <= 0 && audioInputTokens > 0 {
 			promptTokens = audioInputTokens
 		}
 		if completionTokens <= 0 && audioOutputTokens > 0 {
 			completionTokens = audioOutputTokens
+		}
+		if completionTokens <= 0 && imageOutputIncluded && imageOutputTokens > 0 {
+			completionTokens = imageOutputTokens
 		}
 		if audioInputTokens > promptTokens {
 			audioInputTokens = promptTokens
@@ -932,13 +986,38 @@ func estimateRuleCostBase(rule map[string]interface{}, params map[string]interfa
 		if audioOutputTokens > completionTokens {
 			audioOutputTokens = completionTokens
 		}
-		textPromptTokens := promptTokens - audioInputTokens
-		textCompletionTokens := completionTokens - audioOutputTokens
-		if cacheReadTokens+cacheWriteTokens > textPromptTokens {
-			cacheReadTokens, cacheWriteTokens = 0, 0
+		if imageOutputIncluded {
+			if imageOutputTokens < 0 {
+				imageOutputTokens = 0
+			}
+			availableImageOutputTokens := completionTokens - audioOutputTokens
+			if imageOutputTokens > availableImageOutputTokens {
+				imageOutputTokens = availableImageOutputTokens
+			}
 		}
-		uncached := textPromptTokens - cacheReadTokens - cacheWriteTokens
-		return (float64(uncached)*input + float64(cacheReadTokens)*cacheRead + float64(cacheWriteTokens)*cacheWrite + float64(textCompletionTokens)*output + float64(audioInputTokens)*audioInputCost + float64(audioOutputTokens)*audioOutputCost) / 1_000_000
+		if imageInputTokens < 0 {
+			imageInputTokens = 0
+		}
+		availableImageTokens := promptTokens - audioInputTokens
+		if imageInputTokens > availableImageTokens {
+			imageInputTokens = availableImageTokens
+		}
+		textPromptTokens := promptTokens - audioInputTokens
+		textPromptTokens -= imageInputTokens
+		textCompletionTokens := completionTokens - audioOutputTokens
+		if imageOutputIncluded {
+			textCompletionTokens -= imageOutputTokens
+		}
+		if cacheWriteTokens > textPromptTokens {
+			cacheWriteTokens = textPromptTokens
+		}
+		textCacheReadTokens := cacheReadTokens
+		if textCacheReadTokens > textPromptTokens-cacheWriteTokens {
+			textCacheReadTokens = textPromptTokens - cacheWriteTokens
+		}
+		imageCacheReadTokens := cacheReadTokens - textCacheReadTokens
+		uncachedText := textPromptTokens - textCacheReadTokens - cacheWriteTokens
+		return (float64(uncachedText)*textInput + float64(imageInputTokens)*imageInput + float64(textCacheReadTokens)*textCacheRead + float64(imageCacheReadTokens)*cacheRead + float64(cacheWriteTokens)*cacheWrite + float64(imageOutputTokens)*imageOutput + float64(textCompletionTokens)*textOutput + float64(audioInputTokens)*audioInputCost + float64(audioOutputTokens)*audioOutputCost) / 1_000_000
 	case "per_image", "per_request":
 		count := intFromAny(params["n"], 1)
 		if count <= 0 {
@@ -1030,4 +1109,23 @@ func EstimateRouteUserChargeCost(route *ModelRoute, params map[string]interface{
 		return cost
 	}
 	return cost * routeCostTimeMultiplier(route.UserPriceRule, time.Now())
+}
+
+func routeUserPriceIsFinal(route *ModelRoute) bool {
+	if route == nil || len(route.UserPriceRule) == 0 {
+		return false
+	}
+	final, _ := route.UserPriceRule["user_price_is_final"].(bool)
+	return final
+}
+
+// routeImageTokenItemCount expands token estimates for image models because
+// their configured output token budget is per generated image. Chat token
+// estimates remain per request, while per-image routes already apply count in
+// estimateRuleCostBase and must not be multiplied again.
+func routeImageTokenItemCount(model *ModelFull, rule map[string]interface{}, params map[string]interface{}) float64 {
+	if model == nil || model.Category != "image" || strings.ToLower(strings.TrimSpace(stringValue(rule["billing_type"]))) != "per_token" {
+		return 1
+	}
+	return billingItemCount(params)
 }

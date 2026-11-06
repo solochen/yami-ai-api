@@ -31,10 +31,14 @@ function priceText(m: Model, t: (key: string, vars?: Record<string, string | num
   switch (r.billing_type) {
     case "per_token": {
       const parts: string[] = [];
+      const textInput = perM(r, "text_input_price");
+      const imageInput = perM(r, "image_input_price");
       const input = perM(r, "input_price");
       const output = perM(r, "output_price");
       const cacheRead = perM(r, "cache_read_price");
-      if (input !== null) parts.push(t("pricing.inputPrice", { value: `${fmt(input)} 算力` }));
+      if (textInput !== null && imageInput !== null) {
+        parts.push(t("pricing.inputPrice", { value: `${fmt(textInput)} 算力/文本，${fmt(imageInput)} 算力/图片` }));
+      } else if (input !== null) parts.push(t("pricing.inputPrice", { value: `${fmt(input)} 算力` }));
       if (output !== null) parts.push(t("pricing.outputPrice", { value: `${fmt(output)} 算力` }));
       if (cacheRead !== null) parts.push(t("pricing.cacheReadPrice", { value: `${fmt(cacheRead)} 算力` }));
       return parts.length ? `${parts.join(" / ")} / 1M Tokens` : "-";
@@ -45,6 +49,10 @@ function priceText(m: Model, t: (key: string, vars?: Record<string, string | num
       return t("pricing.computePerRequest", { value: Number(r.unit_price ?? 0) });
     case "per_second":
       return t("pricing.computePerSecond", { value: Number(r.unit_price ?? 0) });
+    case "model_actual":
+      // Multi-model collaboration: the member models are billed individually,
+      // so there is no single unit price to show.
+      return t("pricing.memberActualEstimate");
     case "dynamic": {
       const multiplier = dynamicCreditMultiplier(r);
       if (r.strategy === "seedance_2_tokens") {
@@ -80,7 +88,14 @@ export default function PricingPage() {
 
   const categories = useMemo(() => ["all", ...Array.from(new Set(models.map((m) => m.category).filter(Boolean)))], [models]);
   const filtered = category === "all" ? models : models.filter((m) => m.category === category);
-  const categoryLabel = (code: string) => (code === "all" ? t("common.all") : td(`category.${code}`, code));
+  // The API returns snake_case category codes (multi_collab) while the message
+  // catalog keys multi-word categories in camelCase (category.multiCollab), so a
+  // naive `category.${code}` lookup fell through to the raw code.
+  const categoryLabel = (code: string) => {
+    if (code === "all") return t("common.all");
+    const camel = code.replace(/_([a-z0-9])/g, (_, ch: string) => ch.toUpperCase());
+    return td(`category.${code}`, td(`category.${camel}`, code));
+  };
   const billingLabel = (type?: string) => (type ? t(`billing.${type}`) : "-");
 
   return (
@@ -130,11 +145,14 @@ export default function PricingPage() {
                   <div className="font-medium text-gray-950 dark:text-gray-100">{m.display_name}</div>
                   <div className="mt-0.5 font-mono text-xs text-gray-400">{m.code}</div>
                 </td>
-                <td className="px-5 py-4 text-gray-500 dark:text-gray-400">{categoryLabel(m.category)}</td>
-                <td className="px-5 py-4 text-gray-500 dark:text-gray-400">{billingLabel(m.price_rule?.billing_type)}</td>
+                <td className="whitespace-nowrap px-5 py-4 text-gray-500 dark:text-gray-400">{categoryLabel(m.category)}</td>
+                <td className="whitespace-nowrap px-5 py-4 text-gray-500 dark:text-gray-400">{billingLabel(m.price_rule?.billing_type)}</td>
                 <td className="px-5 py-4 text-gray-700 dark:text-gray-300">{priceText(m, t)}</td>
-                <td className="px-5 py-4">
-                  <span className={`rounded-full px-2 py-1 text-xs ${m.is_enabled ? "bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-300" : "bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400"}`}>
+                {/* w-px keeps the status column at its content width instead of
+                    absorbing whatever is left over, which used to squeeze 「可用」
+                    onto two lines. */}
+                <td className="w-px whitespace-nowrap px-5 py-4">
+                  <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs ${m.is_enabled ? "bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-300" : "bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400"}`}>
                     {m.is_enabled ? t("pricing.enabled") : t("pricing.disabled")}
                   </span>
                 </td>

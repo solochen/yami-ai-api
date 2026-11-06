@@ -3091,6 +3091,14 @@ func numericMicrosWorker(value float64) float64 {
 	return math.Ceil(value*1_000_000-1e-9) / 1_000_000
 }
 
+func signedMicrosWorker(value float64) float64 {
+	if value == 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0
+	}
+	rounded := math.Ceil(math.Abs(value)*1_000_000-1e-9) / 1_000_000
+	return math.Copysign(rounded, value)
+}
+
 type workflowChargeResult struct {
 	ProviderCost   float64
 	UserCharge     float64
@@ -3112,22 +3120,27 @@ func workflowSettlementCharge(ctx context.Context, pool *pgxpool.Pool, projectID
 	if costs.IncompleteCost {
 		return workflowChargeResult{}, fmt.Errorf("工作流共有 %d 次成功调用缺少可核验的上游成本，已停止结算", costs.MissingCostCount)
 	}
-	charge, err := workerChargeForProviderCost(ctx, pool, costs.ProviderCost)
-	if err != nil {
-		return workflowChargeResult{}, err
-	}
-	result := workflowChargeResult{
-		ProviderCost: charge.ProviderCost,
-		UserCharge:   charge.UserCharge,
-		Commission:   charge.Commission,
-		Config:       charge.Config,
-		Items:        make([]workerSettlementItem, 0, len(costs.Items)),
-	}
+	config := loadWorkerPricingConfig(ctx, pool)
+	result := workflowChargeResult{Config: config, Items: make([]workerSettlementItem, 0, len(costs.Items))}
 	for _, item := range costs.Items {
-		itemCharge, err := workerCalculateCharge(item.ProviderCost, charge.Config.GrossMarginPercent)
+		itemCharge, err := workerCalculateCharge(item.ProviderCost, config.GrossMarginPercent)
 		if err != nil {
 			return workflowChargeResult{}, err
 		}
+		if item.UserChargeFinal && item.UserCharge > 0 {
+			// The workflow task already calculated the final listed price from
+			// actual usage. A negative commission records a loss if upstream cost
+			// exceeded that official-price quote.
+			itemCharge = workerChargeBreakdown{
+				ProviderCost: itemCharge.ProviderCost,
+				UserCharge:   numericMicrosWorker(item.UserCharge),
+				Commission:   numericMicrosWorker(item.UserCharge) - itemCharge.ProviderCost,
+				Config:       config,
+			}
+		}
+		result.ProviderCost += itemCharge.ProviderCost
+		result.UserCharge += itemCharge.UserCharge
+		result.Commission += itemCharge.Commission
 		result.Items = append(result.Items, workerSettlementItem{
 			ModelID: item.ModelID, RouteID: item.RouteID, Source: item.Source,
 			RefType: "workflow_item", RefID: item.RefID,
@@ -3137,6 +3150,13 @@ func workflowSettlementCharge(ctx context.Context, pool *pgxpool.Pool, projectID
 			CachedTokens: item.CachedTokens, ImageCount: item.ImageCount,
 			VideoSeconds: item.VideoSeconds,
 		})
+	}
+	if len(result.Items) == 0 && costs.ProviderCost > 0 {
+		charge, err := workerCalculateCharge(costs.ProviderCost, config.GrossMarginPercent)
+		if err != nil {
+			return workflowChargeResult{}, err
+		}
+		result.ProviderCost, result.UserCharge, result.Commission = charge.ProviderCost, charge.UserCharge, charge.Commission
 	}
 	// Rounding each item up can exceed the charge for the aggregate because the
 	// aggregate is also rounded once. The ledger requires exact balance, so
@@ -3150,12 +3170,12 @@ func workflowSettlementCharge(ctx context.Context, pool *pgxpool.Pool, projectID
 		}
 		providerDelta := numericMicrosWorker(result.ProviderCost - itemProvider)
 		userDelta := numericMicrosWorker(result.UserCharge - itemUser)
-		commissionDelta := numericMicrosWorker(result.Commission - itemCommission)
+		commissionDelta := signedMicrosWorker(result.Commission - itemCommission)
 		if math.Abs(providerDelta) > 1e-6 || math.Abs(userDelta) > 1e-6 || math.Abs(commissionDelta) > 1e-6 {
 			last := &result.Items[len(result.Items)-1]
 			last.ProviderCost = numericMicrosWorker(last.ProviderCost + providerDelta)
 			last.UserCharge = numericMicrosWorker(last.UserCharge + userDelta)
-			last.Commission = numericMicrosWorker(last.Commission + commissionDelta)
+			last.Commission = signedMicrosWorker(last.Commission + commissionDelta)
 		}
 	}
 	return result, nil
@@ -3302,7 +3322,7 @@ func estimateModelCostByIDWorker(ctx context.Context, pool *pgxpool.Pool, modelI
 }
 
 func workerBillingParams(params map[string]interface{}, category string) map[string]interface{} {
-	if category != "audio" {
+	if category != "audio" && category != "image" {
 		return params
 	}
 	out := make(map[string]interface{}, len(params)+1)
@@ -3316,7 +3336,9 @@ func workerBillingParams(params map[string]interface{}, category string) map[str
 	if count <= 0 {
 		count = 1
 	}
-	out["_billing_item_count"] = count
+	if category == "audio" || category == "image" {
+		out["_billing_item_count"] = count
+	}
 	return out
 }
 
@@ -3334,6 +3356,12 @@ func estimatePriceRuleCostWorker(rule map[string]interface{}, params map[string]
 	case "per_token":
 		promptTokens, outputTokens = workerEstimatedTokenCounts(rule, params, promptTokens, outputTokens)
 		audioInputTokens, audioOutputTokens := workerAudioTokenCounts(rule, params)
+		imageInputTokens := int(math.Ceil(floatAny(firstNonNil(params["_actual_image_input_tokens"], params["image_input_tokens"], params["estimated_image_input_tokens"]))))
+		imageOutputTokens := int(math.Ceil(floatAny(firstNonNil(params["_actual_image_output_tokens"], params["_estimated_image_output_tokens"]))))
+		if imageOutputTokens <= 0 {
+			imageOutputTokens = workerEstimatedImageOutputTokens(rule, params)
+		}
+		imageOutputIncluded, _ := params["_actual_image_output_tokens_included"].(bool)
 		// 以管理后台设定的输入/输出/缓存单价为准：缓存 token 按缓存单价计，其余输入按输入单价计。
 		if cacheReadTokens < 0 {
 			cacheReadTokens = 0
@@ -3347,18 +3375,48 @@ func estimatePriceRuleCostWorker(rule map[string]interface{}, params map[string]
 		if audioOutputTokens > outputTokens {
 			audioOutputTokens = outputTokens
 		}
-		textPromptTokens := promptTokens - audioInputTokens
-		textOutputTokens := outputTokens - audioOutputTokens
-		if cacheReadTokens+cacheWriteTokens > textPromptTokens {
-			overflow := cacheReadTokens + cacheWriteTokens - textPromptTokens
-			if cacheWriteTokens >= overflow {
-				cacheWriteTokens -= overflow
-			} else {
-				cacheReadTokens = textPromptTokens - cacheWriteTokens
+		if imageOutputTokens < 0 {
+			imageOutputTokens = 0
+		}
+		if imageOutputIncluded {
+			availableImageOutputTokens := outputTokens - audioOutputTokens
+			if imageOutputTokens > availableImageOutputTokens {
+				imageOutputTokens = availableImageOutputTokens
 			}
 		}
-		uncachedInput := textPromptTokens - cacheReadTokens - cacheWriteTokens
-		inputPrice := tokenPriceWorker(rule, "input_price")
+		if imageInputTokens < 0 {
+			imageInputTokens = 0
+		}
+		availableImageTokens := promptTokens - audioInputTokens
+		if imageInputTokens > availableImageTokens {
+			imageInputTokens = availableImageTokens
+		}
+		textPromptTokens := promptTokens - audioInputTokens
+		textPromptTokens -= imageInputTokens
+		textOutputTokens := outputTokens - audioOutputTokens
+		if imageOutputIncluded {
+			textOutputTokens -= imageOutputTokens
+		}
+		if textOutputTokens < 0 {
+			textOutputTokens = 0
+		}
+		if cacheWriteTokens > textPromptTokens {
+			cacheWriteTokens = textPromptTokens
+		}
+		textCacheReadTokens := cacheReadTokens
+		if textCacheReadTokens > textPromptTokens-cacheWriteTokens {
+			textCacheReadTokens = textPromptTokens - cacheWriteTokens
+		}
+		imageCacheReadTokens := cacheReadTokens - textCacheReadTokens
+		uncachedInput := textPromptTokens - textCacheReadTokens - cacheWriteTokens
+		inputPrice := tokenPriceWorker(rule, "text_input_price")
+		if inputPrice <= 0 {
+			inputPrice = tokenPriceWorker(rule, "input_price")
+		}
+		imageInputPrice := tokenPriceWorker(rule, "image_input_price")
+		if imageInputPrice <= 0 {
+			imageInputPrice = tokenPriceWorker(rule, "input_price")
+		}
 		cacheReadPrice := tokenPriceWorker(rule, "cache_read_price")
 		if cacheReadPrice <= 0 {
 			cacheReadPrice = inputPrice
@@ -3367,7 +3425,20 @@ func estimatePriceRuleCostWorker(rule map[string]interface{}, params map[string]
 		if cacheWritePrice <= 0 {
 			cacheWritePrice = inputPrice
 		}
-		cost := float64(uncachedInput)*inputPrice + float64(cacheReadTokens)*cacheReadPrice + float64(cacheWriteTokens)*cacheWritePrice + float64(textOutputTokens)*tokenPriceWorker(rule, "output_price") + workerAudioTokenCost(rule, audioInputTokens, audioOutputTokens)
+		textCacheReadPrice := tokenPriceWorker(rule, "text_cache_read_price")
+		if textCacheReadPrice <= 0 {
+			textCacheReadPrice = cacheReadPrice
+		}
+		outputPrice := tokenPriceWorker(rule, "output_price")
+		imageOutputPrice := tokenPriceWorker(rule, "image_output_price")
+		if imageOutputPrice <= 0 {
+			imageOutputPrice = outputPrice
+		}
+		textOutputPrice := outputPrice
+		if workerRuleHasPrice(rule, "text_output_price", "text_output_cost_per_m") {
+			textOutputPrice = tokenPriceWorker(rule, "text_output_price")
+		}
+		cost := float64(uncachedInput)*inputPrice + float64(imageInputTokens)*imageInputPrice + float64(textCacheReadTokens)*textCacheReadPrice + float64(imageCacheReadTokens)*cacheReadPrice + float64(cacheWriteTokens)*cacheWritePrice + float64(imageOutputTokens)*imageOutputPrice + float64(textOutputTokens)*textOutputPrice + workerAudioTokenCost(rule, audioInputTokens, audioOutputTokens)
 		if surcharge := floatAny(rule["surcharge_per_m"]); surcharge > 0 {
 			cost += float64(promptTokens+outputTokens) / 1_000_000 * surcharge
 		}
@@ -3396,6 +3467,12 @@ func estimatePriceRuleCostWorker(rule map[string]interface{}, params map[string]
 	default:
 		return 0
 	}
+}
+
+func workerRuleHasPrice(rule map[string]interface{}, priceKey, costKey string) bool {
+	_, hasPrice := rule[priceKey]
+	_, hasCost := rule[costKey]
+	return hasPrice || hasCost
 }
 
 func workerAudioTokenCounts(rule, params map[string]interface{}) (int, int) {
@@ -3441,20 +3518,160 @@ func workerEstimatedTokenCounts(rule, params map[string]interface{}, promptToken
 		}
 	}
 	if outputTokens <= 0 {
+		if included, _ := params["_actual_image_output_tokens_included"].(bool); included {
+			outputTokens = int(math.Ceil(floatAny(params["_actual_image_output_tokens"])))
+		}
 		for _, key := range []string{"_estimated_output_tokens", "max_completion_tokens", "max_tokens"} {
+			if outputTokens > 0 {
+				break
+			}
 			if value := int(math.Ceil(floatAny(params[key]))); value > 0 {
 				outputTokens = value
 				break
 			}
 		}
-		if outputTokens <= 0 {
+		if outputTokens <= 0 && workerEstimatedImageOutputTokens(rule, params) == 0 {
 			outputTokens = int(math.Ceil(floatAny(rule["estimated_output_tokens"])))
 		}
-		if outputTokens <= 0 {
+		if outputTokens <= 0 && workerEstimatedImageOutputTokens(rule, params) == 0 {
 			outputTokens = 1000
 		}
 	}
 	return promptTokens, outputTokens
+}
+
+func workerEstimatedImageOutputTokens(rule, params map[string]interface{}) int {
+	if estimator := strings.ToLower(strings.TrimSpace(stringAny(rule["image_output_token_estimator"]))); estimator != "" {
+		return workerEstimateOpenAIImageOutputTokens(estimator, rule, params)
+	}
+	variants, ok := rule["estimated_output_tokens_by_variant"].(map[string]interface{})
+	if !ok || len(variants) == 0 {
+		return 0
+	}
+	quality := strings.ToLower(strings.TrimSpace(stringAny(params["quality"])))
+	if quality == "" || quality == "<nil>" || quality == "auto" {
+		quality = strings.ToLower(strings.TrimSpace(stringAny(rule["default_quality"])))
+	}
+	if quality == "" || quality == "<nil>" || quality == "auto" {
+		quality = "medium"
+	}
+	tier := strings.ToLower(strings.TrimSpace(stringAny(params["image_size"])))
+	if tier == "" || tier == "<nil>" || tier == "auto" {
+		tier = "1k"
+	}
+	shape := workerImageOutputShape(params)
+	for _, key := range []string{quality + "_" + tier + "_" + shape, quality + "_" + tier} {
+		if value := intAny(variants[key]); value > 0 {
+			return value
+		}
+	}
+	return 0
+}
+
+func workerEstimatedImageOutputTokensForRequest(rule, params map[string]interface{}) int {
+	return int(math.Ceil(float64(workerEstimatedImageOutputTokens(rule, params)) * workerBillingItemCount(params)))
+}
+
+func workerEstimateOpenAIImageOutputTokens(estimator string, rule, params map[string]interface{}) int {
+	width, height := workerImageOutputDimensions(params)
+	if width <= 0 || height <= 0 {
+		return 0
+	}
+	quality := strings.ToLower(strings.TrimSpace(stringAny(params["quality"])))
+	if quality == "" || quality == "<nil>" || quality == "auto" {
+		quality = strings.ToLower(strings.TrimSpace(stringAny(rule["default_quality"])))
+	}
+	if quality == "" || quality == "<nil>" || quality == "auto" {
+		quality = "medium"
+	}
+	base := 0
+	switch estimator {
+	case "gpt_image_2":
+		base = map[string]int{"low": 16, "medium": 48, "high": 96}[quality]
+	case "gpt_image_2_5":
+		base = map[string]int{"low": 16, "medium": 24, "high": 48, "xhigh": 64, "max": 96}[quality]
+	}
+	if base == 0 {
+		return 0
+	}
+	longEdge, shortEdge := width, height
+	if shortEdge > longEdge {
+		longEdge, shortEdge = shortEdge, longEdge
+	}
+	shortEdgeTiles := int(math.RoundToEven(float64(base) / (float64(longEdge) / float64(shortEdge))))
+	widthTiles, heightTiles := base, shortEdgeTiles
+	if width < height {
+		widthTiles, heightTiles = shortEdgeTiles, base
+	}
+	tileCount := widthTiles * heightTiles
+	pixelCost := float64(tileCount) * (2_000_000 + float64(width*height)) / 4_000_000
+	return int(math.Ceil(pixelCost))
+}
+
+func workerImageOutputDimensions(params map[string]interface{}) (int, int) {
+	for _, raw := range []string{stringAny(params["resolved_size"]), stringAny(params["size"])} {
+		parts := strings.Split(strings.ToLower(strings.TrimSpace(raw)), "x")
+		if len(parts) != 2 {
+			continue
+		}
+		width, widthErr := strconv.Atoi(strings.TrimSpace(parts[0]))
+		height, heightErr := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if widthErr == nil && heightErr == nil && width > 0 && height > 0 {
+			return width, height
+		}
+	}
+	scale := 1
+	switch strings.ToLower(strings.TrimSpace(stringAny(params["image_size"]))) {
+	case "", "<nil>", "auto", "1k":
+	case "2k":
+		scale = 2
+	default:
+		return 0, 0
+	}
+	switch workerImageOutputShape(params) {
+	case "portrait":
+		return 1024 * scale, 1536 * scale
+	case "landscape":
+		return 1536 * scale, 1024 * scale
+	default:
+		return 1024 * scale, 1024 * scale
+	}
+}
+
+func workerImageOutputShape(params map[string]interface{}) string {
+	for _, raw := range []string{stringAny(params["resolved_size"]), stringAny(params["size"])} {
+		parts := strings.Split(strings.ToLower(strings.TrimSpace(raw)), "x")
+		if len(parts) != 2 {
+			continue
+		}
+		width, widthErr := strconv.Atoi(strings.TrimSpace(parts[0]))
+		height, heightErr := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
+			continue
+		}
+		if width == height {
+			return "square"
+		}
+		if width > height {
+			return "landscape"
+		}
+		return "portrait"
+	}
+	ratio := strings.Split(strings.TrimSpace(stringAny(params["aspect_ratio"])), ":")
+	if len(ratio) == 2 {
+		width, widthErr := strconv.ParseFloat(strings.TrimSpace(ratio[0]), 64)
+		height, heightErr := strconv.ParseFloat(strings.TrimSpace(ratio[1]), 64)
+		if widthErr == nil && heightErr == nil {
+			if width == height {
+				return "square"
+			}
+			if width > height {
+				return "landscape"
+			}
+			return "portrait"
+		}
+	}
+	return "square"
 }
 
 func workerTextTokenEstimate(value string) int {
@@ -3705,6 +3922,10 @@ func tokenPriceWorker(rule map[string]interface{}, key string) float64 {
 		return v
 	}
 	if v := floatAny(rule[key+"_per_m"]); v > 0 {
+		return v / 1_000_000
+	}
+	costKey := strings.TrimSuffix(key, "_price") + "_cost_per_m"
+	if v := floatAny(rule[costKey]); v > 0 {
 		return v / 1_000_000
 	}
 	return 0
@@ -3965,10 +4186,15 @@ func selectedAnalysisCandidate(analysis map[string]interface{}, candidateID stri
 }
 
 func runAgentMediaTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, token string, projectID, userID int64, publicID string, runtimeCfg, inputs map[string]interface{}, prompt string) ([]map[string]interface{}, string) {
-	modelCode := stringAny(runtimeCfg["generation_model_code"])
-	if modelCode == "" {
+	requestedModelCode := strings.TrimSpace(stringAny(runtimeCfg["generation_model_code"]))
+	if requestedModelCode == "" {
 		return nil, "未配置生成模型"
 	}
+	model, err := loadEnabledWorkerMediaModel(ctx, pool, requestedModelCode)
+	if err != nil {
+		return nil, "生成模型不存在：" + requestedModelCode
+	}
+	modelCode := model.Code
 	genType := firstNonEmpty(stringAny(runtimeCfg["generation_type"]), "image")
 	count := intAny(inputs["count"])
 	if count <= 0 {
@@ -3980,20 +4206,14 @@ func runAgentMediaTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, token 
 	if count > 20 {
 		count = 20
 	}
-	var modelID int64
-	var requestMode string
-	var defaultsRaw, runtimeRaw []byte
-	if err := pool.QueryRow(ctx, `SELECT id, request_mode, default_params, runtime_rule FROM models WHERE code=$1 AND is_enabled=true`, modelCode).Scan(&modelID, &requestMode, &defaultsRaw, &runtimeRaw); err != nil {
-		return nil, "生成模型不存在：" + modelCode
-	}
 	defaultParams := map[string]interface{}{}
 	runtimeRule := map[string]interface{}{}
-	_ = json.Unmarshal(defaultsRaw, &defaultParams)
-	_ = json.Unmarshal(runtimeRaw, &runtimeRule)
+	_ = json.Unmarshal(model.DefaultParams, &defaultParams)
+	_ = json.Unmarshal(model.RuntimeRule, &runtimeRule)
 	taskType := "image"
-	if requestMode == "video" || genType == "video" {
+	if model.RequestMode == "video" || genType == "video" {
 		taskType = "video"
-	} else if requestMode == "audio" || genType == "audio" {
+	} else if model.RequestMode == "audio" || genType == "audio" {
 		taskType = "audio"
 	}
 	referenceImages := referenceImageURLs(inputs)
@@ -4012,8 +4232,8 @@ func runAgentMediaTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, token 
 		if len(referenceImages) > 0 {
 			taskInput["reference_images"] = referenceImages
 		}
-		taskEstimated := estimateModelCostByIDWorker(ctx, pool, modelID, taskInput, 0, 0, 0, 0)
-		err := insertWorkflowMediaTask(ctx, pool, projectID, userID, modelID, taskNo, taskType, taskInput, taskEstimated)
+		taskEstimated := estimateModelCostByIDWorker(ctx, pool, model.ID, taskInput, 0, 0, 0, 0)
+		err := insertWorkflowMediaTask(ctx, pool, projectID, userID, model.ID, taskNo, taskType, taskInput, taskEstimated)
 		if err != nil {
 			if firstErr == "" {
 				firstErr = err.Error()
@@ -4023,7 +4243,7 @@ func runAgentMediaTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, token 
 		}
 		appendWorkflowMediaTask(ctx, pool, projectID, map[string]interface{}{"task_no": taskNo, "type": taskType, "status": "pending", "progress": 5, "output": map[string]interface{}{}})
 		_ = processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{
-			TaskNo: taskNo, UserID: userID, ModelID: modelID, ModelCode: modelCode,
+			TaskNo: taskNo, UserID: userID, ModelID: model.ID, ModelCode: modelCode,
 			WorkflowProjectID: projectID, Input: taskInput,
 		})
 		item := loadAgentMediaTask(ctx, pool, taskNo)
@@ -4040,6 +4260,33 @@ func runAgentMediaTasks(ctx context.Context, pool *pgxpool.Pool, baseURL, token 
 		return results, firstNonEmpty(firstErr, "生成任务全部失败")
 	}
 	return results, ""
+}
+
+type workerMediaModelQueryer interface {
+	QueryRow(context.Context, string, ...interface{}) pgx.Row
+}
+
+type workerMediaModel struct {
+	ID            int64
+	Code          string
+	RequestMode   string
+	DefaultParams []byte
+	RuntimeRule   []byte
+}
+
+func loadEnabledWorkerMediaModel(ctx context.Context, db workerMediaModelQueryer, identifier string) (*workerMediaModel, error) {
+	model := &workerMediaModel{}
+	err := db.QueryRow(ctx, `
+		SELECT id, code, request_mode, default_params, runtime_rule
+		FROM models
+		WHERE (code=$1 OR public_alias=$1) AND is_enabled=true
+		ORDER BY CASE WHEN code=$1 THEN 0 ELSE 1 END
+		LIMIT 1`, strings.TrimSpace(identifier)).Scan(
+		&model.ID, &model.Code, &model.RequestMode, &model.DefaultParams, &model.RuntimeRule)
+	if err != nil {
+		return nil, err
+	}
+	return model, nil
 }
 
 func applyAgentModelDefaults(taskInput, defaults, runtimeRule map[string]interface{}, taskType string) {

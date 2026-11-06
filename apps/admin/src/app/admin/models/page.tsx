@@ -47,6 +47,13 @@ interface ModelConnectionTest {
   latency_ms: number;
 }
 
+interface VisionProbeResult {
+  verdict: "supported" | "unsupported" | "inconclusive" | "error";
+  applied: boolean;
+  message: string;
+  probes: { label: string; answer: string; matched: boolean; refused: boolean; error?: string }[];
+}
+
 interface UpstreamModel {
   id: string;
   object?: string;
@@ -624,6 +631,8 @@ export default function ModelsPage() {
   const [modelUsdToComputeRate, setModelUsdToComputeRate] = useState(7200);
   const [testingModelId, setTestingModelId] = useState<number | null>(null);
   const [connectionTests, setConnectionTests] = useState<Record<number, ModelConnectionTest>>({});
+  const [probingVisionId, setProbingVisionId] = useState<number | null>(null);
+  const [visionProbes, setVisionProbes] = useState<Record<number, VisionProbeResult>>({});
   const [upstreamModels, setUpstreamModels] = useState<UpstreamModel[]>([]);
   const [upstreamModelsLoading, setUpstreamModelsLoading] = useState(false);
   const [upstreamModelsError, setUpstreamModelsError] = useState("");
@@ -3588,6 +3597,39 @@ export default function ModelsPage() {
     }
   };
 
+  // Manual `capabilities.vision` configuration is unreliable in both
+  // directions, and a non-vision upstream answers with a polite refusal rather
+  // than an error, so this probe is the only dependable way to set the flag.
+  const probeVision = async (m: AdminModel) => {
+    if (probingVisionId !== null) return;
+    setProbingVisionId(m.id);
+    setVisionProbes((current) => {
+      const next = { ...current };
+      delete next[m.id];
+      return next;
+    });
+    try {
+      const result = await adminApi<VisionProbeResult>(`/models/${m.id}/probe-vision`, {
+        method: "POST",
+        body: JSON.stringify({ apply: true }),
+      });
+      setVisionProbes((current) => ({ ...current, [m.id]: result }));
+      await load();
+    } catch (error) {
+      setVisionProbes((current) => ({
+        ...current,
+        [m.id]: {
+          verdict: "error",
+          applied: false,
+          message: error instanceof Error ? error.message : "图片能力检测失败",
+          probes: [],
+        },
+      }));
+    } finally {
+      setProbingVisionId(null);
+    }
+  };
+
   const remove = async (m: AdminModel) => {
     if (
       !confirm(
@@ -5854,6 +5896,21 @@ export default function ModelsPage() {
                     >
                       <ConnectionTestIcon loading={testingModelId === m.id} />
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => probeVision(m)}
+                      disabled={probingVisionId !== null || m.category === "multi_collab"}
+                      title={
+                        m.category === "multi_collab"
+                          ? "多模型协作入口没有独立上游，请对成员模型单独检测"
+                          : probingVisionId === m.id
+                            ? "正在检测图片理解能力"
+                            : "检测图片理解能力（发一张纯色图，看模型能否说出颜色）"
+                      }
+                      className="text-xs text-violet-600 hover:underline disabled:cursor-not-allowed disabled:text-gray-300"
+                    >
+                      {probingVisionId === m.id ? "检测中…" : "检测图片能力"}
+                    </button>
                     <button onClick={() => openEdit(m)} className="text-xs text-secondary hover:underline">
                       编辑
                     </button>
@@ -5865,6 +5922,29 @@ export default function ModelsPage() {
                     </button>
                   </div>
                   {testingModelId === m.id && <p className="mt-1.5 text-[11px] text-blue-600">正在验证地址、鉴权与模型路由…</p>}
+                  {probingVisionId === m.id && (
+                    <p className="mt-1.5 text-[11px] text-violet-600">正在发送纯色探测图，检查模型能否识别颜色…</p>
+                  )}
+                  {probingVisionId !== m.id && visionProbes[m.id] && (
+                    <div className="mt-1.5 max-w-[420px] whitespace-normal text-[11px] leading-4">
+                      <p
+                        className={
+                          visionProbes[m.id].verdict === "supported"
+                            ? "text-green-600"
+                            : visionProbes[m.id].verdict === "unsupported"
+                              ? "text-amber-600"
+                              : "text-gray-500"
+                        }
+                      >
+                        {visionProbes[m.id].message}
+                      </p>
+                      {visionProbes[m.id].probes.map((probe) => (
+                        <p key={probe.label} className="mt-0.5 text-gray-400">
+                          探测图（{probe.label}）→ {probe.error ? `调用失败：${probe.error}` : probe.answer}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                   {testingModelId !== m.id && connectionTests[m.id] && (
                     <p
                       className={connectionTests[m.id].ok ? "mt-1.5 max-w-[300px] whitespace-normal text-[11px] leading-4 text-green-600" : "mt-1.5 max-w-[300px] whitespace-normal text-[11px] leading-4 text-red-600"}

@@ -22,10 +22,15 @@ type AgentService struct {
 	billing *billing.Service
 	queue   *asynq.Client
 	storage storage.Store
+	models  *ModelService
 }
 
-func NewAgentService(db *pgxpool.Pool, billing *billing.Service, q *asynq.Client, store storage.Store) *AgentService {
-	return &AgentService{db: db, billing: billing, queue: q, storage: store}
+func NewAgentService(db *pgxpool.Pool, billing *billing.Service, q *asynq.Client, store storage.Store, modelServices ...*ModelService) *AgentService {
+	var models *ModelService
+	if len(modelServices) > 0 {
+		models = modelServices[0]
+	}
+	return &AgentService{db: db, billing: billing, queue: q, storage: store, models: models}
 }
 
 type WorkflowNode struct {
@@ -131,8 +136,17 @@ func (s *AgentService) Get(ctx context.Context, code string) (*WorkflowDTO, erro
 		`SELECT code, name, description, icon, category, nodes, input_schema, price_rule, display_config, runtime_config, is_enabled, sort_order FROM workflow_definitions WHERE code=$1`, code)
 	w, err := scanWorkflowRow(row)
 	if err == nil && stringValue(w.RuntimeConfig["agent_mode"]) == "product_refine" {
-		if pricing, _, priceErr := s.productPricing(ctx, w.RuntimeConfig, w.PriceRule, 1, "high"); priceErr == nil {
+		if w.RuntimeConfig == nil {
+			w.RuntimeConfig = map[string]interface{}{}
+		}
+		pricing, _, priceErr := s.productPricing(ctx, w.RuntimeConfig, w.PriceRule, 1, "high")
+		if priceErr == nil {
 			w.RuntimeConfig["product_pricing"] = pricing
+		} else {
+			// Surface why the estimate is unavailable. Dropping the error left the
+			// frontend with no pricing and only a "refresh the page" hint, which
+			// never helps when the real cause is an unbound or incompatible model.
+			w.RuntimeConfig["product_pricing_error"] = priceErr.Error()
 		}
 	}
 	return w, err
@@ -698,6 +712,15 @@ func mergePhotoStudioRuntimeDefaults(runtimeCfg, inputs map[string]interface{}) 
 	}
 	if stringValue(inputs["aspect_ratio"]) == "" {
 		inputs["aspect_ratio"] = "3:4"
+	}
+	// OpenAI's image estimates are tied to an explicit quality and size. Keep
+	// the photo studio reservation deterministic instead of falling back to the
+	// old 12,000-token placeholder or provider-specific auto selection.
+	if stringValue(inputs["quality"]) == "" || strings.EqualFold(stringValue(inputs["quality"]), "auto") {
+		inputs["quality"] = "medium"
+	}
+	if stringValue(inputs["image_size"]) == "" || strings.EqualFold(stringValue(inputs["image_size"]), "auto") {
+		inputs["image_size"] = "1K"
 	}
 	if stringValue(inputs["_mode"]) == "" {
 		inputs["_mode"] = "auto"
@@ -1769,12 +1792,12 @@ func (s *AgentService) estimateAgentRuntimeCost(ctx context.Context, runtimeCfg 
 	}
 	if stringValue(runtimeCfg["agent_mode"]) == "photo_studio" {
 		if code := stringValue(runtimeCfg["analysis_model_code"]); code != "" {
-			total += s.estimateModelCostByCode(ctx, code, inputs, 500, 600)
+			total += s.estimateAgentModelCostByCode(ctx, code, inputs, 500, 600)
 		}
 		if code := firstAgentString(stringValue(inputs["model_code"]), stringValue(runtimeCfg["generation_model_code"])); code != "" {
 			params := copyAgentMap(inputs)
 			params["n"] = positiveAgentInt(intFromAgentAny(inputs["count"]), positiveAgentInt(intFromAgentAny(runtimeCfg["default_count"]), 1))
-			total += s.estimateModelCostByCode(ctx, code, params, 0, 0)
+			total += s.estimateAgentModelCostByCode(ctx, code, params, 0, 0)
 		}
 		return total
 	}
@@ -1866,6 +1889,20 @@ func (s *AgentService) estimateModelCostByCode(ctx context.Context, code string,
 		params["_billing_item_count"] = billingItemCount(params)
 	}
 	return estimateCostFromPriceRule(rule, params, promptTokens, outputTokens)
+}
+
+// estimateAgentModelCostByCode uses the same active route and user-price rule
+// as a real model request. The legacy price_rule remains a compatibility
+// fallback for tests and installations created before model routes existed.
+func (s *AgentService) estimateAgentModelCostByCode(ctx context.Context, code string, params map[string]interface{}, promptTokens, outputTokens int) float64 {
+	if s.models != nil {
+		if model, err := s.models.GetFullByCode(ctx, code); err == nil {
+			if estimate, _, err := s.models.RouteBillingEstimate(ctx, model, params, promptTokens, outputTokens); err == nil {
+				return estimate
+			}
+		}
+	}
+	return s.estimateModelCostByCode(ctx, code, params, promptTokens, outputTokens)
 }
 
 func estimateCostFromPriceRule(rule map[string]interface{}, params map[string]interface{}, promptTokens, outputTokens int) float64 {
@@ -2569,6 +2606,14 @@ func (s *AgentService) Upsert(ctx context.Context, in AgentUpsertInput) error {
 	}
 	if in.RuntimeConfig == nil {
 		in.RuntimeConfig = buildAgentRuntimeConfig(in)
+	}
+	if in.Code == "general_creative_agent" {
+		in.RuntimeConfig["agent_mode"] = "creative_chat"
+		in.RuntimeConfig["generation_type"] = "mixed"
+		in.RuntimeConfig["preset_code"] = "general_creative_agent"
+		in.Category = "chat"
+		in.PriceRule["billing_type"] = "model_actual"
+		in.PriceRule["unit_price"] = 0.0
 	}
 	if _, ok := in.RuntimeConfig["agent_mode"]; !ok {
 		in.RuntimeConfig["agent_mode"] = "custom_nodes"

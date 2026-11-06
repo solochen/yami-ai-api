@@ -24,6 +24,21 @@ func TestEstimateRouteProviderCostForMedia(t *testing.T) {
 	}
 }
 
+func TestRouteImageTokenItemCountUsesCountOnlyForImageTokenRules(t *testing.T) {
+	model := &ModelFull{ModelDTO: ModelDTO{Category: "image"}}
+	params := map[string]interface{}{"count": float64(4)}
+	if got := routeImageTokenItemCount(model, map[string]interface{}{"billing_type": "per_token"}, params); got != 4 {
+		t.Fatalf("image token count = %v, want 4", got)
+	}
+	if got := routeImageTokenItemCount(model, map[string]interface{}{"billing_type": "per_image"}, params); got != 1 {
+		t.Fatalf("per-image route multiplier = %v, want 1", got)
+	}
+	chat := &ModelFull{ModelDTO: ModelDTO{Category: "chat"}}
+	if got := routeImageTokenItemCount(chat, map[string]interface{}{"billing_type": "per_token"}, params); got != 1 {
+		t.Fatalf("chat token count = %v, want 1", got)
+	}
+}
+
 func TestEstimateRouteProviderCostSeparatesAudioTokens(t *testing.T) {
 	route := &ModelRoute{CostRule: map[string]interface{}{
 		"billing_type":            "per_token",
@@ -39,6 +54,84 @@ func TestEstimateRouteProviderCostSeparatesAudioTokens(t *testing.T) {
 	want := (float64(700)*10 + float64(1600)*20 + float64(300)*100 + float64(400)*200) / 1_000_000
 	if got != want {
 		t.Fatalf("provider cost = %.9f, want %.9f", got, want)
+	}
+}
+
+func TestEstimateRuleCostUsesOfficialOpenAIImageTokenRates(t *testing.T) {
+	rule := map[string]interface{}{
+		"billing_type": "per_token", "input_cost_per_m": float64(54),
+		"text_input_cost_per_m": float64(33.75), "image_input_cost_per_m": float64(54),
+		"output_cost_per_m": float64(202.5), "cache_read_cost_per_m": float64(13.5),
+		"text_cache_read_cost_per_m": float64(8.4375),
+	}
+	got := estimateRuleCostBase(rule, map[string]interface{}{"_actual_image_input_tokens": float64(400)}, 1000, 1367, 0, 0)
+	want := (600*33.75 + 400*54 + 1367*202.5) / 1_000_000
+	if got != want {
+		t.Fatalf("official image token charge = %.10f, want %.10f", got, want)
+	}
+}
+
+func TestEstimateRuleCostSeparatesOpenAIImageAndTextOutputTokens(t *testing.T) {
+	rule := map[string]interface{}{
+		"billing_type": "per_token", "text_input_cost_per_m": float64(33.75),
+		"image_input_cost_per_m": float64(54), "output_cost_per_m": float64(202.5),
+		"image_output_cost_per_m": float64(202.5), "text_output_cost_per_m": float64(67.5),
+	}
+	got := estimateRuleCostBase(rule, map[string]interface{}{
+		"_actual_image_input_tokens": float64(400), "_actual_image_output_tokens": float64(100),
+		"_actual_image_output_tokens_included": true,
+	}, 1000, 150, 0, 0)
+	want := (600*33.75 + 400*54 + 100*202.5 + 50*67.5) / 1_000_000
+	if got != want {
+		t.Fatalf("split image/text output charge = %.10f, want %.10f", got, want)
+	}
+}
+
+func TestEstimateRuleCostKeepsAggregateOutputWhenImageTokensAreEstimated(t *testing.T) {
+	rule := map[string]interface{}{
+		"billing_type": "per_token", "output_cost_per_m": float64(202.5),
+		"image_output_cost_per_m": float64(202.5), "text_output_cost_per_m": float64(67.5),
+	}
+	got := estimateRuleCostBase(rule, map[string]interface{}{
+		"_estimated_image_output_tokens": float64(344),
+	}, 0, 150, 0, 0)
+	want := (344*202.5 + 150*67.5) / 1_000_000
+	if got != want {
+		t.Fatalf("estimated image plus aggregate text charge = %.10f, want %.10f", got, want)
+	}
+}
+
+func TestEstimateRuleCostHonorsExplicitZeroTextOutputPrice(t *testing.T) {
+	rule := map[string]interface{}{
+		"billing_type": "per_token", "output_cost_per_m": float64(202.5),
+		"image_output_cost_per_m": float64(202.5), "text_output_cost_per_m": float64(0),
+	}
+	got := estimateRuleCostBase(rule, map[string]interface{}{"_actual_image_output_tokens": float64(100)}, 0, 150, 0, 0)
+	want := 100 * 202.5 / 1_000_000
+	if got != want {
+		t.Fatalf("explicit zero text output charge = %.10f, want %.10f", got, want)
+	}
+}
+
+func TestOpenAIImageOutputTokenEstimateUsesModelSpecificFormula(t *testing.T) {
+	rule := map[string]interface{}{
+		"default_quality": "medium", "image_output_token_estimator": "gpt_image_2_5",
+	}
+	if got := estimatedImageOutputTokens(rule, map[string]interface{}{"image_size": "1K", "aspect_ratio": "1:1"}); got != 439 {
+		t.Fatalf("GPT Image 2.5 square medium estimate = %d, want 439", got)
+	}
+	if got := estimatedImageOutputTokens(rule, map[string]interface{}{"image_size": "1K", "aspect_ratio": "3:4"}); got != 343 {
+		t.Fatalf("GPT Image 2.5 portrait medium estimate = %d, want 343", got)
+	}
+	if got := estimatedImageOutputTokens(rule, map[string]interface{}{"image_size": "1K", "aspect_ratio": "1:1", "quality": "xhigh"}); got != 3122 {
+		t.Fatalf("GPT Image 2.5 square xhigh estimate = %d, want 3122", got)
+	}
+	if got := estimatedImageOutputTokens(rule, map[string]interface{}{"image_size": "1K", "aspect_ratio": "1:1", "quality": "max"}); got != 7024 {
+		t.Fatalf("GPT Image 2.5 square max estimate = %d, want 7024", got)
+	}
+	rule["image_output_token_estimator"] = "gpt_image_2"
+	if got := estimatedImageOutputTokens(rule, map[string]interface{}{"image_size": "1K", "aspect_ratio": "1:1"}); got != 1756 {
+		t.Fatalf("GPT Image 2 square medium estimate = %d, want 1756", got)
 	}
 }
 

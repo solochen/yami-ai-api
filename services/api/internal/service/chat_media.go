@@ -51,13 +51,23 @@ func chatRouteMediaError(model *ModelFull, route *ModelRoute, messages interface
 			default:
 				continue
 			}
-			allowed, _ := mediaCapability(model.RuntimeRule, keys...)
+			allowed, configured := mediaCapability(model.RuntimeRule, keys...)
 			if override, exists := mediaCapability(route.RuntimeRule, keys...); exists {
-				allowed = override
+				allowed, configured = override, true
 			}
 			protocol := strings.ToLower(strings.TrimSpace(route.Protocol))
 			videoUnsupported := protocol == "claude" || protocol == "anthropic" || protocol == "anthropic_messages" || protocol == "claude_messages" || strings.Contains(route.Endpoint, "/responses")
-			if !allowed || ((part.Type == "video_url" || part.Type == "audio_url" || part.Type == "input_audio") && videoUnsupported) {
+			// Only an EXPLICIT false blocks. A capability that was never
+			// configured is unknown, not unsupported: manual configuration is
+			// demonstrably unreliable (models that do read images ship with no
+			// vision flag at all), and a non-vision upstream answers in-band
+			// with a refusal instead of erroring — so treating "unknown" as
+			// "no" silently breaks capable models with no way for the user to
+			// tell. The admin "检测图片理解能力" probe is what fills the flag in.
+			if (configured && !allowed) || ((part.Type == "video_url" || part.Type == "audio_url" || part.Type == "input_audio") && videoUnsupported) {
+				if label == "图片" {
+					return &runtime.PlatformError{Code: "MEDIA_INPUT_UNSUPPORTED", StatusCode: 400, Message: "当前模型已配置为不支持图片理解，请改用支持图片的模型，或移除附件后重试"}
+				}
 				return &runtime.PlatformError{Code: "MEDIA_INPUT_UNSUPPORTED", StatusCode: 400, Message: "模型线路未启用或协议不支持" + label + "理解，请检查模型及线路的媒体能力配置"}
 			}
 		}

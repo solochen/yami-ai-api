@@ -126,6 +126,20 @@ func ValidateWebSearchConfig(cfg WebSearchConfig) error {
 				return errors.New("SearXNG 服务地址必须是有效的 HTTP/HTTPS 地址")
 			}
 		}
+	case "tavily_primary":
+		// Tavily is the primary source; the other two layers are optional, but at
+		// least one must be present or "primary + backup" degrades to plain Tavily.
+		if cfg.Enabled && cfg.APIKey == "" {
+			return errors.New("启用 Tavily 主备搜索前请填写 Tavily API Key")
+		}
+		if cfg.Enabled && strings.TrimSpace(cfg.BaseURL) == "" && strings.TrimSpace(cfg.ExaAPIKey) == "" {
+			return errors.New("Tavily 主备搜索至少需要配置一层备用搜索（SearXNG 服务地址或 Exa API Key）")
+		}
+		if cfg.BaseURL != "" {
+			if _, err := searchEndpoint(cfg.BaseURL, "/search"); err != nil {
+				return errors.New("SearXNG 服务地址必须是有效的 HTTP/HTTPS 地址")
+			}
+		}
 	case "searxng":
 		if cfg.Enabled && cfg.BaseURL == "" {
 			return errors.New("启用 SearXNG 前请填写服务地址")
@@ -148,6 +162,22 @@ func ValidateWebSearchConfig(cfg WebSearchConfig) error {
 		return errors.New("联网搜索服务商参数错误")
 	}
 	return nil
+}
+
+// WebSearchPrimaryLayer maps a configured provider to the provider name its
+// first search layer reports. Composite values ("hybrid" tries SearXNG first,
+// "tavily_primary" tries Tavily first) intentionally differ from the value
+// itself, so callers comparing an answered provider against the configuration
+// must go through this mapping or a healthy primary layer looks like a fallback.
+func WebSearchPrimaryLayer(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "tavily_primary":
+		return "tavily"
+	case "hybrid":
+		return "searxng"
+	default:
+		return provider
+	}
 }
 
 func SearchWeb(ctx context.Context, cfg WebSearchConfig, query string) ([]WebSearchResult, error) {
@@ -207,6 +237,45 @@ func SearchWebWithOptions(ctx context.Context, cfg WebSearchConfig, input WebSea
 		}
 		if err != nil || len(results) == 0 {
 			results, err = searchTavily(ctx, client, cfg, input)
+		}
+	case "tavily_primary":
+		// Paid primary first, then the free self-hosted layer, then the second paid
+		// layer. Every configured layer is attempted before giving up: a later
+		// provider that answers with an error must not discard results an earlier
+		// layer already returned.
+		type webSearchLayer struct {
+			name string
+			run  func() ([]WebSearchResult, error)
+		}
+		layers := []webSearchLayer{
+			{"tavily", func() ([]WebSearchResult, error) { return searchTavily(ctx, client, cfg, input) }},
+		}
+		if strings.TrimSpace(cfg.BaseURL) != "" {
+			layers = append(layers, webSearchLayer{"searxng", func() ([]WebSearchResult, error) {
+				layerCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+				defer cancel()
+				return searchSearXNG(layerCtx, &http.Client{Timeout: 3 * time.Second}, cfg, input)
+			}})
+		}
+		if strings.TrimSpace(cfg.ExaAPIKey) != "" {
+			layers = append(layers, webSearchLayer{"exa", func() ([]WebSearchResult, error) { return searchExa(ctx, client, cfg, input) }})
+		}
+		var failures []string
+		for _, layer := range layers {
+			layerResults, layerErr := layer.run()
+			layerResults = cleanWebSearchResults(layerResults, cfg.MaxResults, input)
+			if layerErr == nil && len(layerResults) > 0 {
+				results, err = layerResults, nil
+				break
+			}
+			if layerErr != nil {
+				failures = append(failures, layer.name+": "+layerErr.Error())
+			} else {
+				failures = append(failures, layer.name+": 未返回可用结果")
+			}
+		}
+		if len(results) == 0 {
+			err = fmt.Errorf("%w: Tavily 主备搜索全部失败（%s）", ErrWebSearchUnavailable, strings.Join(failures, "; "))
 		}
 	}
 	if err != nil {

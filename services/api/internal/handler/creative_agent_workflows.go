@@ -183,11 +183,25 @@ func creativeAgentWorkflowRequired(schema map[string]interface{}) map[string]boo
 	return required
 }
 
+// Prompt-chat, budget and realtime assistants have their own runtimes.
+// Keeping them out of this catalog does not change those products themselves.
+func creativeAgentCanCallWorkflow(item *service.WorkflowDTO) bool {
+	if item == nil || !item.IsEnabled || item.Code == "general_creative_agent" || item.Code == "infinite_canvas" || item.RuntimeConfig["agent_callable"] == false {
+		return false
+	}
+	switch strings.TrimSpace(stringAny(item.RuntimeConfig["agent_mode"])) {
+	case "prompt_chat", "renovation_budget", "realtime_avatar":
+		return false
+	default:
+		return true
+	}
+}
+
 func creativeAgentWorkflowCapabilities(items []service.WorkflowDTO) []creativeAgentWorkflowCapability {
 	capabilities := make([]creativeAgentWorkflowCapability, 0, len(items))
 	for i := range items {
 		item := &items[i]
-		if !item.IsEnabled || item.Code == "general_creative_agent" || item.Code == "infinite_canvas" || item.RuntimeConfig["agent_callable"] == false {
+		if !creativeAgentCanCallWorkflow(item) {
 			continue
 		}
 		generationType := creativeAgentWorkflowGenerationType(item)

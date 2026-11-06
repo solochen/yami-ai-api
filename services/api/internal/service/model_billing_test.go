@@ -76,6 +76,19 @@ func TestPerTokenCostMultipliesGeneratedCount(t *testing.T) {
 	}
 }
 
+func TestPerTokenImageCostMultipliesGeneratedCount(t *testing.T) {
+	service := &ModelService{}
+	model := &ModelFull{ModelDTO: ModelDTO{Category: "image", PriceRule: map[string]interface{}{
+		"billing_type": "per_token", "input_price_per_m": float64(2), "output_price_per_m": float64(4),
+		"estimated_output_tokens": float64(1000),
+	}}}
+	one := service.EstimateCost(model, map[string]interface{}{}, 100, 1000)
+	three := service.EstimateCost(model, map[string]interface{}{"count": float64(3)}, 100, 1000)
+	if math.Abs(three-one*3) > 0.000000001 {
+		t.Fatalf("three images cost %.9f, want %.9f", three, one*3)
+	}
+}
+
 func TestEstimateCostSeparatesAudioTokenPrices(t *testing.T) {
 	service := &ModelService{}
 	model := &ModelFull{ModelDTO: ModelDTO{Category: "audio", PriceRule: map[string]interface{}{

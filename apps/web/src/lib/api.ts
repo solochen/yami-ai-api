@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 let redirectingToLogin = false;
 const responseCache = new Map<string, { expiresAt: number; promise: Promise<unknown> }>();

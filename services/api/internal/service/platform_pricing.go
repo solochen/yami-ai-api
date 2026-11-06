@@ -77,12 +77,19 @@ func chargeRouteProviderCost(providerCost float64, source string, cfg billing.Pr
 
 // routeChargeBreakdown 组装收费明细：ProviderCost 记上游真实成本（用于毛利
 // 审计），UserCharge 按售价依据计算，两者可来自不同的计价规则。
-func routeChargeBreakdown(providerCost, chargeCost float64, source string, cfg billing.PricingConfig) (billing.ChargeBreakdown, error) {
+func routeChargeBreakdown(providerCost, chargeCost float64, source string, cfg billing.PricingConfig, finalUserPrice bool) (billing.ChargeBreakdown, error) {
 	provider, err := chargeRouteProviderCost(providerCost, source, cfg)
 	if err != nil {
 		return billing.ChargeBreakdown{}, err
 	}
-	user, err := chargeRouteProviderCost(chargeCost, source, cfg)
+	userMargin := cfg.GrossMarginPercent
+	if finalUserPrice {
+		userMargin = 0
+	}
+	user, err := chargeRouteProviderCost(chargeCost, source, billing.PricingConfig{
+		GrossMarginPercent: userMargin,
+		MissingCostPolicy:  cfg.MissingCostPolicy,
+	})
 	if err != nil {
 		return billing.ChargeBreakdown{}, err
 	}
@@ -127,7 +134,6 @@ func (s *ModelService) RouteBillingEstimate(
 	// 预估阶段通常还没有真实 token 用量（聊天流程会把估算值写进 params），
 	// 沿用旧计费路径的估算链补出 token 数，否则按 0 用量算出的 0 成本会被
 	// 当成「线路未配置成本」而在 block 策略下直接报错。
-	promptTokens, outputTokens = estimatedTokenCounts(model.PriceRule, params, promptTokens, outputTokens)
 	for i := range routes {
 		route := &routes[i]
 		availability := routeCostAvailabilityFor(route)
@@ -135,16 +141,20 @@ func (s *ModelService) RouteBillingEstimate(
 			complete = false
 			continue
 		}
-		providerCost := EstimateRouteProviderCostWithTokenDetails(route, params, promptTokens, outputTokens, 0, 0)
+		providerPrompt, providerOutput := estimatedTokenCounts(route.CostRule, params, promptTokens, outputTokens)
+		providerCost := EstimateRouteProviderCostWithTokenDetails(route, params, providerPrompt, providerOutput, 0, 0)
 		if availability.Complimentary {
 			providerCost = 0
 		}
+		providerCost *= routeImageTokenItemCount(model, route.CostRule, params)
 		// 配了 user_price_rule 的线路：成本按 cost_rule 记账，收费按售价规则计算。
 		chargeCost := providerCost
 		if len(route.UserPriceRule) > 0 {
-			chargeCost = EstimateRouteUserChargeCost(route, params, promptTokens, outputTokens, 0, 0)
+			chargePrompt, chargeOutput := estimatedTokenCounts(route.UserPriceRule, params, promptTokens, outputTokens)
+			chargeCost = EstimateRouteUserChargeCost(route, params, chargePrompt, chargeOutput, 0, 0)
+			chargeCost *= routeImageTokenItemCount(model, route.UserPriceRule, params)
 		}
-		charge, err := routeChargeBreakdown(providerCost, chargeCost, availability.Source, cfg)
+		charge, err := routeChargeBreakdown(providerCost, chargeCost, availability.Source, cfg, routeUserPriceIsFinal(route))
 		if err != nil {
 			continue
 		}
@@ -186,13 +196,18 @@ func (s *ModelService) RouteProviderCharge(
 	if availability.Complimentary {
 		providerCost = 0
 	}
+	providerCost *= routeImageTokenItemCount(model, route.CostRule, params)
 	// 收费依据与成本依据可分离：user_price_rule 存在时用它算用户应付，
 	// provider_cost 仍按上游真实成本记账，毛利报表因此保持准确。
 	chargeCost := providerCost
 	if len(route.UserPriceRule) > 0 {
+		if promptTokens <= 0 || outputTokens <= 0 {
+			promptTokens, outputTokens = estimatedTokenCounts(route.UserPriceRule, params, promptTokens, outputTokens)
+		}
 		chargeCost = EstimateRouteUserChargeCost(route, params, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens)
+		chargeCost *= routeImageTokenItemCount(model, route.UserPriceRule, params)
 	}
-	charge, err := routeChargeBreakdown(providerCost, chargeCost, availability.Source, cfg)
+	charge, err := routeChargeBreakdown(providerCost, chargeCost, availability.Source, cfg, routeUserPriceIsFinal(route))
 	return charge, true, cfg, err
 }
 
@@ -204,6 +219,16 @@ func (s *ModelService) EnabledRoutesWithCost(ctx context.Context, model *ModelFu
 	if err != nil {
 		return nil, err
 	}
+	// A route still holding a template key ("REPLACE_ME...") can only answer 401.
+	// Dropping it here keeps failover slots for routes that can actually serve.
+	usable := make([]ModelRoute, 0, len(routes))
+	for _, route := range routes {
+		if routeHoldsPlaceholderKey(&route) {
+			continue
+		}
+		usable = append(usable, route)
+	}
+	routes = usable
 	cfg, err := billing.LoadPricingConfig(ctx, s.db)
 	if err != nil {
 		return nil, err
@@ -220,7 +245,14 @@ func (s *ModelService) EnabledRoutesWithCost(ctx context.Context, model *ModelFu
 		}
 		routes = billable
 	}
+	// Healthy routes first so a recovering candidate is preferred; priority keeps
+	// the operator's intent inside each group.
 	sort.SliceStable(routes, func(i, j int) bool {
+		leftHealthy := routes[i].HealthStatus == "healthy"
+		rightHealthy := routes[j].HealthStatus == "healthy"
+		if leftHealthy != rightHealthy {
+			return leftHealthy
+		}
 		if routes[i].Priority == routes[j].Priority {
 			return routes[i].ID < routes[j].ID
 		}
@@ -231,6 +263,14 @@ func (s *ModelService) EnabledRoutesWithCost(ctx context.Context, model *ModelFu
 
 func (s *ModelService) BillingPricingConfig(ctx context.Context) (pricing billing.PricingConfig, err error) {
 	return billing.LoadPricingConfig(ctx, s.db)
+}
+
+func routeHoldsPlaceholderKey(route *ModelRoute) bool {
+	if route == nil {
+		return false
+	}
+	key := strings.ToUpper(strings.TrimSpace(route.APIKey))
+	return strings.Contains(key, "REPLACE_ME") || strings.Contains(key, "CHANGEME") || strings.Contains(key, "YOUR_API_KEY")
 }
 
 func routeIDPointer(id int64) *int64 {

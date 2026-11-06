@@ -116,7 +116,7 @@ func main() {
 	}
 	galleryReviewSvc := service.NewGalleryQualityReviewService(pool, storageClient, cfg.LocalStoragePublicURL, cfg.LocalStorageInternalURL)
 	startExpiredWorksCleaner(ctx, worksSvc, storageClient)
-	agentSvc := service.NewAgentService(pool, billingSvc, qClient, storageClient)
+	agentSvc := service.NewAgentService(pool, billingSvc, qClient, storageClient, modelSvc)
 	startBillingReconciler(ctx, opsSvc, billingSvc, agentSvc)
 	if count, syncErr := contentI18nSvc.SyncCatalog(ctx, modelSvc, agentSvc); syncErr != nil {
 		log.Printf("warning: dynamic content translation catalog sync failed: %v", syncErr)

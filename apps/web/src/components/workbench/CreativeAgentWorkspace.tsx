@@ -39,7 +39,7 @@ type Attachment = { public_id: string; name: string; url: string; kind?: string 
 type SearchResult = { title: string; url: string; snippet?: string; published_date?: string };
 type SearchTrace = { queries?: string[]; searched_count?: number; browsed_count?: number; duration_ms?: number };
 type Artifact = { kind: string; text: string };
-type Message = WorkflowMessage & { documentRequested?: boolean; exportBlocked?: boolean; canvasId?: string; canvasState?: CanvasAgentState; artifact?: Artifact; plan?: Plan; planState?: "pending" | "submitted" | "cancelled"; attachments?: Attachment[]; sources?: SearchResult[]; searchTrace?: SearchTrace; searchWarning?: string; searchRequired?: boolean; retryText?: string };
+type Message = WorkflowMessage & { documentRequested?: boolean; exportBlocked?: boolean; canvasId?: string; canvasState?: CanvasAgentState; artifact?: Artifact; plan?: Plan; planState?: "pending" | "submitted" | "cancelled"; attachments?: Attachment[]; sources?: SearchResult[]; searchTrace?: SearchTrace; searchWarning?: string; searchRequired?: boolean; retryText?: string; reasoning?: string };
 type Plan = { artifact?: Artifact; plan_version?: number; draft_status?: string; slots?: Record<string, unknown>; missing_fields?: string[]; intent?: string; model_code?: string; model_selection_reason?: string; workflow_code?: string; reply?: string; prompt?: string; params?: Record<string, unknown>; needs_confirm?: boolean; route_confidence?: number; route_reason?: string; route_changed?: boolean; workflow_candidates?: Array<{ code?: string; score?: number; reason?: string }>; estimated_cost?: number; confirmed_max_cost?: number; cost_estimate_available?: boolean; cost_estimate_note?: string };
 type AgentDraft = { version: number; status: string; slots: Record<string, unknown>; plan?: Plan; execution_ref?: string; execution_kind?: string; error?: string; last_user_message?: string; incomplete_reply?: string };
 type ReplanResult = { changed: boolean; draft: AgentDraft; changes?: string[] };
@@ -52,6 +52,15 @@ type MediaSet = { images: string[]; videos: string[]; audios: string[] };
 type MediaPreview = { url: string; type: "image" | "video" };
 type GenerationType = "image" | "video" | "speech" | "music";
 type AgentPlanResponse = { conversation_id?: string; plan?: Plan; search_required?: boolean; search_hint?: string; search_results?: SearchResult[]; search_trace?: SearchTrace; search_warning?: string };
+
+function customModelSelection(enabled: boolean, type: GenerationType, image: string, video: string, speech: string, music: string) {
+  return {
+    image_model_code: enabled && type === "image" ? image : "",
+    video_model_code: enabled && type === "video" ? video : "",
+    speech_model_code: enabled && type === "speech" ? speech : "",
+    music_model_code: enabled && type === "music" ? music : "",
+  };
+}
 
 const HOT_PROMPTS = ["生成一套小红书图文笔记和 4 张配图", "根据角色参考图生成 40-50 秒完整短剧", "生成一张产品主图", "做一个 10 秒产品展示视频"];
 const MESSAGE_PAGE_SIZE = 40;
@@ -437,6 +446,7 @@ export function CreativeAgentWorkspace({
   const assetsChangedRef = useRef(false);
   const sessionEpoch = useRef(0);
   const selectionEpoch = useRef(0);
+  const selectionRefreshTimer = useRef<number | undefined>(undefined);
   const restoringSelection = useRef(false);
   const [task, setTask] = useState<TaskState | null>(null);
   const [pendingRetry, setPendingRetry] = useState<{ run: TaskState; model: string; message: string; conversation: string } | null>(null);
@@ -498,6 +508,8 @@ export function CreativeAgentWorkspace({
     return result;
   }, []);
 
+  const modelSelection = useCallback(() => customModelSelection(customEnabled, customMediaType, imageModelCode, videoModelCode, speechModelCode, musicModelCode), [customEnabled, customMediaType, imageModelCode, videoModelCode, speechModelCode, musicModelCode]);
+
   useEffect(() => {
     if (restoringSelection.current) { restoringSelection.current = false; return; }
     selectionEpoch.current++;
@@ -508,18 +520,18 @@ export function CreativeAgentWorkspace({
     const epoch = sessionEpoch.current;
     if (draft && ["awaiting_confirmation", "refreshing"].includes(draft.status) && selectedConversationId) {
       draftRef.current = { ...draft, status: "refreshing" };
-      const timer = window.setTimeout(() => {
+      selectionRefreshTimer.current = window.setTimeout(() => {
         setBusy(true); setError("");
-        void refreshPlan(false, { video_model_code: customEnabled ? videoModelCode : "", image_model_code: customEnabled ? imageModelCode : "", speech_model_code: customEnabled ? speechModelCode : "", music_model_code: customEnabled ? musicModelCode : "", replace_assets: true, asset_ids: [...bottom.asset_ids, ...bottom.files.map((file) => file.public_id)].filter(Boolean) })
+        void refreshPlan(false, { ...modelSelection(), replace_assets: true, asset_ids: [...bottom.asset_ids, ...bottom.files.map((file) => file.public_id)].filter(Boolean) })
           .catch(async (err) => {
             if (sessionEpoch.current !== epoch) return;
             draftRef.current = await api<AgentDraft>(`/api/creative-agent/state/${selectedConversationId}`).catch(() => draftRef.current);
             setError(err instanceof Error ? err.message : t("方案更新失败，原需求已保留"));
           }).finally(() => { if (sessionEpoch.current === epoch) setBusy(false); });
       }, 250);
-      return () => window.clearTimeout(timer);
+      return () => window.clearTimeout(selectionRefreshTimer.current);
     }
-  }, [customEnabled, customMediaType, imageModelCode, videoModelCode, speechModelCode, musicModelCode, bottom.files, bottom.asset_ids, refreshPlan, t]);
+  }, [modelSelection, bottom.files, bottom.asset_ids, refreshPlan, t]);
   const uploadRef = useRef<HTMLInputElement>(null);
   const messagesViewportRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -761,7 +773,7 @@ export function CreativeAgentWorkspace({
         prompt: generationPrompt,
         params: {
           ...(nextPlan.params || {}),
-          image_model_code: imageModelCode,
+          image_model_code: customEnabled && customMediaType === "image" ? imageModelCode : "",
           video_model_code: nextPlan.workflow_code === "ai_comic_drama" ? nextPlan.model_code : undefined,
         },
         asset_ids: assetIDs,
@@ -797,8 +809,8 @@ export function CreativeAgentWorkspace({
         method: "POST",
         body: JSON.stringify({
           confirmed: true,
-          image_model_code: customEnabled ? imageModelCode : "",
-          video_model_code: customEnabled || mentionedVideoModel(userMessage, videoModels) ? selectedVideoModel : "",
+          image_model_code: customEnabled && customMediaType === "image" ? imageModelCode : "",
+          video_model_code: (customEnabled && customMediaType === "video") || mentionedVideoModel(userMessage, videoModels) ? selectedVideoModel : "",
           conversation_id: conversationId,
           user_message: userMessage,
         }),
@@ -806,7 +818,7 @@ export function CreativeAgentWorkspace({
       const next = await api<TaskState>(`/api/agent-projects/${run.public_id}`);
       setTask(next);
       setMessages((current) => updateWorkflowMessages(current, next));
-      if (userMessage) setMessages((current) => [...current, { role: "assistant", content: "已从失败节点继续，已完成内容不会重新生成；未完成部分使用服务端当前配置的模型。" }]);
+      if (userMessage) setMessages((current) => [...current, { role: "assistant", content: customEnabled ? "已从失败节点继续，已完成内容不会重新生成；未完成部分使用当前自定义模型。" : "已从失败节点继续，已完成内容不会重新生成；未完成部分使用后台默认模型。" }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("工作流重试失败"));
     } finally {
@@ -816,12 +828,15 @@ export function CreativeAgentWorkspace({
 
   const confirmPlan = async (index: number) => {
     const message = messages[index];
-    if (busy || confirmationInFlight.current || message?.planState !== "pending" || !message.plan || message.plan.plan_version !== draftRef.current?.version || draftRef.current?.status !== "awaiting_confirmation") return;
+    const status = draftRef.current?.status || "";
+    if (busy || confirmationInFlight.current || message?.planState !== "pending" || !message.plan || !["awaiting_confirmation", "refreshing"].includes(status)) return;
+    if (status !== "refreshing" && message.plan.plan_version !== draftRef.current?.version) return;
+    window.clearTimeout(selectionRefreshTimer.current);
     confirmationInFlight.current = true;
     setBusy(true);
     setError("");
     try {
-      const preflight = await refreshPlan(true);
+      const preflight = await refreshPlan(true, modelSelection());
       if (preflight.changed) return; // Show the difference; this click never authorizes a changed plan.
       if (message.plan.intent === "workflow") await runWorkflow(message.plan, conversationId);
       else await createGeneration(message.plan, conversationId);
@@ -902,10 +917,7 @@ export function CreativeAgentWorkspace({
       const result = await streamAgentPlan({
         base_version: draftRef.current?.version || 0,
         model_code: chatModelCode,
-        video_model_code: customEnabled ? videoModelCode : "",
-        image_model_code: customEnabled ? imageModelCode : "",
-        speech_model_code: customEnabled ? speechModelCode : "",
-        music_model_code: customEnabled ? musicModelCode : "",
+        ...modelSelection(),
         replace_assets: assetsChangedRef.current,
         reference_image_urls: latestGeneratedMedia.images,
         reference_video_urls: latestGeneratedMedia.videos,
@@ -928,6 +940,8 @@ export function CreativeAgentWorkspace({
           });
         } else if (event === "status" && data.message) {
           setAgentStage(data.message);
+        } else if (event === "reasoning" && data.content) {
+          updateAssistant((message) => ({ ...message, reasoning: `${message.reasoning || ""}${data.content}` }));
         } else if (event === "delta" && data.content) {
           setAgentStage("正在生成回复…");
           updateAssistant((message) => ({ ...message, content: message.content + data.content }));
@@ -1369,12 +1383,13 @@ export function CreativeAgentWorkspace({
                   </div>
                   <div className={`min-w-0 max-w-[calc(100%_-_46px)] text-sm leading-6 ${message.workflow ? "w-[min(78vw,900px)]" : message.resultRunId ? "w-[min(78vw,720px)]" : ""}`}>
                     {message.searchTrace ? <SearchResearchTrace trace={message.searchTrace} sources={message.sources} /> : null}
-                    {message.content && !(message.content === "生成完成" && (message.images?.length || message.videos?.length || message.audios?.length)) ? (
+                    {(message.content || message.reasoning) && !(message.content === "生成完成" && (message.images?.length || message.videos?.length || message.audios?.length)) ? (
                       message.role === "user" ? (
                         <div className="ml-auto w-fit max-w-full whitespace-pre-wrap rounded-2xl bg-primary px-4 py-3 text-dark shadow-sm">{message.content}</div>
                       ) : (
                         <div className="w-full max-w-full rounded-2xl border border-white/80 bg-white px-4 py-3 text-gray-700 shadow-sm dark:border-white/10 dark:bg-gray-900 dark:text-gray-200">
-                          <AgentRichText content={message.content} sources={message.sources} />
+                          {message.reasoning ? <details className="mb-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500 dark:bg-white/5 dark:text-gray-400"><summary className="cursor-pointer">{ts("思考过程")}</summary><div className="mt-2 whitespace-pre-wrap">{message.reasoning}</div></details> : null}
+                          {message.content ? <AgentRichText content={message.content} sources={message.sources} /> : null}
                           <div className="mt-1.5 flex flex-wrap items-center justify-end gap-2">
                             {message.documentRequested && !message.plan && !message.retryText && !message.exportBlocked && !(busy && index === messages.length - 1) && (["docx", "pdf"] as const).map((format) => {
                               const key = `${conversationId}:${index}:${format}`;
@@ -1418,7 +1433,7 @@ export function CreativeAgentWorkspace({
                           <button type="button" disabled={busy} onClick={() => void cancelPlan(index)} className="rounded-lg border border-gray-300 px-4 py-2">{ts("取消")}</button>
                           <span className="self-center text-xs text-gray-500">{ts("修改需求可直接在下方输入")}</span>
                         </div> : null}
-                        {(message.planState !== "submitted" || draftRef.current?.status === "awaiting_confirmation") && message.plan.plan_version === draftRef.current?.version && !["executing", "submitted"].includes(draftRef.current?.status || "") ? <button type="button" disabled={busy} className="mt-2 text-xs text-primary disabled:opacity-50" onClick={() => { setBusy(true); void refreshPlan(true).catch((err) => setError(err instanceof Error ? err.message : t("更新失败"))).finally(() => setBusy(false)); }}>{ts("按最新配置更新方案（保留需求）")}</button> : null}
+                        {(message.planState !== "submitted" || draftRef.current?.status === "awaiting_confirmation") && message.plan.plan_version === draftRef.current?.version && !["executing", "submitted"].includes(draftRef.current?.status || "") ? <button type="button" disabled={busy} className="mt-2 text-xs text-primary disabled:opacity-50" onClick={() => { setBusy(true); void refreshPlan(true, modelSelection()).catch((err) => setError(err instanceof Error ? err.message : t("更新失败"))).finally(() => setBusy(false)); }}>{ts("按最新配置更新方案（保留需求）")}</button> : null}
                       </div>
                     ) : null}
                     {message.canvasId && <div className="my-2 space-y-2">
@@ -1530,13 +1545,13 @@ export function CreativeAgentWorkspace({
           </section>}
           {error && <div className="mb-2 px-1 text-sm text-red-500"><p>{error}</p>{conversationId && draftRef.current && !["executing", "submitted"].includes(draftRef.current.status) && <button type="button" disabled={busy} className="mt-1 text-xs underline disabled:opacity-50" onClick={() => {
             setBusy(true); setError("");
-            void api<AgentDraft>(`/api/creative-agent/state/${conversationId}`).then((next) => { draftRef.current = next; return refreshPlan(true); }).catch((err) => setError(err instanceof Error ? err.message : t("更新失败"))).finally(() => setBusy(false));
+            void api<AgentDraft>(`/api/creative-agent/state/${conversationId}`).then((next) => { draftRef.current = next; return refreshPlan(true, modelSelection()); }).catch((err) => setError(err instanceof Error ? err.message : t("更新失败"))).finally(() => setBusy(false));
           }}>{ts("同步并更新当前方案，无需重述需求")}</button>}</div>}
           {!error && conversationId && draftRef.current?.status === "draft" && !!draftRef.current.slots.media_type && draftRef.current.slots.media_type !== "text" && <div className="mb-2 px-1 text-xs text-gray-500">
             {ts("需求草稿已保留；重新核对不会启动生成或调用付费模型。")}
             <button type="button" disabled={busy} className="ml-2 text-primary underline disabled:opacity-50" onClick={() => {
               setBusy(true);
-              void refreshPlan(true).catch((err) => setError(err instanceof Error ? err.message : t("更新失败"))).finally(() => setBusy(false));
+              void refreshPlan(true, modelSelection()).catch((err) => setError(err instanceof Error ? err.message : t("更新失败"))).finally(() => setBusy(false));
             }}>{ts("按最新配置更新方案（保留需求）")}</button>
           </div>}
           <div className="soft-input overflow-hidden">
@@ -1608,7 +1623,7 @@ export function CreativeAgentWorkspace({
               <p>{ts("直接描述想生成的图片、视频、配音或歌曲音乐，也可以先上传参考文件或从资产库选择素材。")}</p>
               <p>{ts("Agent 先区分聊天、文案与生成需求。生成前会展示方案和所用模型，点击“确认并开始生成”后才执行；视频按模型支持的时长规划分段。")}</p>
               <p>{ts("会话会记住当前需求、角色和文案；仅在明确要求使用上一轮素材时才引用。换模型会保留需求并更新待确认方案，不自动重新生成。")}</p>
-              <p>{ts("需要指定模型时开启“自定义”，选择一种生成类型后只会显示该类型的模型。")}</p>
+              <p>{ts("需要指定模型时开启“自定义”。选择一种生成类型后只显示该类型的模型，明确的生成请求也按这个类型执行；问答和写作仍直接回答。")}</p>
               <p>{reasoningCapability.message}</p>
               {searchAvailable && <p>开启智能搜索后，Agent 会先检索并交叉核验网页资料，再归纳提炼为直接回答。成功完成一次真实联网检索{searchUnitPrice > 0 ? `扣除 ${searchUnitPrice} 算力` : t("当前免费")}；命中缓存或搜索失败不收费，检索决策模型用量另行计算。</p>}
               <p>{ts("主聊天模型按实际对话用量计费，生成任务按所选图片、视频或音频模型计费；不额外收取智能体工作流费。")}</p>

@@ -4,7 +4,7 @@ import { readEventStream } from "@/lib/eventStream";
 import { pollAsync } from "@/lib/pollAsync";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { clsx } from "clsx";
@@ -59,6 +59,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   reasoning_content?: string;
+  attachments?: { url: string; name: string }[];
   createdAt: string;
 }
 
@@ -120,27 +121,43 @@ function defaultImageSizeForConfig(runtimeRule: Model["runtime_rule"], defaultPa
   return normalizeTier(String(runtimeQuality ?? defaultQuality ?? "1K").toUpperCase());
 }
 
+function parseMultiCollabResults(raw: unknown): MultiModelResult[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((x) => x && typeof x.model_code === "string")
+    .map((x) => ({
+      model_code: String(x.model_code),
+      display_name: String(x.display_name || x.model_code),
+      icon_url: typeof x.icon_url === "string" ? x.icon_url : undefined,
+      content: typeof x.content === "string" ? x.content : "",
+      // Accept both the camelCase wire contract and the PascalCase shape older
+      // builds emitted for this payload.
+      error:
+        x.error && typeof x.error === "object"
+          ? {
+              code: String(x.error.code || x.error.Code || ""),
+              message: String(x.error.message || x.error.Message || ""),
+            }
+          : undefined,
+    }));
+}
+
 function parseMultiCollabSnapshot(content: string): MultiCollabSnapshot | null {
   try {
-    const data = JSON.parse(content) as Partial<MultiCollabSnapshot>;
-    if (data?.type === "multi_collab") {
+    const data = JSON.parse(content) as Partial<MultiCollabSnapshot> | unknown[];
+    if (Array.isArray(data)) {
+      // Legacy storage wrote a bare results array whenever the summary was
+      // empty. Recognise it so the history view does not render raw JSON.
+      const results = parseMultiCollabResults(data);
+      if (results.length === 0) return null;
+      return { type: "multi_collab", summary: "", results };
+    }
+    if (data && (data as Partial<MultiCollabSnapshot>).type === "multi_collab") {
+      const snap = data as Partial<MultiCollabSnapshot>;
       return {
         type: "multi_collab",
-        summary: typeof data.summary === "string" ? data.summary : "",
-        results: Array.isArray(data.results)
-          ? data.results
-              .filter((x) => x && typeof x.model_code === "string")
-              .map((x) => ({
-                model_code: String(x.model_code),
-                display_name: String(x.display_name || x.model_code),
-                icon_url: typeof x.icon_url === "string" ? x.icon_url : undefined,
-                content: typeof x.content === "string" ? x.content : "",
-                error:
-                  x.error && typeof x.error === "object"
-                    ? { code: String((x.error as { code?: string }).code || ""), message: String((x.error as { message?: string }).message || "") }
-                    : undefined,
-              }))
-          : [],
+        summary: typeof snap.summary === "string" ? snap.summary : "",
+        results: parseMultiCollabResults(snap.results),
       };
     }
   } catch {
@@ -218,7 +235,20 @@ type ChannelPreset = {
 };
 
 type ModelBadge = { code: string; icon?: string; label: string };
-type ChatModelOption = { code: string; display_name: string; icon_url?: string; description?: string };
+type ChatModelOption = { code: string; display_name: string; icon_url?: string; description?: string; vision?: boolean };
+
+// Mirrors the server's mediaCapability key precedence. `undefined` means the
+// capability was never configured, which is NOT the same as "unsupported": the
+// backend now lets unknown through, and only an explicit false blocks media.
+function readVisionCapability(runtimeRule: unknown): boolean | undefined {
+  const caps = (runtimeRule as { capabilities?: Record<string, unknown> } | undefined)?.capabilities;
+  if (!caps) return undefined;
+  for (const key of ["vision", "image_input", "multimodal"]) {
+    const value = caps[key];
+    if (typeof value === "boolean") return value;
+  }
+  return undefined;
+}
 
 function normalizeModelCodes(codes?: string[]) {
   const seen = new Set<string>();
@@ -648,6 +678,25 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
   });
 }
 
+function ThinkingIndicator({ label }: { label: string }) {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return (
+    <div role="status" aria-live="polite" className="flex items-center gap-2 py-1 text-sm text-gray-500 dark:text-gray-400">
+      <span className="flex items-end gap-1" aria-hidden="true">
+        <span className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.32s]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-primary/80 animate-bounce [animation-delay:-0.16s]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce" />
+      </span>
+      <span>{label}</span>
+      {seconds > 0 && <span className="text-xs tabular-nums text-gray-400">{seconds}s</span>}
+    </div>
+  );
+}
+
 function RichMarkdown({ content, emptyText }: { content: string; emptyText?: string }) {
   const text = content.trim() || emptyText || "";
   const lines = text.split(/\r?\n/);
@@ -835,6 +884,11 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [chatError, setChatError] = useState("");
+  const [truncatedNotice, setTruncatedNotice] = useState("");
+  // Set when the summary model failed but the member answers are still usable.
+  const [summaryWarning, setSummaryWarning] = useState("");
+  const [searchTrace, setSearchTrace] = useState<{ query?: string; sources?: { title?: string; url?: string }[]; warning?: string } | null>(null);
+  const [compressionCfg, setCompressionCfg] = useState<{ enabled: boolean; minChars: number; minMessages: number; keep: number }>({ enabled: true, minChars: 6000, minMessages: 8, keep: 6 });
   const [continuing, setContinuing] = useState(false);
   const [mmMode, setMmMode] = useState(false);
   const [mmActiveTab, setMmActiveTab] = useState<"answer" | "summary">("answer");
@@ -885,6 +939,27 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
     } catch {
       /* ignore */
     }
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    api<Record<string, unknown>>("/api/system-configs/public", { cache: "no-store" })
+      .then((cfg) => {
+        if (cancelled || !cfg) return;
+        const positive = (value: unknown, fallback: number) => {
+          const parsed = Number(value);
+          return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+        };
+        setCompressionCfg({
+          enabled: cfg.chat_compression_enabled !== false,
+          minChars: positive(cfg.chat_compression_min_chars, 6000),
+          minMessages: positive(cfg.chat_compression_min_messages, 8),
+          keep: positive(cfg.chat_compression_keep_messages, 6),
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, []);
   const [menuWallet, setMenuWallet] = useState<{ compute_balance?: number } | null>(null);
   const [conversationId, setConversationId] = useState<string>("");
@@ -942,11 +1017,26 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
     () => (isMultiCollab ? channelPresets.find((preset) => preset.key === bottom.channel_key) : undefined),
     [isMultiCollab, channelPresets, bottom.channel_key]
   );
-  const presetAnswerCodes = useMemo(
-    () => normalizeModelCodes(currentPreset?.answer_model_codes?.length ? currentPreset.answer_model_codes : currentPreset?.model_codes),
-    [currentPreset]
+  // Only models the picker can actually offer may seed the active combination.
+  // A preset that still references a retired model (e.g. the seeded demo model)
+  // used to inject an invisible, unremovable code into every custom selection,
+  // which made the request fail with a model the user never chose.
+  const selectableChatCodes = useMemo(() => new Set(chatModels.map((item) => item.code)), [chatModels]);
+  const keepSelectable = useCallback(
+    (codes: string[]) => (selectableChatCodes.size === 0 ? codes : codes.filter((code) => selectableChatCodes.has(code))),
+    [selectableChatCodes]
   );
-  const presetSummaryCodes = useMemo(() => normalizeModelCodes(currentPreset?.summary_model_codes), [currentPreset]);
+  const presetAnswerCodes = useMemo(
+    () =>
+      keepSelectable(
+        normalizeModelCodes(currentPreset?.answer_model_codes?.length ? currentPreset.answer_model_codes : currentPreset?.model_codes)
+      ),
+    [currentPreset, keepSelectable]
+  );
+  const presetSummaryCodes = useMemo(
+    () => keepSelectable(normalizeModelCodes(currentPreset?.summary_model_codes)),
+    [currentPreset, keepSelectable]
+  );
   const activeAnswerCodes = useMemo(
     () => selectionChannelKey === bottom.channel_key && selectedAnswerCodes.length > 0 ? selectedAnswerCodes : presetAnswerCodes,
     [selectionChannelKey, bottom.channel_key, selectedAnswerCodes, presetAnswerCodes]
@@ -973,6 +1063,55 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
   const modelCategoryLabel = td(`modelCategory.${model.category}`, t(tag.labelKey), { category: model.category });
   const caps = (model.runtime_rule as any)?.capabilities || {};
   const capWebSearch = !!caps.web_search;
+  // The collaboration entry declares no capabilities of its own, so upload is
+  // gated on the selected member models instead: if any member understands
+  // images the attachment button must be usable.
+  const collabVision = useMemo(() => {
+    const empty = { ready: false, total: 0, withVision: 0, unknown: 0, unsupported: 0, unsupportedNames: [] as string[], unknownNames: [] as string[] };
+    if (!isMultiCollab) return empty;
+    const codes = normalizeModelCodes(activeAnswerCodes);
+    if (codes.length === 0 || chatModels.length === 0) return { ...empty, total: codes.length };
+    const members = codes.map((code) => chatModels.find((item) => item.code === code)).filter(Boolean) as ChatModelOption[];
+    return {
+      ready: true,
+      total: codes.length,
+      withVision: members.filter((item) => item.vision === true).length,
+      unknown: members.filter((item) => item.vision === undefined).length,
+      unsupported: members.filter((item) => item.vision === false).length,
+      unsupportedNames: members.filter((item) => item.vision === false).map((item) => item.display_name),
+      unknownNames: members.filter((item) => item.vision === undefined).map((item) => item.display_name),
+    };
+  }, [isMultiCollab, activeAnswerCodes, chatModels]);
+  // Only an explicit "unsupported" blocks upload. Unknown capabilities are
+  // allowed through because the server does the same: hand configuration is
+  // unreliable and a wrong flag used to disable the button for models that do
+  // read images. Use the admin probe to turn an unknown into a known value.
+  const capVision = isMultiCollab
+    ? collabVision.ready && collabVision.withVision + collabVision.unknown > 0
+    : readVisionCapability(model.runtime_rule) !== false;
+  // Distinguish the three cases the user can act on:
+  //   * every member is explicitly marked unsupported -> attachments fail
+  //   * some are explicitly unsupported -> those members will refuse
+  //   * some are unconfigured -> unknown, they may or may not read the image
+  const visionNotice = useMemo(() => {
+    if (!isMultiCollab || !collabVision.ready) return { text: "", fatal: false };
+    const hasMedia = (bottom.files?.length ?? 0) > 0 || (bottom.asset_ids?.length ?? 0) > 0;
+    if (!hasMedia) return { text: "", fatal: false };
+    if (collabVision.withVision === 0 && collabVision.unknown === 0) {
+      return {
+        text: "当前模型组合都已标记为不支持图片理解，图片/音视频附件会让所有成员模型失败；请移除附件，或改选支持图片的模型（文档类资产不受影响）",
+        fatal: true,
+      };
+    }
+    const parts: string[] = [];
+    if (collabVision.unsupportedNames.length > 0) {
+      parts.push(`${collabVision.unsupportedNames.join("、")} 已标记为不支持图片理解，将跳过本次附件`);
+    }
+    if (collabVision.unknownNames.length > 0) {
+      parts.push(`${collabVision.unknownNames.join("、")} 的图片能力未检测，若无法读图会返回拒绝回答`);
+    }
+    return { text: parts.join("；"), fatal: false };
+  }, [isMultiCollab, collabVision, bottom.files, bottom.asset_ids]);
   const capDeepThink = !!caps.deep_think;
   const reasoningConfig = ((model.runtime_rule as any)?.reasoning || {}) as Record<string, unknown>;
   const rawMaxRefImages = (model.runtime_rule as any)?.image?.max_reference_images ?? (model.default_params as any)?.max_reference_images;
@@ -1131,6 +1270,14 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
   }, [model.code, initialPrompt, isVideo, isAudio, isImage, workbenchInputSchema, model.default_params, model.runtime_rule, capDeepThink, reasoningConfig.default_enabled, imageAllowsAutoRatio]);
 
   useEffect(() => {
+    // Nothing to price yet: the channel preset has no usable member models.
+    // Firing the estimate here only produced a 400 and a console error before
+    // the preset finished loading (or when it is genuinely unconfigured).
+    if (isMultiCollab && activeAnswerCodes.length === 0) {
+      setEstimatedCost(null);
+      setEstimateError("");
+      return;
+    }
     const selectedAssets = bottom.asset_ids?.length ? { asset_ids: bottom.asset_ids } : {};
     const selectedReferenceAssets = referenceAssetIds.length ? { reference_asset_ids: referenceAssetIds } : {};
     const languageParams = buildLanguageParams(selectedLanguage);
@@ -1160,7 +1307,8 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
               ? {
                   channel_key: bottom.channel_key,
                   fallback_enabled: bottom.fallback_enabled,
-                  ...(customSelectionEnabled && activeAnswerCodes.length >= 2 && activeSummaryCode
+                  summary_enabled: bottom.summary_enabled !== false,
+                  ...(customSelectionEnabled && activeAnswerCodes.length >= 2 && activeSummaryCode && bottom.summary_enabled !== false
                     ? { answer_model_codes: activeAnswerCodes, summary_model_codes: [activeSummaryCode] }
                     : {}),
                 }
@@ -1238,6 +1386,9 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                 display_name: m.display_name || m.code,
                 icon_url: m.icon_url || undefined,
                 description: m.description || undefined,
+                // Collaboration members supply the vision capability, because
+                // the pseudo model itself declares none.
+                vision: readVisionCapability(m.runtime_rule),
               });
             }
           }
@@ -1418,12 +1569,24 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
         if (m.role !== "assistant") continue;
         if (isMultiCollab) {
           const snap = parseMultiCollabSnapshot(m.content);
+          const restoredText = snap
+            ? snap.summary || snap.results.map((r) => r.content).filter(Boolean).join("\n\n")
+            : m.content;
           if (snap) {
             restoredSummary = snap.summary;
             restoredResults = snap.results;
           } else if (m.content.trim()) {
             // Legacy history: assistant content is plain summary text.
             restoredSummary = m.content;
+          }
+          // Keep the assistant turn in `messages` as well. The request body is
+          // built from `messages`, so without this a conversation restored from
+          // history lost every previous answer and follow-up questions
+          // ("what number did I ask you to remember?") had no context. The
+          // multi-collab renderer only shows user bubbles from `messages`, so
+          // this does not duplicate anything on screen.
+          if (restoredText.trim()) {
+            displayMessages.push(newMessage("assistant", restoredText, { createdAt: m.created_at || new Date().toISOString() }));
           }
           continue;
         }
@@ -1435,7 +1598,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
         setMmMode(true);
         setMmResults(restoredResults);
         setMmSummary(restoredSummary);
-        setMmActiveTab(restoredSummary ? "summary" : "answer");
+        setMmActiveTab(restoredSummary && bottom.summary_enabled !== false ? "summary" : "answer");
       } else {
         setMmMode(false);
         setMmResults([]);
@@ -1512,15 +1675,39 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
 
   const handleChat = async () => {
     if (!prompt.trim() || streaming || textLength(prompt) > MAX_CHAT_INPUT_CHARS) return;
-    const userMsg = newMessage("user", prompt);
+    // Snapshot the attachments for this turn before the state reset below, so
+    // the request body never depends on the post-reset value.
+    const sentAssetIds = [...(bottom.asset_ids || [])];
+    const sentFileIds = (bottom.files || []).map((file) => file.public_id);
+    const attachments = (bottom.files || []).map((file) => ({ url: file.url, name: file.name }));
+    const userMsg = newMessage("user", prompt, attachments.length ? { attachments } : undefined);
     const newMessages = [...messages, userMsg];
     setMessages((prev) => [...prev, userMsg]);
     setChatError("");
+    setTruncatedNotice("");
+    setSummaryWarning("");
+    setSearchTrace(null);
     setPrompt("");
+    // Attachments belong to the message being sent. Clearing only `files` left
+    // a previously picked asset silently attached to every later message, which
+    // surfaced as an "附件读取失败" error on plain text questions.
+    if (attachments.length || bottom.asset_ids.length > 0) {
+      setBottom((prev) => ({ ...prev, files: [], asset_ids: [], asset_labels: {} }));
+    }
     setStreaming(true);
     setContinuing(false);
+    // Show the pending bubble immediately: the first token may take a while
+    // (large context / thinking / upstream failover) and an empty screen looks
+    // like nothing happened.
+    setMessages((prev) => [...prev, newMessage("assistant", "")]);
     const dialogueChars = newMessages.reduce((sum, item) => sum + Array.from(item.content || "").length, 0);
-    setCompressing(isChatSingle && multiTurn && (newMessages.length > 8 || dialogueChars > 6000));
+    setCompressing(
+      isChatSingle &&
+        multiTurn &&
+        compressionCfg.enabled &&
+        newMessages.length > compressionCfg.keep &&
+        (dialogueChars >= compressionCfg.minChars || newMessages.length > compressionCfg.minMessages)
+    );
     setMmMode(false);
     setMmResults([]);
     setMmSummary("");
@@ -1543,21 +1730,19 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
             messages: [
               { role: "system", content: OUTPUT_FORMAT_INSTRUCTION },
               ...(bottom.role_prompt ? [{ role: "system", content: bottom.role_prompt }] : []),
-              ...(bottom.asset_ids?.length
+              ...(sentAssetIds.length
                 ? [
                     {
                       role: "system",
-                      content: `Selected asset public_ids: ${bottom.asset_ids.join(", ")}. Use these assets as context when answering.`,
+                      content: `Selected asset public_ids: ${sentAssetIds.join(", ")}. Use these assets as context when answering.`,
                     },
                   ]
                 : []),
-              ...(bottom.files?.length
+              ...(sentFileIds.length
                 ? [
                     {
                       role: "system",
-                      content: `Uploaded attachment asset public_ids: ${bottom.files
-                        .map((f) => f.public_id)
-                        .join(", ")}. Use these attachments as context when answering.`,
+                      content: `Uploaded attachment asset public_ids: ${sentFileIds.join(", ")}. Use these attachments as context when answering.`,
                     },
                   ]
                 : []),
@@ -1570,8 +1755,9 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                   channel_key: bottom.channel_key,
                   fallback_enabled: bottom.fallback_enabled,
                   web_search: bottom.web_search,
+                  summary_enabled: bottom.summary_enabled !== false,
                   timeout_sec: bottom.timeout_sec,
-                  ...(customSelectionEnabled && activeAnswerCodes.length >= 2 && activeSummaryCode
+                  ...(customSelectionEnabled && activeAnswerCodes.length >= 2 && activeSummaryCode && bottom.summary_enabled !== false
                     ? { answer_model_codes: activeAnswerCodes, summary_model_codes: [activeSummaryCode] }
                     : {}),
                 }
@@ -1582,8 +1768,8 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
               ? { reasoning_budget: reasoningConfig.default_budget }
               : {}),
             ...(isChatSingle ? { auto_continue: autoContinue, compression_model: multiTurn ? compressionModel : "off" } : {}),
-            asset_ids: bottom.asset_ids,
-            file_asset_ids: bottom.files.map((f) => f.public_id),
+            asset_ids: sentAssetIds,
+            file_asset_ids: sentFileIds,
           },
           stream: true,
         }),
@@ -1601,7 +1787,6 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
 
       const body = res.body;
       const assistantMsg = newMessage("assistant", "");
-      setMessages((prev) => [...prev, assistantMsg]);
 
       const applyDelta = (content: string, reasoning = "") => {
         receivedReply = true;
@@ -1648,6 +1833,20 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
         }
         if (typeof data.conversation_id === "string" && data.conversation_id) setConversationId(data.conversation_id);
         if (data.auto_continue === true) setContinuing(true);
+        if (data.truncated === true) {
+          setTruncatedNotice(typeof data.message === "string" && data.message ? data.message : ts("模型达到输出长度上限，回复不完整"));
+        }
+        if (data.web_search && typeof data.web_search === "object") {
+          const trace = data.web_search as { query?: unknown; sources?: unknown; warning?: unknown };
+          const sources = Array.isArray(trace.sources)
+            ? trace.sources.map((item) => item as { title?: string; url?: string })
+            : [];
+          setSearchTrace({
+            query: typeof trace.query === "string" ? trace.query : undefined,
+            sources,
+            warning: typeof trace.warning === "string" ? trace.warning : undefined,
+          });
+        }
         const streamError = data.error;
         if (streamError && typeof streamError === "object") {
           const error = streamError as { message?: unknown };
@@ -1707,19 +1906,11 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
             setConversationId(data.conversation_id);
           }
           if (typeof data.summary === "string") setMmSummary(data.summary);
+          if (typeof data.summary_warning === "string" && data.summary_warning) {
+            setSummaryWarning(data.summary_warning);
+          }
           if (Array.isArray(data.results)) {
-            const items = data.results as any[];
-            setMmResults(
-              items
-                .filter((x) => x && typeof x.model_code === "string")
-                .map((x) => ({
-                  model_code: String(x.model_code),
-                  display_name: String(x.display_name || x.model_code),
-                  icon_url: typeof x.icon_url === "string" ? x.icon_url : undefined,
-                  content: typeof x.content === "string" ? x.content : "",
-                  error: x.error && typeof x.error === "object" ? { code: String(x.error.code || ""), message: String(x.error.message || "") } : undefined,
-                }))
-            );
+            setMmResults(parseMultiCollabResults(data.results));
           }
         } else if (eventType === "delta" && typeof data.content === "string") {
           applyDelta(data.content);
@@ -2256,6 +2447,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                     >
                       {t("channel.answer")}
                     </button>
+                    {bottom.summary_enabled !== false && (
                     <button
                       onClick={() => setMmActiveTab("summary")}
                       className={`h-8 px-3 rounded-xl text-sm border ${
@@ -2264,6 +2456,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                     >
                       {t("channel.summary")}
                     </button>
+                    )}
                   </div>
                   <div className="flex items-center -space-x-2">
                     {mmResults.slice(0, 8).map((r) => (
@@ -2342,6 +2535,19 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                     >
                       {msg.role === "user" ? (
                         <>
+                          {msg.attachments?.length ? (
+                            <div className="mb-2 flex flex-wrap gap-2">
+                              {msg.attachments.map((item, attachmentIndex) => (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  key={`${item.url}-${attachmentIndex}`}
+                                  src={item.url}
+                                  alt={item.name}
+                                  className="h-20 w-20 rounded-xl object-cover shadow-sm"
+                                />
+                              ))}
+                            </div>
+                          ) : null}
                           {msg.content}
                           <div className="mt-2 flex items-center justify-end">
                             <CopyOutputButton
@@ -2359,7 +2565,11 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                               <div className="mt-2 whitespace-pre-wrap leading-relaxed">{msg.reasoning_content}</div>
                             </details>
                           )}
-                          <RichMarkdown content={msg.content} emptyText={streaming && index === messages.length - 1 ? ts(UI_TEXT.thinking) : ""} />
+                          {msg.content.trim() ? (
+                            <RichMarkdown content={msg.content} />
+                          ) : streaming && index === messages.length - 1 ? (
+                            <ThinkingIndicator label={ts(UI_TEXT.thinking).replace(/[.…\s]+$/, "")} />
+                          ) : null}
                           <div className="mt-2 flex items-center justify-end">
                             <CopyOutputButton
                               text={msg.content}
@@ -2372,6 +2582,38 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
                     </div>
                   </div>
                 ))}
+                {truncatedNotice && (
+                  <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    {truncatedNotice}
+                  </div>
+                )}
+                {summaryWarning && (
+                  <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    {summaryWarning}
+                  </div>
+                )}
+                {searchTrace && ((searchTrace.sources?.length ?? 0) > 0 || searchTrace.warning) && (
+                  <div className="rounded-xl border border-sky-200 bg-sky-50/70 px-4 py-3 text-xs text-sky-900">
+                    {(searchTrace.sources?.length ?? 0) > 0 ? (
+                      <>
+                        <div className="font-semibold">
+                          {ts("联网检索")} · {searchTrace.sources?.length} {ts("条来源")}
+                        </div>
+                        <ol className="mt-1 space-y-1">
+                          {searchTrace.sources?.slice(0, 6).map((item, index) => (
+                            <li key={`${item.url || index}`} className="truncate">
+                              <a href={item.url} target="_blank" rel="noreferrer" className="underline">
+                                {item.title || item.url}
+                              </a>
+                            </li>
+                          ))}
+                        </ol>
+                      </>
+                    ) : (
+                      <div>{searchTrace.warning}</div>
+                    )}
+                  </div>
+                )}
                 {chatError && (
                   <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     <span>{chatError}</span>
@@ -2504,8 +2746,54 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
               <div className="px-3 sm:px-4 py-2 border-b border-gray-50">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5 sm:gap-2">
-                    <ChatTopTools value={bottom} onChange={setBottom} />
+                    <ChatTopTools
+                      value={bottom}
+                      onChange={setBottom}
+                      uploadDisabled={!capVision}
+                      uploadDisabledHint={
+                        isMultiCollab
+                          ? ts("当前模型组合都已标记为不支持图片理解，请在「自选模型组合」中至少选择一个支持图片的模型")
+                          : ts("当前模型不支持图片理解，请切换支持图片的模型")
+                      }
+                    />
                     <SchemaForm schema={workbenchInputSchema} values={params} onChange={setParams} placement="top" />
+                    {isChat && bottom.asset_ids.length > 0 && (
+                      <div className="flex w-full min-w-0 basis-full flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[11px] text-gray-400">{ts("已引用素材")}</span>
+                        {bottom.asset_ids.map((assetId) => (
+                          <span
+                            key={assetId}
+                            className="inline-flex max-w-[220px] items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-200"
+                            title={assetId}
+                          >
+                            <span className="truncate">{bottom.asset_labels?.[assetId] || assetId}</span>
+                            <button
+                              type="button"
+                              aria-label={ts("移除该素材")}
+                              className="shrink-0 text-violet-400 hover:text-violet-700 dark:hover:text-violet-100"
+                              onClick={() =>
+                                setBottom((prev) => {
+                                  const labels = { ...(prev.asset_labels || {}) };
+                                  delete labels[assetId];
+                                  return { ...prev, asset_ids: prev.asset_ids.filter((id) => id !== assetId), asset_labels: labels };
+                                })
+                              }
+                            >
+                              <X size={11} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {visionNotice.text && (
+                      <span
+                        role="status"
+                        className={`text-[11px] leading-4 ${visionNotice.fatal ? "text-red-500 dark:text-red-400" : "text-amber-600 dark:text-amber-300"}`}
+                        title={visionNotice.text}
+                      >
+                        {visionNotice.text}
+                      </span>
+                    )}
                     {isMultiCollab && (
                       <div className="flex lg:hidden items-center gap-1 h-9 shrink-0">
                         {/* compact collaborator logos */}
@@ -2901,11 +3189,29 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
               <div
                 className={
                   isMultiCollab
-                    ? "w-full min-w-0 scroll-x-only sm:flex-1 sm:overflow-visible"
+                    // A real flex row: the channel picker, the web-search
+                    // switch and the fusion switch share one line instead of
+                    // stacking as block elements.
+                    ? "flex w-full min-w-0 flex-wrap items-center gap-1.5 scroll-x-only sm:flex-1 sm:gap-2 sm:overflow-visible"
                     : "scroll-x-only flex flex-1 min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto sm:flex-wrap sm:gap-2 sm:overflow-visible"
                 }
               >
-                {isMultiCollab && <BottomBar value={bottom} onChange={setBottom} showWebSearch={false} showTimeout={false} />}
+                {isMultiCollab && <BottomBar value={bottom} onChange={setBottom} showWebSearch showTimeout={false} />}
+                {isMultiCollab && (
+                  <button
+                    type="button"
+                    aria-pressed={bottom.summary_enabled !== false}
+                    onClick={() => setBottom((prev) => ({ ...prev, summary_enabled: prev.summary_enabled === false }))}
+                    title={ts("开启后由总结模型把各成员答案融合成一份最终答案；关闭可只保留各模型原始回答，费用更低")}
+                    className={`h-9 shrink-0 rounded-xl border px-2 text-sm sm:px-3 ${
+                      bottom.summary_enabled !== false
+                        ? "border-primary/30 bg-primary/10 text-primary"
+                        : "border-gray-200 bg-gray-50 text-gray-500 dark:border-white/10 dark:bg-white/5 dark:text-gray-300"
+                    }`}
+                  >
+                    <span className="whitespace-nowrap">{ts("AI 总结")}</span>
+                  </button>
+                )}
                 {isChatSingle && (
                   <>
                     <button

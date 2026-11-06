@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"time"
 
@@ -113,7 +114,14 @@ type CompletionInput struct {
 	Params         map[string]interface{} `json:"params"`
 	Stream         bool                   `json:"stream"`
 	Ephemeral      bool                   `json:"ephemeral"`
-	BillingLabel   string                 `json:"-"`
+	// ChannelKey is the top-level spelling of params.channel_key, accepted for
+	// OpenAI-compatible clients that cannot nest extra parameters.
+	ChannelKey   string `json:"channel_key"`
+	BillingLabel string `json:"-"`
+	// BillContent is the text produced by the current round only. Billing falls
+	// back to it when the upstream does not report usage, so continuation rounds
+	// are not charged twice.
+	BillContent string `json:"-"`
 }
 
 type CompletionResult struct {
@@ -344,6 +352,14 @@ func (s *ChatService) CompletionStreamRaw(ctx context.Context, userID int64, mod
 	return requestID, ch, estimated, nil
 }
 
+// ChatRequestMessages renders conversation messages for an upstream request,
+// folding any reference images/videos/audio carried in params into the last
+// user turn. Multi-model collaboration member calls must go through this too;
+// passing raw messages silently drops every attachment.
+func (s *ChatService) ChatRequestMessages(messages []runtime.ChatMessage, params map[string]interface{}) interface{} {
+	return chatRequestMessages(messages, params)
+}
+
 func chatRequestMessages(messages []runtime.ChatMessage, params map[string]interface{}) interface{} {
 	images := stringSliceParam(params["reference_images"])
 	videos := stringSliceParam(params["reference_videos"])
@@ -572,6 +588,17 @@ func waitRouteRetry(ctx context.Context, retry int) bool {
 
 const maxRouteAttemptsPerRequest = 8
 
+const (
+	// chatStreamFirstByteTimeout bounds how long we wait for a streaming upstream
+	// to start answering (HTTP/2 ignores http.Transport.ResponseHeaderTimeout).
+	chatStreamFirstByteTimeout = 60 * time.Second
+	// chatStreamIdleTimeout aborts a stream that stopped producing chunks.
+	chatStreamIdleTimeout = 90 * time.Second
+	// chatStreamFailoverBudget caps the whole route-failover walk so a chat turn
+	// cannot stay silent for many minutes.
+	chatStreamFailoverBudget = 150 * time.Second
+)
+
 func (s *ChatService) modelRuntimeRoutes(ctx context.Context, model *ModelFull) ([]ModelRoute, error) {
 	routes, err := s.models.EnabledRoutesWithCost(ctx, model)
 	if err != nil {
@@ -596,7 +623,7 @@ func (s *ChatService) chatCompletionWithFailover(ctx context.Context, requestID 
 routeLoop:
 	for i := range routes {
 		route := &routes[i]
-		if mediaErr := chatRouteMediaError(model, route, req.Messages); mediaErr != nil {
+		if mediaErr := mediaGateError(ctx, model, route, req.Messages); mediaErr != nil {
 			lastErr = mediaErr
 			continue
 		}
@@ -663,10 +690,21 @@ func (s *ChatService) chatCompletionStreamWithFailover(ctx context.Context, requ
 	}
 	var lastErr error
 	attempt := 0
+	failoverStarted := time.Now()
+	timeoutErr := func(message string) *runtime.PlatformError {
+		return &runtime.PlatformError{Code: "MODEL_TIMEOUT", StatusCode: 504, Message: message}
+	}
+	budgetExceeded := func() bool { return time.Since(failoverStarted) > chatStreamFailoverBudget }
 routeLoop:
 	for i := range routes {
 		route := &routes[i]
-		if mediaErr := chatRouteMediaError(model, route, req.Messages); mediaErr != nil {
+		if budgetExceeded() {
+			if lastErr == nil {
+				lastErr = timeoutErr("模型响应超时，请稍后重试或更换模型")
+			}
+			break routeLoop
+		}
+		if mediaErr := mediaGateError(ctx, model, route, req.Messages); mediaErr != nil {
 			lastErr = mediaErr
 			continue
 		}
@@ -682,32 +720,73 @@ routeLoop:
 			if attempt >= maxRouteAttemptsPerRequest {
 				break routeLoop
 			}
+			if budgetExceeded() {
+				if lastErr == nil {
+					lastErr = timeoutErr("模型响应超时，请稍后重试或更换模型")
+				}
+				break routeLoop
+			}
 			attempt++
 			started := time.Now()
-			chunks, callErr := s.runtime.ChatCompletionStreamWithConfig(ctx, route.Endpoint, attemptReq, route.RequestExtraForRequest(model, requestID))
+			// Streaming has no total deadline: HTTP/2 upstreams ignore
+			// ResponseHeaderTimeout, so a silent provider would hang the request
+			// (and its balance freeze) forever. Bound the first byte here and keep
+			// an idle watchdog on the body.
+			attemptCtx, attemptCancel := context.WithCancel(ctx)
+			firstByteWatchdog := time.AfterFunc(chatStreamFirstByteTimeout, attemptCancel)
+			chunks, callErr := s.runtime.ChatCompletionStreamWithConfig(attemptCtx, route.Endpoint, attemptReq, route.RequestExtraForRequest(model, requestID))
+			firstByteFired := !firstByteWatchdog.Stop()
 			latency := int(time.Since(started).Milliseconds())
+			if firstByteFired {
+				attemptCancel()
+				callErr = timeoutErr("模型响应超时，未返回任何内容")
+			}
 			if callErr == nil {
 				s.models.MarkRouteSuccess(ctx, route.ID)
 				s.models.LogRouteAttempt(ctx, requestID, model.ID, route.ID, attempt, "success", 200, "", latency, 0)
 				forwarded := make(chan runtime.StreamChunk, 32)
 				go func(selectedRouteID int64, selectedAttempt int) {
 					defer close(forwarded)
+					defer attemptCancel()
 					var streamError error
-					for chunk := range chunks {
-						if chunk.Error != nil {
-							streamError = chunk.Error
-						}
-						forwarded <- chunk
-					}
-					if streamError != nil {
-						if isRouteFailoverError(streamError) {
+					idle := time.NewTimer(chatStreamIdleTimeout)
+					defer idle.Stop()
+					for {
+						select {
+						case chunk, ok := <-chunks:
+							if !ok {
+								if streamError != nil {
+									if isRouteFailoverError(streamError) {
+										s.models.MarkRouteFailure(context.Background(), selectedRouteID)
+									}
+									s.models.MarkStreamRouteAttemptFailed(context.Background(), requestID, selectedRouteID, selectedAttempt, streamError)
+								}
+								return
+							}
+							if !idle.Stop() {
+								select {
+								case <-idle.C:
+								default:
+								}
+							}
+							idle.Reset(chatStreamIdleTimeout)
+							if chunk.Error != nil {
+								streamError = chunk.Error
+							}
+							forwarded <- chunk
+						case <-idle.C:
+							streamError = timeoutErr("模型响应超时，未收到新的内容")
 							s.models.MarkRouteFailure(context.Background(), selectedRouteID)
+							s.models.MarkStreamRouteAttemptFailed(context.Background(), requestID, selectedRouteID, selectedAttempt, streamError)
+							attemptCancel()
+							forwarded <- runtime.StreamChunk{Error: streamError}
+							return
 						}
-						s.models.MarkStreamRouteAttemptFailed(context.Background(), requestID, selectedRouteID, selectedAttempt, streamError)
 					}
 				}(route.ID, attempt)
 				return forwarded, route, nil
 			}
+			attemptCancel()
 			lastErr = callErr
 			statusCode, errorCode := routeErrorDetails(callErr)
 			if platformErr, ok := callErr.(*runtime.PlatformError); ok && platformErr.Detail != "" {
@@ -740,10 +819,20 @@ func (s *ChatService) FinalizeStream(ctx context.Context, userID int64, requestI
 	if usage != nil {
 		normalized = *usage
 	}
-	normalized = normalizedChatUsage(normalized, input, fullContent)
+	billText := fullContent
+	if input.BillContent != "" {
+		billText = input.BillContent
+	}
+	normalized = normalizedChatUsage(normalized, input, billText)
 	selectedRoute, _ := s.models.SuccessfulRouteForRequest(ctx, requestID)
+	if selectedRoute == nil {
+		// Truncated or partially delivered replies may have their attempt marked
+		// rejected after the fact; fall back to the route that served the request.
+		selectedRoute, _ = s.models.RouteForRequest(ctx, requestID)
+	}
 	charge, costComplete, pricingCfg, err := s.models.RouteProviderCharge(ctx, model, selectedRoute, input.Params, normalized.PromptTokens, normalized.CompletionTokens, normalized.CachedInputTokens(), normalized.CacheCreationInputTokens)
 	if err != nil {
+		s.logCall(ctx, requestID, userID, model.ID, nil, normalized.PromptTokens, normalized.CompletionTokens, normalized.TotalTokens, 0, "billing_failed", err, 0)
 		return "", fmt.Errorf("对话结算失败: %w", err)
 	}
 	actualCost := charge.UserCharge
@@ -792,6 +881,30 @@ func (s *ChatService) UnfreezeStream(ctx context.Context, userID int64, requestI
 	return s.billing.Unfreeze(ctx, userID, estimated, "chat", requestID)
 }
 
+// multiChatDefaultOutputTokens bounds the per-member output reservation for
+// multi-model collaboration. The generic 1000-token default in
+// estimatedTokenCounts is applied once per member and once for the summary, so
+// a 3-member collaboration reserved ~3000 output tokens for an answer that
+// typically uses ~150 — a ~20x over-reservation that locked users with a small
+// balance out of the feature entirely. The reservation is released and settled
+// against the real usage, and ChargeWithSettlement still handles an actual cost
+// above the reservation.
+const multiChatDefaultOutputTokens = 512
+
+// applyMultiChatEstimateDefaults narrows the output reservation for a
+// multi-member collaboration request, unless the caller asked for an explicit
+// output budget. It mutates params in place so the estimate endpoint and the
+// actual request agree on the same reservation.
+func applyMultiChatEstimateDefaults(params map[string]interface{}) {
+	if params == nil {
+		return
+	}
+	if firstPositiveIntValue(params, "_estimated_output_tokens", "max_completion_tokens", "max_tokens") > 0 {
+		return
+	}
+	params["_estimated_output_tokens"] = multiChatDefaultOutputTokens
+}
+
 func (s *ChatService) BeginMultiChat(ctx context.Context, userID int64, input CompletionInput, modelCodes []string) (requestID string, estimated float64, err error) {
 	prepareChatBillingParams(&input)
 	requestID = util.NewRequestID()
@@ -826,17 +939,25 @@ func (s *ChatService) FinalizeMultiChat(ctx context.Context, userID int64, reque
 	}
 	cfg, err := s.models.BillingPricingConfig(ctx)
 	if err != nil {
+		// Never leave the reservation locked: the caller has no way to release
+		// it once we return an error.
+		_ = s.billing.Unfreeze(ctx, userID, estimated, "chat", requestID)
 		return 0, err
 	}
-	providerCost, actualCost, commission := 0.0, 0.0, 0.0
+	// Aggregate in integer micro-credits. Each item is already an exact
+	// multiple of 1e-6 (produced by billing.CalculateCharge), so summing the
+	// integers and converting back once makes the aggregate exactly equal to
+	// the item sum. Re-rounding the float64 sum with math.Ceil used to add up
+	// to 2e-6 of drift, which validateSettlementItems rejected.
+	providerMicros, actualMicros, commissionMicros := int64(0), int64(0), int64(0)
 	for _, item := range items {
-		providerCost += item.ProviderCost
-		actualCost += item.UserCharge
-		commission += item.Commission
+		providerMicros += creditMicros(item.ProviderCost)
+		actualMicros += creditMicros(item.UserCharge)
+		commissionMicros += creditMicros(item.Commission)
 	}
-	providerCost = numericMicros(providerCost)
-	actualCost = numericMicros(actualCost)
-	commission = numericMicros(actualCost - providerCost)
+	providerCost := float64(providerMicros) / 1_000_000
+	actualCost := float64(actualMicros) / 1_000_000
+	commission := float64(commissionMicros) / 1_000_000
 	settlement := billing.Settlement{
 		ModelID: modelIDPointer(model.ID), RefType: "chat", RefID: requestID,
 		ProviderCost: providerCost, UserCharge: actualCost, Commission: commission,
@@ -849,22 +970,37 @@ func (s *ChatService) FinalizeMultiChat(ctx context.Context, userID int64, reque
 	}
 	if err := s.billing.ChargeWithSettlement(ctx, userID, estimated, settlement, "chat_usage", "多模型协作消费", nil); err != nil {
 		s.logCall(ctx, requestID, userID, model.ID, nil, promptTokens, completionTokens, totalTokens, 0, "billing_failed", err, 0)
+		// Release the reservation so a failed settlement never strands funds.
+		_ = s.billing.Unfreeze(ctx, userID, estimated, "chat", requestID)
 		return actualCost, err
 	}
 	s.logCallWithRoute(ctx, requestID, userID, model.ID, 0, nil, promptTokens, completionTokens, totalTokens, actualCost, providerCost, "success", nil, 0)
 	return actualCost, nil
 }
 
+// creditMicros converts a credit amount into integer micro-credits.
+func creditMicros(value float64) int64 {
+	if value <= 0 {
+		return 0
+	}
+	return int64(math.Round(value * 1_000_000))
+}
+
 func (s *ChatService) EstimateModelsBilling(ctx context.Context, modelCodes []string, params map[string]interface{}) (float64, error) {
+	if len(modelCodes) > 1 {
+		applyMultiChatEstimateDefaults(params)
+	}
 	total := 0.0
 	for _, code := range modelCodes {
 		model, err := s.models.GetFullByCode(ctx, code)
 		if err != nil {
-			return 0, err
+			// Surface a configuration problem instead of the raw English
+			// "model not found" the repository layer returns.
+			return 0, fmt.Errorf("成员模型 %q 不存在或未启用，请在后台「渠道预设」页面重新配置", code)
 		}
 		estimate, _, err := s.models.RouteBillingEstimate(ctx, model, params, 0, 0)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("成员模型 %q 计费预估失败：%v", code, err)
 		}
 		total += estimate
 	}
@@ -1012,18 +1148,16 @@ func (s *ChatService) SaveMultiMessages(ctx context.Context, convPublicID string
 		return
 	}
 	s.db.Exec(ctx, `INSERT INTO conversation_messages (conversation_id, role, content) VALUES ($1,$2,$3)`, convID, lastUser.Role, lastUser.Content)
-	out := summary
-	if strings.TrimSpace(out) == "" {
-		b, _ := json.Marshal(results)
-		out = string(b)
-	} else {
-		snapshot, _ := json.Marshal(map[string]interface{}{
-			"type":    "multi_collab",
-			"summary": summary,
-			"results": results,
-		})
-		out = string(snapshot)
-	}
+	// Always persist the snapshot envelope. A bare results array (the previous
+	// fallback when the summary was empty) carries no type marker, so reloading
+	// the conversation could not recognise it and the history view rendered the
+	// raw JSON as the assistant answer.
+	snapshot, _ := json.Marshal(map[string]interface{}{
+		"type":    "multi_collab",
+		"summary": summary,
+		"results": results,
+	})
+	out := string(snapshot)
 	s.db.Exec(ctx, `INSERT INTO conversation_messages (conversation_id, role, content) VALUES ($1,'assistant',$2)`, convID, out)
 	s.db.Exec(ctx, `UPDATE conversations SET updated_at=now() WHERE id=$1`, convID)
 }

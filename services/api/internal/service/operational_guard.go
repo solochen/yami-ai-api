@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -581,6 +582,10 @@ func (s *OpsService) settleTerminalStateFreezes(ctx context.Context) (int, error
 		if err != nil {
 			return n, err
 		}
+		if _, err = tx.Exec(ctx, `SELECT 1 FROM wallets WHERE user_id=$1 FOR UPDATE`, userID); err != nil {
+			tx.Rollback(ctx)
+			return n, err
+		}
 		var status string
 		if err = tx.QueryRow(ctx, `SELECT status, amount FROM balance_freezes WHERE id=$1 FOR UPDATE`, freezeID).Scan(&status, &amount); err != nil {
 			tx.Rollback(ctx)
@@ -590,11 +595,15 @@ func (s *OpsService) settleTerminalStateFreezes(ctx context.Context) (int, error
 			tx.Rollback(ctx)
 			continue
 		}
-		if _, err = tx.Exec(ctx, `SELECT 1 FROM wallets WHERE user_id=$1 FOR UPDATE`, userID); err != nil {
+		var alreadyCharged float64
+		if err = tx.QueryRow(ctx, `
+			SELECT COALESCE(SUM(CASE WHEN direction='out' THEN amount WHEN direction='in' THEN -amount ELSE 0 END),0)
+			FROM wallet_transactions WHERE user_id=$1 AND ref_type=$2 AND ref_id=$3`, userID, refType, refID).Scan(&alreadyCharged); err != nil {
 			tx.Rollback(ctx)
 			return n, err
 		}
-		if refStatus == "succeeded" && actualCost > 0 {
+		remainingCharge := terminalFreezeChargeRemainder(actualCost, alreadyCharged)
+		if refStatus == "succeeded" && remainingCharge > 0 {
 			var balance, frozen float64
 			if err = tx.QueryRow(ctx, `SELECT compute_balance, frozen_compute FROM wallets WHERE user_id=$1`, userID).Scan(&balance, &frozen); err != nil {
 				tx.Rollback(ctx)
@@ -604,7 +613,7 @@ func (s *OpsService) settleTerminalStateFreezes(ctx context.Context) (int, error
 			if newFrozen < 0 {
 				newFrozen = 0
 			}
-			if _, err = tx.Exec(ctx, `UPDATE wallets SET compute_balance=$1, frozen_compute=$2, updated_at=now() WHERE user_id=$3`, balance-actualCost, newFrozen, userID); err != nil {
+			if _, err = tx.Exec(ctx, `UPDATE wallets SET compute_balance=$1, frozen_compute=$2, updated_at=now() WHERE user_id=$3`, balance-remainingCharge, newFrozen, userID); err != nil {
 				tx.Rollback(ctx)
 				return n, err
 			}
@@ -614,7 +623,7 @@ func (s *OpsService) settleTerminalStateFreezes(ctx context.Context) (int, error
 			}
 			if _, err = tx.Exec(ctx, `
 				INSERT INTO wallet_transactions (user_id, type, direction, amount, balance_after, ref_type, ref_id, remark)
-				VALUES ($1,$6,'out',$2,$3,$4,$5,'冻结滞留补结算')`, userID, actualCost, balance-actualCost, refType, refID, txType); err != nil {
+				VALUES ($1,$6,'out',$2,$3,$4,$5,'冻结滞留补结算')`, userID, remainingCharge, balance-remainingCharge, refType, refID, txType); err != nil {
 				tx.Rollback(ctx)
 				return n, err
 			}
@@ -634,6 +643,14 @@ func (s *OpsService) settleTerminalStateFreezes(ctx context.Context) (int, error
 		n++
 	}
 	return n, rows.Err()
+}
+
+func terminalFreezeChargeRemainder(actualCost, alreadyCharged float64) float64 {
+	remainingMicros := int64(math.Round(actualCost*1_000_000)) - int64(math.Round(alreadyCharged*1_000_000))
+	if remainingMicros <= 0 {
+		return 0
+	}
+	return float64(remainingMicros) / 1_000_000
 }
 
 // failOrphanedStaleTasks 清理没有活动冻结记录的卡住任务（如冻结已被手动释放），

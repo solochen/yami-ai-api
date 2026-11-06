@@ -1485,15 +1485,16 @@ export default function SystemConfigPage() {
             {renderItem({ key: "web_search_enabled", label: "启用智能搜索", type: "checkbox", hint: "关闭后用户端不显示智能搜索按钮。" })}
             {renderItem({ key: "web_search_provider", label: "搜索服务商", type: "select", options: [
               { value: "tavily", label: "Tavily（推荐）" },
+              { value: "tavily_primary", label: "Tavily 主 + 备用兜底（推荐生产）" },
               { value: "exa", label: "Exa Search API" },
               { value: "hybrid", label: "混合模式（SearXNG 优先，Tavily 兜底）" },
               { value: "brave", label: "Brave Search API" },
               { value: "searxng", label: "SearXNG（自建）" },
               { value: "redfox", label: "RedFox 抖音数据 API" },
             ], onChange: (value) => setConfigs((prev) => ({ ...prev, web_search_provider: value, web_search_enabled: true })), hint: "切换服务商时会同步开启智能搜索；如需停用，请在切换后手动关闭。" })}
-            {["tavily", "brave", "hybrid"].includes(String(configs.web_search_provider || "tavily")) && renderItem({ key: "web_search_api_key", label: "搜索 API Key", type: "password", hint: "Tavily / Brave 使用；保存后只显示脱敏值，不会下发到用户端。" })}
-            {String(configs.web_search_provider || "tavily") === "exa" && renderItem({ key: "web_search_exa_api_key", label: "Exa API Key", type: "password", hint: "在 Exa 控制台获取；独立保存，不覆盖其他搜索服务的密钥。使用标准搜索并获取相关网页摘录，消耗 Exa 账户额度。" })}
-            {["searxng", "hybrid"].includes(String(configs.web_search_provider || "tavily")) && renderItem({ key: "web_search_base_url", label: "SearXNG 服务地址", type: "text", hint: "内置生产环境填写 http://searxng:8080；本地开发填写 http://127.0.0.1:8888。" })}
+            {["tavily", "brave", "hybrid", "tavily_primary"].includes(String(configs.web_search_provider || "tavily")) && renderItem({ key: "web_search_api_key", label: "搜索 API Key", type: "password", hint: "Tavily / Brave 使用；保存后只显示脱敏值，不会下发到用户端。" })}
+            {["exa", "tavily_primary"].includes(String(configs.web_search_provider || "tavily")) && renderItem({ key: "web_search_exa_api_key", label: String(configs.web_search_provider) === "tavily_primary" ? "备用 Exa API Key" : "Exa API Key", type: "password", hint: String(configs.web_search_provider) === "tavily_primary" ? "Tavily 与 SearXNG 都失败时使用的第三层兜底；留空则不启用这一层。保存后只显示脱敏值。" : "在 Exa 控制台获取；独立保存，不覆盖其他搜索服务的密钥。使用标准搜索并获取相关网页摘录，消耗 Exa 账户额度。" })}
+            {["searxng", "hybrid", "tavily_primary"].includes(String(configs.web_search_provider || "tavily")) && renderItem({ key: "web_search_base_url", label: String(configs.web_search_provider) === "tavily_primary" ? "备用 SearXNG 服务地址" : "SearXNG 服务地址", type: "text", hint: String(configs.web_search_provider) === "tavily_primary" ? "Tavily 失败后的第二层兜底；留空则跳过这一层。内置生产环境填写 http://searxng:8080，本地开发填写 http://127.0.0.1:8888。" : "内置生产环境填写 http://searxng:8080；本地开发填写 http://127.0.0.1:8888。" })}
             {String(configs.web_search_provider || "tavily") === "redfox" && renderItem({ key: "web_search_base_url", label: "备用 SearXNG 地址", type: "text", hint: "RedFox 未返回可核验网页来源时自动回退；留空则不回退。本地开发可填写 http://127.0.0.1:8888。" })}
             {String(configs.web_search_provider || "tavily") === "redfox" && renderItem({ key: "web_search_api_key", label: "二级备用 Tavily API Key", type: "password", hint: "RedFox 和 SearXNG 都无可核验结果时使用；留空则不启用二级回退。保存后仅显示脱敏值。" })}
             {String(configs.web_search_provider || "tavily") === "redfox" && renderItem({ key: "web_search_redfox_api_key", label: "RedFox 搜索 API Key", type: "password", hint: "只用于 Agent 联网搜索；保存后只显示脱敏值。" })}
@@ -1503,7 +1504,7 @@ export default function SystemConfigPage() {
               { value: "", label: "跟随 Agent 主模型" },
               ...searchRouterModels,
             ], hint: "仅模糊、依赖上下文的联网问题会调用。建议选择速度快、价格低的对话模型。" })}
-            {["tavily", "hybrid"].includes(String(configs.web_search_provider || "tavily")) && renderItem({ key: "web_search_depth", label: "Tavily 搜索深度", type: "select", options: [
+            {["tavily", "hybrid", "tavily_primary"].includes(String(configs.web_search_provider || "tavily")) && renderItem({ key: "web_search_depth", label: "Tavily 搜索深度", type: "select", options: [
               { value: "basic", label: "Basic（1 Credit）" },
               { value: "advanced", label: "Advanced（2 Credits，更高相关性）" },
             ], hint: "时效范围和新闻主题由 Agent 自动判断；Advanced 会消耗更多 Tavily Credits。" })}

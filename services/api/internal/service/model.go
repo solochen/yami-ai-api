@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -441,7 +442,7 @@ func audioTokenCostFromRule(rule map[string]interface{}, inputTokens, outputToke
 }
 
 func modelTokenItemCount(model *ModelFull, params map[string]interface{}) float64 {
-	if model != nil && model.Category == "audio" {
+	if model != nil && (model.Category == "audio" || model.Category == "image") {
 		return billingItemCount(params)
 	}
 	return 1
@@ -480,9 +481,15 @@ func tokenCostFromRule(rule map[string]interface{}, promptTokens, outputTokens, 
 		}
 	}
 	uncachedInput := promptTokens - cacheReadTokens - cacheWriteTokens
-	inputPrice := perTokenPrice(rule, "input_price")
+	inputPrice := perTokenPrice(rule, "text_input_price")
+	if inputPrice <= 0 {
+		inputPrice = perTokenPrice(rule, "input_price")
+	}
 	outputPrice := perTokenPrice(rule, "output_price")
 	cacheReadPrice := perTokenPrice(rule, "cache_read_price")
+	if textCacheReadPrice := perTokenPrice(rule, "text_cache_read_price"); textCacheReadPrice > 0 {
+		cacheReadPrice = textCacheReadPrice
+	}
 	if cacheReadPrice <= 0 {
 		cacheReadPrice = inputPrice
 	}
@@ -519,15 +526,162 @@ func estimatedTokenCounts(rule, params map[string]interface{}, promptTokens, out
 		}
 	}
 	if outputTokens <= 0 {
-		outputTokens = firstPositiveIntValue(params, "_estimated_output_tokens", "max_completion_tokens", "max_tokens")
-		if outputTokens <= 0 {
-			outputTokens = firstPositiveIntValue(rule, "estimated_output_tokens")
+		if included, _ := params["_actual_image_output_tokens_included"].(bool); included {
+			outputTokens = firstPositiveIntValue(params, "_actual_image_output_tokens")
 		}
 		if outputTokens <= 0 {
+			outputTokens = firstPositiveIntValue(params, "_estimated_output_tokens", "max_completion_tokens", "max_tokens")
+		}
+		if outputTokens <= 0 && estimatedImageOutputTokens(rule, params) == 0 {
+			outputTokens = firstPositiveIntValue(rule, "estimated_output_tokens")
+		}
+		if outputTokens <= 0 && estimatedImageOutputTokens(rule, params) == 0 {
 			outputTokens = 1000
 		}
 	}
 	return promptTokens, outputTokens
+}
+
+// estimatedImageOutputTokens maps an image model's official size/quality
+// estimate to output tokens. Image models are billed by tokens, but the user
+// selects a number of images, so this gives the reservation path a stable
+// per-image estimate when the upstream has not returned usage yet.
+func estimatedImageOutputTokens(rule, params map[string]interface{}) int {
+	if estimator := strings.ToLower(strings.TrimSpace(stringValue(rule["image_output_token_estimator"]))); estimator != "" {
+		return estimateOpenAIImageOutputTokens(estimator, rule, params)
+	}
+	variants, ok := rule["estimated_output_tokens_by_variant"].(map[string]interface{})
+	if !ok || len(variants) == 0 {
+		return 0
+	}
+	quality := strings.ToLower(strings.TrimSpace(stringValue(params["quality"])))
+	if quality == "" || quality == "<nil>" || quality == "auto" {
+		quality = strings.ToLower(strings.TrimSpace(stringValue(rule["default_quality"])))
+	}
+	if quality == "" || quality == "<nil>" || quality == "auto" {
+		quality = "medium"
+	}
+	tier := strings.ToLower(strings.TrimSpace(stringValue(params["image_size"])))
+	if tier == "" || tier == "<nil>" || tier == "auto" {
+		tier = "1k"
+	}
+	shape := imageOutputShape(params)
+	for _, key := range []string{
+		quality + "_" + tier + "_" + shape,
+		quality + "_" + tier,
+	} {
+		if value := firstPositiveIntValue(variants, key); value > 0 {
+			return value
+		}
+	}
+	return 0
+}
+
+func estimateOpenAIImageOutputTokens(estimator string, rule, params map[string]interface{}) int {
+	width, height := imageOutputDimensions(params)
+	if width <= 0 || height <= 0 {
+		return 0
+	}
+	quality := strings.ToLower(strings.TrimSpace(stringValue(params["quality"])))
+	if quality == "" || quality == "<nil>" || quality == "auto" {
+		quality = strings.ToLower(strings.TrimSpace(stringValue(rule["default_quality"])))
+	}
+	if quality == "" || quality == "<nil>" || quality == "auto" {
+		quality = "medium"
+	}
+	qualityBase := map[string]int{}
+	switch estimator {
+	case "gpt_image_2":
+		qualityBase = map[string]int{"low": 16, "medium": 48, "high": 96}
+	case "gpt_image_2_5":
+		qualityBase = map[string]int{"low": 16, "medium": 24, "high": 48, "xhigh": 64, "max": 96}
+	}
+	base := qualityBase[quality]
+	if base == 0 {
+		return 0
+	}
+	longEdge, shortEdge := width, height
+	if shortEdge > longEdge {
+		longEdge, shortEdge = shortEdge, longEdge
+	}
+	shortEdgeTiles := int(math.RoundToEven(float64(base) / (float64(longEdge) / float64(shortEdge))))
+	if width >= height {
+		return officialImageOutputTokenCount(base, shortEdgeTiles, width, height)
+	}
+	return officialImageOutputTokenCount(shortEdgeTiles, base, width, height)
+}
+
+func officialImageOutputTokenCount(widthTiles, heightTiles, width, height int) int {
+	tileCount := widthTiles * heightTiles
+	pixelCost := float64(tileCount) * (2_000_000 + float64(width*height)) / 4_000_000
+	return int(math.Ceil(pixelCost))
+}
+
+func imageOutputDimensions(params map[string]interface{}) (int, int) {
+	for _, raw := range []string{stringValue(params["resolved_size"]), stringValue(params["size"])} {
+		parts := strings.Split(strings.ToLower(strings.TrimSpace(raw)), "x")
+		if len(parts) != 2 {
+			continue
+		}
+		width, widthErr := strconv.Atoi(strings.TrimSpace(parts[0]))
+		height, heightErr := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if widthErr == nil && heightErr == nil && width > 0 && height > 0 {
+			return width, height
+		}
+	}
+	scale := 1
+	switch strings.ToLower(strings.TrimSpace(stringValue(params["image_size"]))) {
+	case "", "<nil>", "auto", "1k":
+	case "2k":
+		scale = 2
+	default:
+		return 0, 0
+	}
+	switch imageOutputShape(params) {
+	case "portrait":
+		return 1024 * scale, 1536 * scale
+	case "landscape":
+		return 1536 * scale, 1024 * scale
+	default:
+		return 1024 * scale, 1024 * scale
+	}
+}
+
+func imageOutputShape(params map[string]interface{}) string {
+	for _, raw := range []string{stringValue(params["resolved_size"]), stringValue(params["size"])} {
+		parts := strings.Split(strings.ToLower(strings.TrimSpace(raw)), "x")
+		if len(parts) != 2 {
+			continue
+		}
+		width, widthErr := strconv.Atoi(strings.TrimSpace(parts[0]))
+		height, heightErr := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
+			continue
+		}
+		if width == height {
+			return "square"
+		}
+		if width > height {
+			return "landscape"
+		}
+		return "portrait"
+	}
+	ratio := strings.TrimSpace(stringValue(params["aspect_ratio"]))
+	parts := strings.Split(ratio, ":")
+	if len(parts) == 2 {
+		width, widthErr := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+		height, heightErr := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+		if widthErr == nil && heightErr == nil {
+			if width == height {
+				return "square"
+			}
+			if width > height {
+				return "landscape"
+			}
+			return "portrait"
+		}
+	}
+	return "square"
 }
 
 func firstPositiveIntValue(values map[string]interface{}, keys ...string) int {
@@ -598,10 +752,12 @@ func imageVariantPrice(rule, params map[string]interface{}, tierMapKey string) (
 	if tier == "" || tier == "<nil>" {
 		tier = "1k"
 	}
-	want := quality + "_" + tier
-	for name, value := range variants {
-		if strings.EqualFold(strings.TrimSpace(name), want) {
-			return floatValue(value), true
+	shape := imageOutputShape(params)
+	for _, want := range []string{quality + "_" + tier + "_" + shape, quality + "_" + tier} {
+		for name, value := range variants {
+			if strings.EqualFold(strings.TrimSpace(name), want) {
+				return floatValue(value), true
+			}
 		}
 	}
 	return 0, false
@@ -805,6 +961,10 @@ func perTokenPrice(rule map[string]interface{}, key string) float64 {
 		return v
 	}
 	if v, ok := rule[key+"_per_m"].(float64); ok && v > 0 {
+		return v / 1_000_000
+	}
+	costKey := strings.TrimSuffix(key, "_price") + "_cost_per_m"
+	if v, ok := rule[costKey].(float64); ok && v > 0 {
 		return v / 1_000_000
 	}
 	return 0
@@ -1799,7 +1959,7 @@ func validateModelPriceRule(rule map[string]interface{}) error {
 }
 
 func (s *ModelService) preserveExistingModelSecrets(ctx context.Context, id int64, input *CreateModelInput) error {
-	if input == nil || input.Category == "multi_collab" {
+	if input == nil || IsMultiCollab(input.Category, input.Code) {
 		return nil
 	}
 	nextConn, _ := input.NewAPIExtraParams["connection"].(map[string]interface{})
@@ -1956,7 +2116,7 @@ func validateModelConnection(input CreateModelInput) error {
 		return fmt.Errorf("不支持的 request_mode: %s，允许的值：chat_completions, responses, images, video, audio, custom", input.RequestMode)
 	}
 
-	if input.Category == "multi_collab" {
+	if IsMultiCollab(input.Category, input.Code) {
 		return nil
 	}
 
@@ -2106,7 +2266,6 @@ func parseTime(t time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
-
 func firstNonEmptyServiceString(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
@@ -2114,4 +2273,31 @@ func firstNonEmptyServiceString(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// SetModelCapability writes a single boolean into runtime_rule.capabilities.
+// It is used by the admin capability probe so the recorded flag matches what the
+// upstream actually does, instead of relying on hand configuration.
+func (s *ModelService) SetModelCapability(ctx context.Context, id int64, key string, value bool) error {
+	key = strings.TrimSpace(key)
+	if id <= 0 || key == "" {
+		return errors.New("invalid capability target")
+	}
+	tag, err := s.db.Exec(ctx, `
+		UPDATE models
+		SET runtime_rule = jsonb_set(
+				COALESCE(runtime_rule, '{}'::jsonb),
+				ARRAY['capabilities', $2::text],
+				to_jsonb($3::boolean),
+				true
+			),
+			updated_at = now()
+		WHERE id = $1`, id, key, value)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("model not found")
+	}
+	return nil
 }

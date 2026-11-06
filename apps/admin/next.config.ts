@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const adminAssetPrefix = process.env.ADMIN_ASSET_PREFIX || "";
 
@@ -13,6 +14,8 @@ const noStoreHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: path.resolve(__dirname, "../.."),
+  ...(process.env.DEV_DIST_DIR ? { distDir: process.env.DEV_DIST_DIR } : {}),
   output: "standalone",
   transpilePackages: ["@starai/shared-types"],
   ...(adminAssetPrefix ? { assetPrefix: adminAssetPrefix } : {}),

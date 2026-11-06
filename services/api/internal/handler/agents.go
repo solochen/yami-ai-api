@@ -449,10 +449,41 @@ func (h *Handler) AdminToggleAgent(c *gin.Context) {
 	util.OK(c, nil)
 }
 
+func guardGeneralCreativeAgentUpsert(input *service.AgentUpsertInput) error {
+	if input == nil || input.Code != "general_creative_agent" {
+		return nil
+	}
+	config := input.RuntimeConfig
+	if config == nil {
+		config = map[string]interface{}{}
+	}
+	required := []struct{ key, label string }{
+		{"analysis_model_code", "主聊天模型"},
+		{"image_model_code", "图片模型"},
+		{"video_model_code", "视频模型"},
+		{"speech_model_code", "语音模型"},
+		{"music_model_code", "音乐模型"},
+	}
+	var missing []string
+	for _, item := range required {
+		if strings.TrimSpace(stringAny(config[item.key])) == "" {
+			missing = append(missing, item.label)
+		}
+	}
+	if len(missing) > 0 {
+		return errors.New("Agent 通用智能体缺少" + strings.Join(missing, "、") + "，已拒绝保存，避免写成其它工作流")
+	}
+	return nil
+}
+
 func (h *Handler) AdminCreateAgent(c *gin.Context) {
 	var input service.AgentUpsertInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		util.BadRequest(c, "参数错误")
+		return
+	}
+	if err := guardGeneralCreativeAgentUpsert(&input); err != nil {
+		util.BadRequest(c, err.Error())
 		return
 	}
 	if err := h.agents.Upsert(c.Request.Context(), input); err != nil {
@@ -473,6 +504,10 @@ func (h *Handler) AdminUpdateAgent(c *gin.Context) {
 		return
 	}
 	input.Code = c.Param("code")
+	if err := guardGeneralCreativeAgentUpsert(&input); err != nil {
+		util.BadRequest(c, err.Error())
+		return
+	}
 	if err := h.agents.Upsert(c.Request.Context(), input); err != nil {
 		util.BadRequest(c, err.Error())
 		return

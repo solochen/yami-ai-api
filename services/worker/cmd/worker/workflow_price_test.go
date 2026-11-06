@@ -274,6 +274,55 @@ func TestWorkerPerTokenPricingUsesAudioPrices(t *testing.T) {
 	}
 }
 
+func TestWorkerImagePricingSeparatesOfficialImageAndTextOutputTokens(t *testing.T) {
+	rule := map[string]interface{}{
+		"billing_type": "per_token", "text_input_cost_per_m": float64(33.75),
+		"image_input_cost_per_m": float64(54), "output_cost_per_m": float64(202.5),
+		"image_output_cost_per_m": float64(202.5), "text_output_cost_per_m": float64(67.5),
+	}
+	got := estimatePriceRuleCostWorker(rule, map[string]interface{}{
+		"_actual_image_input_tokens": float64(400), "_actual_image_output_tokens": float64(100),
+		"_actual_image_output_tokens_included": true,
+	}, 1000, 150, 0, 0)
+	want := (600*33.75 + 400*54 + 100*202.5 + 50*67.5) / 1_000_000
+	if math.Abs(got-want) > 0.000000001 {
+		t.Fatalf("official image/text output charge = %.10f, want %.10f", got, want)
+	}
+}
+
+func TestWorkerRouteChargeUsesSplitOfficialImageOutputPricing(t *testing.T) {
+	rule := map[string]interface{}{
+		"billing_type": "per_token", "text_input_cost_per_m": float64(33.75),
+		"image_input_cost_per_m": float64(54), "output_cost_per_m": float64(202.5),
+		"image_output_cost_per_m": float64(202.5), "text_output_cost_per_m": float64(67.5),
+	}
+	got := workerRouteProviderCostRule(rule, map[string]interface{}{
+		"_actual_image_input_tokens": float64(400), "_actual_image_output_tokens": float64(100),
+		"_actual_image_output_tokens_included": true,
+	}, 1000, 150, 0, 0)
+	want := (600*33.75 + 400*54 + 100*202.5 + 50*67.5) / 1_000_000
+	if math.Abs(got-want) > 0.000000001 {
+		t.Fatalf("route charge = %.10f, want %.10f", got, want)
+	}
+}
+
+func TestWorkerRouteChargeUsesEstimatedImageOutputTokensWithoutUsage(t *testing.T) {
+	rule := map[string]interface{}{
+		"billing_type": "per_token", "text_input_cost_per_m": float64(33.75),
+		"image_input_cost_per_m": float64(54), "output_cost_per_m": float64(202.5),
+		"image_output_cost_per_m": float64(202.5), "text_output_cost_per_m": float64(0),
+	}
+	params := map[string]interface{}{
+		"_estimated_input_tokens": float64(1000), "_estimated_output_tokens": float64(1367),
+		"_estimated_image_output_tokens": float64(1367),
+	}
+	got := workerRouteProviderCostRule(rule, params, 0, 0, 0, 0)
+	want := (1000*33.75 + 1367*202.5) / 1_000_000
+	if math.Abs(got-want) > 0.000000001 {
+		t.Fatalf("estimated route charge = %.10f, want %.10f", got, want)
+	}
+}
+
 func TestUpstreamUsageTokensSupportsNestedUsage(t *testing.T) {
 	prompt, output := upstreamUsageTokens([]byte(`{"data":{"result":{"usage":{"input_tokens":120,"output_tokens":45}}}}`))
 	if prompt != 120 || output != 45 {
@@ -291,6 +340,43 @@ func TestUpstreamUsageSupportsMiniMaxH3SecondsAndImages(t *testing.T) {
 	}
 }
 
+func TestUpstreamUsageSeparatesImageOutputTokens(t *testing.T) {
+	usage := upstreamUsageFromBody([]byte(`{"usage":{"input_tokens":120,"output_tokens":150,"input_tokens_details":{"image_tokens":40},"output_tokens_details":{"image_tokens":100}}}`))
+	if usage.PromptTokens != 120 || usage.OutputTokens != 150 || usage.ImageInputTokens != 40 || usage.ImageOutputTokens != 100 {
+		t.Fatalf("image usage split = %#v", usage)
+	}
+	if !usage.ImageOutputIncluded {
+		t.Fatal("nested image output usage must be marked as part of aggregate output tokens")
+	}
+	input := inputWithActualUpstreamUsage(nil, usage)
+	if intAny(input["_actual_image_output_tokens"]) != 100 {
+		t.Fatalf("actual image output tokens missing: %#v", input)
+	}
+	if included, _ := input["_actual_image_output_tokens_included"].(bool); !included {
+		t.Fatal("aggregate image output marker was not propagated")
+	}
+
+	usage = upstreamUsageFromBody([]byte(`{"usage":{"input_tokens":120,"output_tokens":150,"image_output_tokens":100}}`))
+	if usage.ImageOutputTokens != 100 || usage.ImageOutputIncluded {
+		t.Fatalf("independent image usage was misclassified: %#v", usage)
+	}
+}
+
+func TestWorkerRoutePriceKeepsAggregateOutputAsTextWhenImageUsageIsEstimated(t *testing.T) {
+	rule := map[string]interface{}{
+		"billing_type": "per_token", "output_cost_per_m": float64(202.5),
+		"image_output_cost_per_m": float64(202.5), "text_output_cost_per_m": float64(67.5),
+		"image_output_token_estimator": "gpt_image_2_5", "default_quality": "medium",
+	}
+	got := workerRouteProviderCostBase(workerModelRoute{CostRule: rule}, map[string]interface{}{
+		"image_size": "1k", "aspect_ratio": "3:4", "_estimated_image_output_tokens": float64(344),
+	}, 0, 150, 0, 0)
+	want := (344*202.5 + 150*67.5) / 1_000_000
+	if got != want {
+		t.Fatalf("estimated image plus aggregate text charge = %.10f, want %.10f", got, want)
+	}
+}
+
 func TestUpstreamUsageMapsSeedanceTotalTokensToActualBilling(t *testing.T) {
 	usage := upstreamUsageFromBody([]byte(`{"data":{"usage":{"total_tokens":108900}}}`))
 	if usage.VideoTokens != 108900 || usage.OutputTokens != 108900 {
@@ -299,5 +385,17 @@ func TestUpstreamUsageMapsSeedanceTotalTokensToActualBilling(t *testing.T) {
 	input := inputWithActualUpstreamUsage(map[string]interface{}{"duration": float64(5)}, usage)
 	if got := intAny(input["_actual_video_tokens"]); got != 108900 {
 		t.Fatalf("actual video tokens = %d, want 108900", got)
+	}
+}
+
+func TestConsumedWorkflowFreezeAmountTracksActualCharge(t *testing.T) {
+	if got := consumedWorkflowFreezeAmount(0.296725, 0.292979); math.Abs(got-0.292979) > 1e-9 {
+		t.Fatalf("consumed freeze = %.6f, want 0.292979", got)
+	}
+	if got := consumedWorkflowFreezeAmount(0.296725, 0.4); math.Abs(got-0.296725) > 1e-9 {
+		t.Fatalf("consumed freeze above reservation = %.6f, want 0.296725", got)
+	}
+	if got := consumedWorkflowFreezeAmount(0.296725, 0); got != 0 {
+		t.Fatalf("zero charge consumed freeze = %.6f, want 0", got)
 	}
 }

@@ -20,8 +20,9 @@ interface Workflow {
   description?: string;
   icon?: string;
   input_schema: Record<string, unknown>;
-  nodes: { id: string; name: string; type: string }[];
-  runtime_config?: { roles?: any[] };
+  nodes: { id: string; name: string; type: string; cost?: number }[];
+  price_rule?: { unit_price?: number };
+  runtime_config?: { roles?: any[]; analysis_model_code?: string; generation_model_code?: string };
 }
 
 interface NodeRun {
@@ -209,7 +210,8 @@ export default function AgentWorkspacePage() {
 
   // 如果是写真馆，采用展示区 + 底部常驻输入栏结构（提交后不跳转）
   if (isPhotoStudio) {
-    const photoBar = <PhotoStudioInputBar key={photoInputKey} defaultModelCode={(workflow.runtime_config as any)?.generation_model_code} error={error} onSubmit={run} />;
+    const photoWorkflowFee = Math.max(0, Number(workflow.price_rule?.unit_price || 0));
+    const photoBar = <PhotoStudioInputBar key={photoInputKey} defaultModelCode={workflow.runtime_config?.generation_model_code} analysisModelCode={workflow.runtime_config?.analysis_model_code} workflowFee={photoWorkflowFee} error={error} onSubmit={run} />;
     if (!project) {
       return (
         <div className="mcdl-workspace-scene relative flex h-screen flex-col overflow-hidden bg-[#fdf0f9] text-gray-900 dark:bg-[#0a0510] dark:text-white">

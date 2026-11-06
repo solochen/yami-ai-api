@@ -3,6 +3,7 @@ node_modules/
 
 # Frontend build outputs
 .next/
+.next-dev/
 out/
 dist/
 build/

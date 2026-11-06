@@ -60,7 +60,15 @@ func finalizeTimedSpeech(ctx context.Context, taskNo, sourceURL string, settings
 		return result, err
 	}
 	defer os.RemoveAll(dir)
-	data, _, err := downloadAuthenticatedMedia(ctx, connectionConfig{}, sourceURL, 250<<20)
+	var data []byte
+	if objectStore != nil {
+		if objectKey := objectStore.ObjectKeyFromURL(sourceURL); objectKey != "" {
+			data, err = objectStore.ReadAll(ctx, objectKey, 250<<20)
+		}
+	}
+	if len(data) == 0 && err == nil {
+		data, _, err = downloadAuthenticatedMedia(ctx, connectionConfig{}, sourceURL, 250<<20)
+	}
 	if err != nil {
 		return result, err
 	}

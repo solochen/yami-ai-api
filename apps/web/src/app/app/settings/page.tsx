@@ -291,7 +291,7 @@ export default function SettingsPage() {
             </button>
           </div>
         )}
-        <div className="divide-y">
+        <div className="divide-y divide-gray-100 dark:divide-white/10">
           {tokens.length === 0 ? (
             <div className="text-center text-sm text-gray-400 py-6">{ts("暂无密钥")}</div>
           ) : (

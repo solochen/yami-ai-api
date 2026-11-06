@@ -103,6 +103,9 @@ type Workflow = {
     preserve_motion?: boolean;
     preserve_identity?: boolean;
     product_pricing?: { workflow_fee?: number; image_unit_fee?: number };
+    // Present when the backend could not compute the product-refine estimate,
+    // carrying the real reason (unbound/incompatible models, missing price).
+    product_pricing_error?: string;
     default_review_mode?: "standard" | "strict";
     default_subtitle_mode?: string;
     default_subtitle_region?: string;
@@ -1390,7 +1393,7 @@ export function AgentWorkspace({ code }: { code: string }) {
   }
 
   if (workflow?.runtime_config?.agent_mode === "product_refine") {
-    return <ProductRefineWorkspace key={`${photoInputKey}:${project?.public_id || "new"}`} workflowCode={workflow.code} workflowName={workflowName} pricing={workflow.runtime_config?.product_pricing} imageModel={generationModel} defaultReviewMode={workflow.runtime_config?.default_review_mode === "strict" ? "strict" : "standard"} project={project ? { ...project, inputs: project.inputs || {}, outputs: project.outputs || {}, estimated_cost: project.estimated_cost || 0, actual_cost: project.actual_cost || 0 } : null} submitting={submitting} error={error} onSubmit={runPhoto} onNewTask={() => { resetTask(); setPhotoInputKey(key => key + 1); }} onLoadHistory={loadHistory} onStop={async () => { if (!project) return; try { await api(`/api/agent-projects/${project.public_id}/cancel`, { method: "POST" }); setProject(await api<Project>(`/api/agent-projects/${project.public_id}`)); } catch (e) { setError(e instanceof Error ? e.message : ts("停止失败")); } }} onRefresh={async () => {
+    return <ProductRefineWorkspace key={`${photoInputKey}:${project?.public_id || "new"}`} workflowCode={workflow.code} workflowName={workflowName} pricing={workflow.runtime_config?.product_pricing} pricingError={workflow.runtime_config?.product_pricing_error} imageModel={generationModel} defaultReviewMode={workflow.runtime_config?.default_review_mode === "strict" ? "strict" : "standard"} project={project ? { ...project, inputs: project.inputs || {}, outputs: project.outputs || {}, estimated_cost: project.estimated_cost || 0, actual_cost: project.actual_cost || 0 } : null} submitting={submitting} error={error} onSubmit={runPhoto} onNewTask={() => { resetTask(); setPhotoInputKey(key => key + 1); }} onLoadHistory={loadHistory} onStop={async () => { if (!project) return; try { await api(`/api/agent-projects/${project.public_id}/cancel`, { method: "POST" }); setProject(await api<Project>(`/api/agent-projects/${project.public_id}`)); } catch (e) { setError(e instanceof Error ? e.message : ts("停止失败")); } }} onRefresh={async () => {
       if (!project) return;
       try {
         const updated = await api<Project>(`/api/agent-projects/${project.public_id}`);
@@ -1431,7 +1434,8 @@ export function AgentWorkspace({ code }: { code: string }) {
 
   if (isPhotoStudio) {
     const roles = (workflow.runtime_config as any)?.roles || [];
-    const photoInputBar = <PhotoStudioInputBar key={photoInputKey} defaultModelCode={workflow.runtime_config?.generation_model_code} error={error} featureTags={display.feature_tags} onSubmit={runPhoto} />;
+    const photoWorkflowFee = Math.max(0, Number(workflow.price_rule?.unit_price || 0));
+    const photoInputBar = <PhotoStudioInputBar key={photoInputKey} defaultModelCode={workflow.runtime_config?.generation_model_code} analysisModelCode={workflow.runtime_config?.analysis_model_code} workflowFee={photoWorkflowFee} error={error} featureTags={display.feature_tags} onSubmit={runPhoto} />;
     // 网格背景 overlay：落地页与项目页保持一致，避免提交后背景突变
     const photoGridOverlay = (
       <div className="pointer-events-none absolute inset-0 opacity-80 [background-image:linear-gradient(rgba(15,23,42,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.06)_1px,transparent_1px)] [background-size:40px_40px] dark:opacity-60 dark:[background-image:linear-gradient(rgba(232,121,249,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(232,121,249,.08)_1px,transparent_1px)]" />

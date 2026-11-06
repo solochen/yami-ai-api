@@ -23,8 +23,8 @@ func TestBuildTencentAudioPayloadSpeech(t *testing.T) {
 	}
 	payload := buildTencentAudioPayload("audio_minimax_speech_28_hd", "minimax-speech-2.8-hd", "你好世界", input)
 
-	if payload["model"] != "speech-2.8-hd" {
-		t.Fatalf("model = %v, 应优先用 model_version", payload["model"])
+	if payload["model"] != "minimax-speech-2.8-hd" {
+		t.Fatalf("model = %v, TokenHub 需要 minimax-speech-2.8-hd", payload["model"])
 	}
 	if payload["text"] != "你好世界" {
 		t.Fatalf("text = %v", payload["text"])
@@ -59,7 +59,7 @@ func TestBuildTencentAudioPayloadMusic(t *testing.T) {
 	}
 	payload := buildTencentAudioPayload("audio_minimax_music_26", "minimax-music-v3.0", "轻快的夏日午后", input)
 
-	if payload["model"] != "music-3.0" || payload["prompt"] != "轻快的夏日午后" {
+	if payload["model"] != "minimax-music-v3.0" || payload["prompt"] != "轻快的夏日午后" {
 		t.Fatalf("music payload = %#v", payload)
 	}
 	if payload["is_instrumental"] != true || payload["lyrics_optimizer"] != true {
@@ -73,6 +73,11 @@ func TestBuildTencentAudioPayloadMusic(t *testing.T) {
 		map[string]interface{}{"is_instrumental": false, "lyrics": "阳光洒在窗台"})
 	if withLyrics["lyrics"] != "阳光洒在窗台" {
 		t.Fatalf("lyrics = %v", withLyrics["lyrics"])
+	}
+	fromSlot := buildTencentAudioPayload("audio_minimax_music_26", "minimax-music-v3.0", "",
+		map[string]interface{}{"is_instrumental": true, "music_prompt": "舒缓钢琴"})
+	if fromSlot["prompt"] != "舒缓钢琴" {
+		t.Fatalf("music_prompt fallback = %#v", fromSlot["prompt"])
 	}
 }
 

@@ -2,7 +2,7 @@ export const REFERENCE_REPOSITORY_URL = "https://github.com/freestylefly/awesome
 export const REFERENCE_MANIFEST_URL =
   "https://raw.githubusercontent.com/freestylefly/awesome-gpt-image-2/main/data/cases.json";
 export const REFERENCE_API_PATH = "/api/gallery/references";
-const REFERENCE_API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const REFERENCE_API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 const REFERENCE_RAW_ROOT =
   "https://raw.githubusercontent.com/freestylefly/awesome-gpt-image-2/main/data";

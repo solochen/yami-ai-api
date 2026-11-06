@@ -10,6 +10,88 @@ import (
 	"github.com/starai/api/internal/service"
 )
 
+func TestCreativeAgentPromotesExplicitMediaOutOfChat(t *testing.T) {
+	image := map[string]interface{}{"intent": "chat", "action": "chat", "reply": "需要我生成吗？"}
+	if !creativeAgentPromoteExplicitMedia(image, "生成一张纯红色正方形图片，不要任何文字，比例1:1") {
+		t.Fatal("explicit image request stayed in chat")
+	}
+	if image["intent"] != "image" || image["action"] != "update" {
+		t.Fatalf("image plan = %#v", image)
+	}
+	speech := map[string]interface{}{"intent": "chat", "action": "chat", "reply": "你好"}
+	if !creativeAgentPromoteExplicitMedia(speech, "请立刻生成一段语音，朗读这句话：你好") {
+		t.Fatal("explicit speech request stayed in chat")
+	}
+	updates := speech["slot_updates"].(map[string]interface{})
+	if speech["intent"] != "speech" || updates["script"] != "你好" {
+		t.Fatalf("speech plan = %#v", speech)
+	}
+	music := map[string]interface{}{"intent": "chat", "action": "chat"}
+	if !creativeAgentPromoteExplicitMedia(music, "生成一段没有歌词的纯钢琴音乐") {
+		t.Fatal("explicit music request stayed in chat")
+	}
+	musicUpdates := music["slot_updates"].(map[string]interface{})
+	if music["intent"] != "music" || musicUpdates["is_instrumental"] != true || musicUpdates["music_prompt"] == "" {
+		t.Fatalf("music plan = %#v", music)
+	}
+	if creativeAgentSlotPrompt(map[string]interface{}{"music_prompt": "舒缓钢琴"}, "music") != "舒缓钢琴" {
+		t.Fatal("music prompt was not recovered from the style slot")
+	}
+	if creativeAgentSlotPrompt(map[string]interface{}{"media_type": "music", "music_prompt": "舒缓钢琴"}) != "舒缓钢琴" {
+		t.Fatal("music draft without an explicit media argument was treated as empty")
+	}
+	chat := map[string]interface{}{"intent": "chat", "action": "chat", "reply": "你好"}
+	if creativeAgentPromoteExplicitMedia(chat, "你好") || chat["intent"] != "chat" {
+		t.Fatal("plain chat was promoted into a media task")
+	}
+}
+
+func TestCreativeAgentPreferredTypeLocksGeneration(t *testing.T) {
+	plan := map[string]interface{}{"intent": "chat", "action": "chat", "reply": "好的"}
+	creativeAgentApplyPreferredType(plan, "video", "生成一张纯绿色图片")
+	if plan["intent"] != "video" || plan["slot_updates"].(map[string]interface{})["media_type"] != "video" {
+		t.Fatalf("custom video mode did not lock the generation: %#v", plan)
+	}
+	chat := map[string]interface{}{"intent": "chat", "action": "chat", "reply": "好"}
+	creativeAgentApplyPreferredType(chat, "video", "只回答一个字：好")
+	if chat["intent"] != "chat" {
+		t.Fatalf("a question was forced into video: %#v", chat)
+	}
+	req := creativeAgentPlanRequest{CheckOnly: true, VideoModelCode: "seedance-2-0"}
+	draft := &service.AgentDraft{Slots: map[string]interface{}{"media_type": "video", "model_code": "seedance-2-5"}, Sources: map[string]service.AgentSlotSource{"model_code": {Source: "selection"}}}
+	creativeAgentKeepSavedModelUnlessReplaced(&req, draft)
+	if req.VideoModelCode != "seedance-2-0" {
+		t.Fatalf("explicit custom model was replaced by the saved selection: %s", req.VideoModelCode)
+	}
+	empty := creativeAgentPlanRequest{CheckOnly: true}
+	creativeAgentKeepSavedModelUnlessReplaced(&empty, draft)
+	if empty.VideoModelCode != "seedance-2-5" {
+		t.Fatalf("omitted model did not keep the saved selection: %s", empty.VideoModelCode)
+	}
+}
+
+func TestCreativeAgentExplicitRemakeIgnoresNegation(t *testing.T) {
+	if creativeAgentExplicitRemake("不要复刻，生成一段普通介绍视频") || creativeAgentExplicitRemake("不是复刻，做原创短片") {
+		t.Fatal("negated remake wording must stay on the normal video plan")
+	}
+	if !creativeAgentExplicitRemake("帮我复刻这个爆款视频") || !creativeAgentExplicitRemake("不是复刻海报，请反推这段视频") {
+		t.Fatal("an explicit remake request must still route to the remake workflow")
+	}
+}
+
+func TestCreativeAgentWorkflowModelsOmitEmptySlots(t *testing.T) {
+	params := map[string]interface{}{}
+	applyCreativeAgentWorkflowModels(params, map[string]interface{}{"image_model_code": "", "speech_model_code": "speech_test", "analysis_model_code": "chat_test"}, "video_creation", "")
+	if _, ok := params["image_model_code"]; ok || params["narration_model_code"] != "speech_test" {
+		t.Fatalf("empty image slot was written: %#v", params)
+	}
+	pages := map[string]interface{}{}
+	applyCreativeAgentWorkflowModels(pages, map[string]interface{}{"image_model_code": "other"}, "content_image_post", "image_test")
+	if pages["image_model_code"] != "image_test" || pages["narration_model_code"] != nil {
+		t.Fatalf("content image model was not limited to the selected image model: %#v", pages)
+	}
+}
+
 func TestCreativeAgentIntentBoundary(t *testing.T) {
 	for _, text := range []string{
 		"这是什么？", "为什么又生成了", "解释一下", "先别生成视频，先写文案", "取消生成", "如何写好文案？", "解释这段脚本", "文章怎么写？", "视频提示词是什么？",

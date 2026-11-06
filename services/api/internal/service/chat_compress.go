@@ -137,10 +137,10 @@ func (s *ChatService) MaybeCompressContext(ctx context.Context, userID int64, in
 		return input
 	}
 	model, err := s.models.GetFullByCode(ctx, modelCode)
-	if err != nil || model == nil || !model.IsEnabled || model.Category != "chat" || model.Code == "multi_collab_chat" {
+	if err != nil || model == nil || !model.IsEnabled || !IsMultiCollabMember(model) {
 		return input
 	}
-	if main, err := s.ResolveInputModel(ctx, &input); err == nil && (main.Category == "multi_collab" || main.Code == "multi_collab_chat") {
+	if main, err := s.ResolveInputModel(ctx, &input); err == nil && IsMultiCollabModel(main) {
 		return input
 	}
 	hash := compressionHash(older)

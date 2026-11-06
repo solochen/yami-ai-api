@@ -379,3 +379,127 @@ func TestHybridSearchFallsBackToTavily(t *testing.T) {
 		t.Fatalf("hybrid fallback failed: results=%#v err=%v", results, err)
 	}
 }
+
+func TestTavilyPrimaryFallsBackToExaWhenTavilyFails(t *testing.T) {
+	tavily := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, `{"detail":"rate limited"}`, http.StatusTooManyRequests)
+	}))
+	defer tavily.Close()
+	exa := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"results":[{"title":"贵阳天气预报","url":"https://weather.example.com/guiyang","text":"贵阳今日气温 18 度","score":0.9}]}`))
+	}))
+	defer exa.Close()
+
+	previousTavily, previousExa := tavilySearchURL, exaSearchURL
+	tavilySearchURL, exaSearchURL = tavily.URL, exa.URL
+	defer func() { tavilySearchURL, exaSearchURL = previousTavily, previousExa }()
+
+	results, err := SearchWebWithOptions(context.Background(), WebSearchConfig{
+		Enabled: true, Provider: "tavily_primary", APIKey: "tavily-key", ExaAPIKey: "exa-key",
+		MaxResults: 5, TimeoutSec: 5,
+	}, WebSearchRequest{Query: "贵阳天气预报"})
+	if err != nil {
+		t.Fatalf("tavily_primary Exa fallback failed: %v", err)
+	}
+	if len(results) != 1 || results[0].Provider != "exa" || results[0].Title != "贵阳天气预报" {
+		t.Fatalf("expected the Exa layer to answer, got %#v", results)
+	}
+}
+
+func TestTavilyPrimaryFallsBackToSearXNGWhenTavilyIsEmpty(t *testing.T) {
+	tavily := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"results":[]}`))
+	}))
+	defer tavily.Close()
+	searx := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"results":[{"title":"贵阳天气预报","url":"https://weather.example.com/guiyang","content":"贵阳今日气温","score":0.8}]}`))
+	}))
+	defer searx.Close()
+
+	previousTavily := tavilySearchURL
+	tavilySearchURL = tavily.URL
+	defer func() { tavilySearchURL = previousTavily }()
+
+	results, err := SearchWebWithOptions(context.Background(), WebSearchConfig{
+		Enabled: true, Provider: "tavily_primary", APIKey: "tavily-key", BaseURL: searx.URL,
+		MaxResults: 5, TimeoutSec: 5,
+	}, WebSearchRequest{Query: "贵阳天气预报"})
+	if err != nil {
+		t.Fatalf("tavily_primary SearXNG fallback failed: %v", err)
+	}
+	if len(results) != 1 || results[0].Provider != "searxng" {
+		t.Fatalf("expected the SearXNG layer to answer, got %#v", results)
+	}
+}
+
+func TestTavilyPrimaryReportsEveryFailedLayer(t *testing.T) {
+	tavily := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "upstream down", http.StatusBadGateway)
+	}))
+	defer tavily.Close()
+	exa := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "quota exhausted", http.StatusForbidden)
+	}))
+	defer exa.Close()
+
+	previousTavily, previousExa := tavilySearchURL, exaSearchURL
+	tavilySearchURL, exaSearchURL = tavily.URL, exa.URL
+	defer func() { tavilySearchURL, exaSearchURL = previousTavily, previousExa }()
+
+	_, err := SearchWebWithOptions(context.Background(), WebSearchConfig{
+		Enabled: true, Provider: "tavily_primary", APIKey: "tavily-key", ExaAPIKey: "exa-key",
+		MaxResults: 5, TimeoutSec: 5,
+	}, WebSearchRequest{Query: "贵阳天气预报"})
+	if err == nil {
+		t.Fatal("expected an outage error when every layer fails")
+	}
+	if !errors.Is(err, ErrWebSearchUnavailable) {
+		t.Fatalf("expected ErrWebSearchUnavailable, got %v", err)
+	}
+	for _, want := range []string{"tavily", "exa"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error should name the failed layer %q, got %v", want, err)
+		}
+	}
+}
+
+func TestValidateTavilyPrimaryRequiresPrimaryKeyAndOneBackup(t *testing.T) {
+	if err := ValidateWebSearchConfig(WebSearchConfig{Enabled: true, Provider: "tavily_primary", ExaAPIKey: "exa-key"}); err == nil {
+		t.Fatal("expected a missing Tavily API key to be rejected")
+	}
+	if err := ValidateWebSearchConfig(WebSearchConfig{Enabled: true, Provider: "tavily_primary", APIKey: "tavily-key"}); err == nil {
+		t.Fatal("expected a missing backup layer to be rejected")
+	}
+	valid := []WebSearchConfig{
+		{Enabled: true, Provider: "tavily_primary", APIKey: "tavily-key", ExaAPIKey: "exa-key"},
+		{Enabled: true, Provider: "tavily_primary", APIKey: "tavily-key", BaseURL: "http://searxng:8080"},
+	}
+	for _, cfg := range valid {
+		if err := ValidateWebSearchConfig(cfg); err != nil {
+			t.Fatalf("expected %#v to validate, got %v", cfg, err)
+		}
+	}
+}
+
+// The admin test endpoint reports whether a backup layer answered. The mapping
+// must be exported to the handler because composite provider values would
+// otherwise always look like a fallback.
+func TestWebSearchPrimaryLayerMapping(t *testing.T) {
+	cases := map[string]string{
+		"tavily_primary": "tavily",
+		"hybrid":         "searxng",
+		"tavily":         "tavily",
+		"exa":            "exa",
+		"searxng":        "searxng",
+		"redfox":         "redfox",
+		"TAVILY_PRIMARY": "tavily",
+	}
+	for provider, want := range cases {
+		if got := WebSearchPrimaryLayer(provider); got != want {
+			t.Fatalf("WebSearchPrimaryLayer(%q) = %q, want %q", provider, got, want)
+		}
+	}
+}

@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: path.resolve(__dirname, "../.."),
+  ...(process.env.DEV_DIST_DIR ? { distDir: process.env.DEV_DIST_DIR } : {}),
   ...(process.env.NEXT_DISABLE_STANDALONE === "1" ? {} : { output: "standalone" as const }),
   transpilePackages: ["@starai/shared-types"],
   images: {

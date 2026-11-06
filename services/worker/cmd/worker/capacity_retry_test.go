@@ -28,8 +28,8 @@ func TestUpstreamCapacityLimitedDetection(t *testing.T) {
 	}
 }
 
-// OpenRouter 另一种拒法：单张请求的最高预估费用超过账户余额（与实扣无关）。
-// 这类错误重试无意义，必须给出「充额度/换便宜模型」的提示。
+// OpenRouter 另一种拒法：本次请求的最高预估费用超过账户余额（与实扣无关）。
+// 图片和视频都会这样拒绝，重试无意义，必须给出「充额度或降低规格」的提示。
 func TestUpstreamCreditsExhaustedDetection(t *testing.T) {
 	body := []byte(`{"error":{"message":"This request's maximum cost exceeds your available credits. Add credits, or request fewer images.","code":402}}`)
 	if got := classifyUpstreamCapacity(402, body); got != upstreamCapacityCredits {
@@ -41,5 +41,9 @@ func TestUpstreamCreditsExhaustedDetection(t *testing.T) {
 	}
 	if got := humanizeUpstreamFailure(`This request's maximum cost exceeds your available credits. Add credits, or request fewer images.`); !strings.HasPrefix(got, "上游额度不足") {
 		t.Fatalf("humanize 未输出额度不足: %s", got)
+	}
+	video := []byte(`{"error":{"message":"This request's maximum cost exceeds your available credits. Add credits, or request a shorter or lower-resolution video.","code":402}}`)
+	if got := classifyUpstreamCapacity(402, video); got != upstreamCapacityCredits {
+		t.Fatalf("视频额度不足未识别: %v", got)
 	}
 }

@@ -32,7 +32,7 @@ type WorkflowLike = {
   display_config?: {
     theme?: string;
     hero_tags?: string[];
-    toolbox?: { subtitle?: string; tags?: string[] };
+    toolbox?: { subtitle?: string; tags?: string[]; billing?: string };
   };
   runtime_config?: {
     agent_mode?: string;
@@ -149,7 +149,7 @@ function ThinkingBlock({ text, streaming }: { text: string; streaming: boolean }
 }
 
 export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
-  const { ts } = useI18n();
+  const { t, ts } = useI18n();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -187,6 +187,7 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
   const placeholder = (workflow.runtime_config?.input_placeholder as string | undefined)?.trim() || ts("输入你的需求，越具体越好");
   const disclaimer = (workflow.runtime_config?.disclaimer as string | undefined)?.trim() || "";
   const chatModelCode = (workflow.runtime_config?.chat_model_code as string | undefined)?.trim() || "";
+  const billingLabel = (workflow.display_config?.toolbox?.billing as string | undefined)?.trim() || t("workspace.tokenBilling");
   const maxInput = Number(workflow.runtime_config?.max_input_chars || DEFAULT_MAX_INPUT) || DEFAULT_MAX_INPUT;
   const quickPrompts = useMemo(() => {
     const raw = workflow.runtime_config?.quick_prompts;
@@ -635,7 +636,7 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white dark:bg-gray-950">
-      <header className="flex items-center gap-3 border-b border-gray-200/70 px-4 py-3 dark:border-white/10 md:px-6">
+      <header className="flex items-center gap-3 border-b border-gray-200/70 px-4 py-3 dark:border-white/10 md:px-6 lg:pr-48">
         <button
           type="button"
           onClick={() => setShowHistory((v) => !v)}
@@ -969,7 +970,7 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
                 rows={1}
                 placeholder={placeholder}
                 aria-label={placeholder}
-                className={`soft-input max-h-40 min-h-[44px] w-full resize-y px-3 py-2.5 text-sm ${overLimit ? "border-red-300 dark:border-red-500/40" : ""}`}
+                className={`soft-input block max-h-40 min-h-[44px] w-full resize-y px-3 py-2.5 text-sm ${overLimit ? "border-red-300 dark:border-red-500/40" : ""}`}
               />
               {charCount > maxInput * 0.8 ? (
                 <span className={`pointer-events-none absolute bottom-1.5 right-2 text-[10px] ${overLimit ? "text-red-500" : "text-gray-400"}`}>
@@ -1000,7 +1001,12 @@ export function PromptAgentWorkspace({ workflow }: { workflow: WorkflowLike }) {
             )}
           </div>
           <div className="mt-1.5 flex items-start justify-between gap-3">
-            <p className="text-[10px] leading-relaxed text-gray-400">{disclaimer}</p>
+            <div className="min-w-0 text-[10px] leading-relaxed text-gray-400">
+              <p>
+                {billingLabel} · {t("workspace.tokenBilling")} · <a className="underline underline-offset-2 hover:text-primary" href="/app/pricing">{t("workspace.viewPricing")}</a>
+              </p>
+              {disclaimer ? <p className="mt-0.5">{disclaimer}</p> : null}
+            </div>
             <p className="hidden shrink-0 text-[10px] text-gray-400 sm:block">{ts("Enter 发送 · Shift + Enter 换行")}</p>
           </div>
         </form>

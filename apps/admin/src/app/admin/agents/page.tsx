@@ -937,8 +937,8 @@ function readBool(map: Record<string, any> | undefined, key: string, fallback: b
   return typeof map?.[key] === "boolean" ? map[key] : fallback;
 }
 
-function typeFromRuntime(runtime: RuntimeConfig, category: string): GenerationType {
-  if (runtime.agent_mode === "creative_chat" || runtime.preset_code === "general_creative_agent" || runtime.generation_type === "mixed") return "creative_agent";
+function typeFromRuntime(runtime: RuntimeConfig, category: string, code = ""): GenerationType {
+  if (code === "general_creative_agent" || runtime.agent_mode === "creative_chat" || runtime.preset_code === "general_creative_agent" || runtime.generation_type === "mixed") return "creative_agent";
   if (runtime.agent_mode === "video_upscale" || runtime.preset_code === "video_upscale") return "video_upscale";
   if (runtime.agent_mode === "video_redraw" || runtime.preset_code === "video_redraw") return "video_redraw";
   if (runtime.agent_mode === "subtitle_remove" || runtime.preset_code === "subtitle_remove") return "subtitle_remove";
@@ -1009,7 +1009,9 @@ export default function AgentsAdminPage() {
 
   const setType = (type: GenerationType) => {
     const preset = TYPE_PRESETS[type];
-    setForm((prev) => ({
+    setForm((prev) => {
+      if (prev.code === "general_creative_agent") return prev;
+      return {
       ...prev,
       generation_type: type,
       generation_model_code: prev.generation_type === type ? prev.generation_model_code : "",
@@ -1020,7 +1022,7 @@ export default function AgentsAdminPage() {
       creative_scenes: normalizeScenes(prev.generation_type === type ? prev.creative_scenes : defaultScenes(type), type),
       ...preset.defaults,
       preset_override: undefined,
-    }));
+    }; });
   };
 
   const selectedDialogueModels = useMemo(
@@ -1049,7 +1051,7 @@ export default function AgentsAdminPage() {
 
   const openEdit = (w: Workflow) => {
     const runtime = w.runtime_config || {};
-    const type = typeFromRuntime(runtime, w.category);
+    const type = typeFromRuntime(runtime, w.category, w.code);
     const preset = TYPE_PRESETS[type];
     const systemWorkspace = runtime.system_workspace === true || runtime.agent_mode === "infinite_canvas";
     const inputCaps = runtime.input_capabilities || {};
@@ -1080,8 +1082,8 @@ export default function AgentsAdminPage() {
       analysis_model_code: runtime.analysis_model_code || "",
       fallback_model_code: runtime.fallback_model_code || "",
       generation_model_code: runtime.generation_model_code || "",
-      image_model_code: runtime.image_model_code || (systemWorkspace ? "" : "image_fast_v1"),
-      video_model_code: runtime.video_model_code || runtime.generation_model_code || (systemWorkspace ? "" : "video_demo_v1"),
+      image_model_code: runtime.image_model_code || (w.code === "general_creative_agent" || systemWorkspace ? "" : "image_fast_v1"),
+      video_model_code: w.code === "general_creative_agent" ? (runtime.video_model_code || "") : (runtime.video_model_code || runtime.generation_model_code || (systemWorkspace ? "" : "video_demo_v1")),
       speech_model_code: runtime.speech_model_code || "",
       music_model_code: runtime.music_model_code || "",
       narration_model_code: runtime.audio_model_code || runtime.narration_model_code || "",
@@ -1217,6 +1219,10 @@ export default function AgentsAdminPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
+    if (form.code.trim() === "general_creative_agent" && form.generation_type !== "creative_agent") {
+      setErr("Agent 通用智能体的类型已锁定。请关闭后重新打开，不要改成图片或视频工作流。");
+      return;
+    }
     if (!form.system_workspace && form.generation_type === "comic_drama" && (!form.analysis_model_code || !form.image_model_code || !form.video_model_code)) {
       setErr("请选择分析模型、图片模型和视频模型");
       return;
@@ -1431,7 +1437,8 @@ export default function AgentsAdminPage() {
 
           <div className="grid gap-6 p-6 xl:grid-cols-[1fr_360px]">
             <div className="space-y-6">
-              {!form.system_workspace && <section className="rounded-2xl border border-gray-100 p-4">
+              {form.code === "general_creative_agent" && <section className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm leading-6 text-amber-900">这条记录固定为「通用智能体」。类型不能改成电商图片或视频，否则会清空图片、视频、语音和音乐模型。</section>}
+              {!form.system_workspace && form.code !== "general_creative_agent" && <section className="rounded-2xl border border-gray-100 p-4">
                 <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-900"><Sparkles size={16} />选择智能体类型</div>
                 <div className="grid gap-3 md:grid-cols-2">
                   {(["image", "video", "video_upscale", "video_redraw", "subtitle_remove", "comic_drama", "novel_workshop", "photo_studio", "virtual_try_on"] as GenerationType[]).map((type) => {
@@ -1919,7 +1926,7 @@ export default function AgentsAdminPage() {
       <div className="grid gap-4">
         {paginatedItems.map((w) => {
           const runtime = w.runtime_config || {};
-          const type = typeFromRuntime(runtime, w.category);
+          const type = typeFromRuntime(runtime, w.category, w.code);
           const preset = TYPE_PRESETS[type];
           const isSystemWorkspace = runtime.system_workspace === true || runtime.agent_mode === "infinite_canvas";
           return (

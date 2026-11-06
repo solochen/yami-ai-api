@@ -1,0 +1,23 @@
+# Local Node development servers share port 3000. Only the host-side proxy
+# needs API and object storage on loopback; everything else uses Docker DNS.
+services:
+  web:
+    profiles: [production-preview]
+    ports: !reset []
+  admin:
+    profiles: [production-preview]
+    ports: !reset []
+  postgres:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  mock-new-api:
+    ports: !reset []
+  searxng:
+    ports: !reset []
+  api:
+    ports: !override
+      - "127.0.0.1:8080:8080"
+  minio:
+    ports: !override
+      - "127.0.0.1:9000:9000"

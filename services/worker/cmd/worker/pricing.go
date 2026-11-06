@@ -159,7 +159,7 @@ func workerProviderCostFromRoute(route workerModelRoute, input map[string]interf
 // workerChargeRouteProviderCost 组装收费明细：providerCost 是上游真实成本
 // （用于毛利审计），chargeCost 是用户应付的计价依据，两者可来自不同规则
 // （线路配了 user_price_rule 时）。
-func workerChargeRouteProviderCost(ctx context.Context, pool *pgxpool.Pool, providerCost, chargeCost float64, source string) (workerChargeBreakdown, error) {
+func workerChargeRouteProviderCost(ctx context.Context, pool *pgxpool.Pool, providerCost, chargeCost float64, source string, finalUserPrice bool) (workerChargeBreakdown, error) {
 	cfg := loadWorkerPricingConfig(ctx, pool)
 	if providerCost < 0 || (providerCost == 0 && source != "complimentary" && source != "local_free" && cfg.MissingCostPolicy == "block") {
 		return workerChargeBreakdown{}, errWorkerProviderCostMissing
@@ -168,7 +168,11 @@ func workerChargeRouteProviderCost(ctx context.Context, pool *pgxpool.Pool, prov
 	if err != nil {
 		return workerChargeBreakdown{}, err
 	}
-	user, err := workerCalculateCharge(chargeCost, cfg.GrossMarginPercent)
+	userMargin := cfg.GrossMarginPercent
+	if finalUserPrice {
+		userMargin = 0
+	}
+	user, err := workerCalculateCharge(chargeCost, userMargin)
 	if err != nil {
 		return workerChargeBreakdown{}, err
 	}
@@ -178,6 +182,11 @@ func workerChargeRouteProviderCost(ctx context.Context, pool *pgxpool.Pool, prov
 		Commission:   user.UserCharge - provider.ProviderCost,
 		Config:       cfg,
 	}, nil
+}
+
+func workerRouteUserPriceIsFinal(rule map[string]interface{}) bool {
+	final, _ := rule["user_price_is_final"].(bool)
+	return final
 }
 
 type workerSettlement struct {
@@ -221,6 +230,8 @@ type workflowProviderCostItem struct {
 	Source           string
 	RefID            string
 	ProviderCost     float64
+	UserCharge       float64
+	UserChargeFinal  bool
 	PromptTokens     int
 	CompletionTokens int
 	CachedTokens     int
@@ -241,10 +252,17 @@ type workflowProviderCostSummary struct {
 // than guessing or silently subsidizing the request.
 func workflowProviderCosts(ctx context.Context, pool *pgxpool.Pool, projectID int64) (workflowProviderCostSummary, error) {
 	summary := workflowProviderCostSummary{}
+	// A media task records its upstream cost twice: once on the task row and once
+	// on the model_route_attempts row keyed by the same request id (the task
+	// number). Counting both charged every image/video at exactly double the real
+	// upstream cost, so remember which request ids the attempt pass already
+	// covered and skip the matching task rows below.
+	coveredRequests := map[string]bool{}
 
 	llmRows, err := pool.Query(ctx, `
-		SELECT model_id, route_id, status, provider_cost,
-		       COALESCE(provider_cost_source,''), provider_cost_complete, request_id
+		SELECT latest.model_id, latest.route_id, latest.status, latest.provider_cost,
+		       COALESCE(latest.provider_cost_source,''), latest.provider_cost_complete, latest.request_id,
+	       COALESCE(task.type,''), COALESCE(task.actual_cost,0), COALESCE(task.input,'{}'::jsonb)
 		FROM (
 			SELECT DISTINCT ON (request_id)
 				model_id, route_id, status, provider_cost,
@@ -253,16 +271,19 @@ func workflowProviderCosts(ctx context.Context, pool *pgxpool.Pool, projectID in
 			WHERE workflow_project_id=$1
 			ORDER BY request_id, id DESC
 		) latest
-		ORDER BY id`, projectID)
+		LEFT JOIN tasks task ON task.task_no=latest.request_id
+		  AND task.workflow_project_id=$1 AND task.status='succeeded'
+		ORDER BY latest.id`, projectID)
 	if err != nil {
 		return summary, err
 	}
 	for llmRows.Next() {
 		var modelID, routeID *int64
-		var status, source, requestID string
-		var providerCost float64
+		var status, source, requestID, taskType string
+		var providerCost, taskUserCharge float64
 		var complete bool
-		if err := llmRows.Scan(&modelID, &routeID, &status, &providerCost, &source, &complete, &requestID); err != nil {
+		var taskInputRaw []byte
+		if err := llmRows.Scan(&modelID, &routeID, &status, &providerCost, &source, &complete, &requestID, &taskType, &taskUserCharge, &taskInputRaw); err != nil {
 			llmRows.Close()
 			return summary, err
 		}
@@ -288,8 +309,23 @@ func workflowProviderCosts(ctx context.Context, pool *pgxpool.Pool, projectID in
 		if routeID != nil {
 			item.RouteID = *routeID
 		}
+		if strings.EqualFold(taskType, "image") && taskUserCharge > 0 && routeID != nil {
+			var userPriceRaw []byte
+			if err := pool.QueryRow(ctx, `SELECT COALESCE(user_price_rule,'{}'::jsonb) FROM model_routes WHERE id=$1`, *routeID).Scan(&userPriceRaw); err == nil {
+				userPriceRule := map[string]interface{}{}
+				_ = json.Unmarshal(userPriceRaw, &userPriceRule)
+				if workerRouteUserPriceIsFinal(userPriceRule) {
+					item.UserCharge = taskUserCharge
+					item.UserChargeFinal = true
+					input := map[string]interface{}{}
+					_ = json.Unmarshal(taskInputRaw, &input)
+					item.ImageCount = int(workerBillingItemCount(input))
+				}
+			}
+		}
 		summary.ProviderCost += providerCost
 		summary.Items = append(summary.Items, item)
+		coveredRequests[requestID] = true
 	}
 	if err := llmRows.Err(); err != nil {
 		llmRows.Close()
@@ -318,6 +354,10 @@ func workflowProviderCosts(ctx context.Context, pool *pgxpool.Pool, projectID in
 			return summary, err
 		}
 		_ = status
+		if coveredRequests[taskNo] {
+			// Already billed through model_route_attempts.
+			continue
+		}
 		input := map[string]interface{}{}
 		_ = json.Unmarshal(inputRaw, &input)
 		if providerCost <= 0 && (strings.EqualFold(source, "complimentary") || strings.EqualFold(source, "local_free")) {
@@ -328,8 +368,7 @@ func workflowProviderCosts(ctx context.Context, pool *pgxpool.Pool, projectID in
 			summary.IncompleteCost = true
 			continue
 		}
-		summary.ProviderCost += providerCost
-		summary.Items = append(summary.Items, workflowProviderCostItem{
+		item := workflowProviderCostItem{
 			ModelID:      modelID,
 			RouteID:      routeID,
 			Source:       taskType,
@@ -337,7 +376,24 @@ func workflowProviderCosts(ctx context.Context, pool *pgxpool.Pool, projectID in
 			ProviderCost: providerCost,
 			ImageCount:   intAny(input["n"]),
 			VideoSeconds: workerDurationSeconds(input),
-		})
+		}
+		// Workflow media tasks intentionally defer wallet billing until the whole
+		// workflow settles. For official image pricing, use the route's public
+		// rule here so a cheaper private upstream lowers the margin instead of
+		// changing the user's quoted OpenAI price.
+		if strings.EqualFold(taskType, "image") && routeID > 0 {
+			var userPriceRaw []byte
+			if err := pool.QueryRow(ctx, `SELECT COALESCE(user_price_rule,'{}'::jsonb) FROM model_routes WHERE id=$1`, routeID).Scan(&userPriceRaw); err == nil {
+				userPriceRule := map[string]interface{}{}
+				_ = json.Unmarshal(userPriceRaw, &userPriceRule)
+				if workerRouteUserPriceIsFinal(userPriceRule) {
+					item.UserCharge = workerRouteProviderCostRule(userPriceRule, input, 0, 0, 0, 0)
+					item.UserChargeFinal = item.UserCharge > 0
+				}
+			}
+		}
+		summary.ProviderCost += providerCost
+		summary.Items = append(summary.Items, item)
 	}
 	if err := mediaRows.Err(); err != nil {
 		mediaRows.Close()
@@ -408,6 +464,11 @@ func chargeBillingWithSettlement(
 				return err
 			}
 		}
+		if settlement.RefType == "workflow" {
+			if err = releaseTerminalWorkflowFreeze(ctx, tx, userID, settlement.RefID); err != nil {
+				return err
+			}
+		}
 		return tx.Commit(ctx)
 	}
 	var balance, frozen float64
@@ -427,7 +488,9 @@ func chargeBillingWithSettlement(
 	_ = freezeAmount
 	newBalance := balance - settlement.UserCharge
 	newFrozen := frozen
-	if settlement.RefType != "workflow" {
+	if settlement.RefType == "workflow" {
+		newFrozen -= consumedWorkflowFreezeAmount(lockedAmount, settlement.UserCharge)
+	} else {
 		newFrozen -= lockedAmount
 	}
 	if newBalance < -1e-6 {
@@ -510,7 +573,44 @@ func chargeBillingWithSettlement(
 			return err
 		}
 	}
+	if settlement.RefType == "workflow" {
+		if err = releaseTerminalWorkflowFreeze(ctx, tx, userID, settlement.RefID); err != nil {
+			return err
+		}
+	}
 	return tx.Commit(ctx)
+}
+
+func consumedWorkflowFreezeAmount(lockedAmount, charge float64) float64 {
+	if lockedAmount <= 0 || charge <= 0 {
+		return 0
+	}
+	if charge < lockedAmount {
+		return charge
+	}
+	return lockedAmount
+}
+
+func releaseTerminalWorkflowFreeze(ctx context.Context, tx pgx.Tx, userID int64, refID string) error {
+	var status string
+	if err := tx.QueryRow(ctx, `SELECT status FROM workflow_projects WHERE public_id=$1 AND user_id=$2 FOR UPDATE`, refID, userID).Scan(&status); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	if status != "succeeded" && status != "failed" && status != "canceled" {
+		return nil
+	}
+	remaining, err := lockedFreezeAmount(ctx, tx, userID, "workflow", refID)
+	if err != nil || remaining <= 0 {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE wallets SET frozen_compute=GREATEST(frozen_compute-$1,0),updated_at=now() WHERE user_id=$2`, remaining, userID); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `UPDATE balance_freezes SET status='released',released_at=now() WHERE user_id=$1 AND ref_type='workflow' AND ref_id=$2 AND status='frozen'`, userID, refID)
+	return err
 }
 
 func chargeWorkflowWithSettlement(
@@ -549,13 +649,7 @@ func chargeWorkflowWithSettlement(
 	// The ledger is charged from the aggregate cost. Because both aggregate
 	// amounts are independently rounded upward, align the commission with the
 	// actual incremental user charge rather than allocating per item again.
-	deltaCommission := numericMicrosWorker(deltaCharge - deltaProvider)
-	if deltaCommission < 0 {
-		deltaCommission = 0
-	}
-	if deltaCommission > deltaCharge {
-		deltaCommission = deltaCharge
-	}
+	deltaCommission := signedMicrosWorker(deltaCharge - deltaProvider)
 	items := []workerSettlementItem{}
 	if deltaCharge > 0 || deltaProvider > 0 {
 		items = []workerSettlementItem{{
@@ -591,7 +685,7 @@ func validateWorkerSettlementItems(settlement workerSettlement) error {
 		if strings.TrimSpace(item.Source) == "" {
 			return fmt.Errorf("settlement item %d source is required", index)
 		}
-		if item.ProviderCost < 0 || item.UserCharge < 0 || item.Commission < 0 {
+		if item.ProviderCost < 0 || item.UserCharge < 0 {
 			return fmt.Errorf("settlement item %d contains a negative amount", index)
 		}
 		if math.Abs(item.UserCharge-item.ProviderCost-item.Commission) > 0.000001 {

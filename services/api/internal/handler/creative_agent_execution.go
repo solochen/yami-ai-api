@@ -79,6 +79,72 @@ func creativeAgentSpeechRequest(text string) bool {
 	return !creativeAgentGenerationProhibited(text) && regexp.MustCompile(`(?:转换成|转成|生成|制作|合成|朗读|读出|转为).{0,35}(?:音频|语音|配音)|(?:朗读|配音).{0,20}(?:文案|正文|这段|这份)`).MatchString(text)
 }
 
+func creativeAgentMusicRequest(text string) bool {
+	if creativeAgentGenerationProhibited(text) || creativeAgentSpeechRequest(text) || creativeAgentVideoRequest(text) || creativeAgentImageRequest(text) {
+		return false
+	}
+	return regexp.MustCompile(`(?:生成|制作|做成|合成|来一段|写一段).{0,40}(?:音乐|歌曲|钢琴曲)|纯音乐`).MatchString(text)
+}
+
+// creativeAgentApplyPreferredType locks an explicit generation request to the
+// type chosen in custom mode. Questions, writing, and cancelled requests stay chat.
+func creativeAgentApplyPreferredType(plan map[string]interface{}, preferred, text string) {
+	switch strings.ToLower(strings.TrimSpace(preferred)) {
+	case "image", "video", "speech", "music":
+		preferred = strings.ToLower(strings.TrimSpace(preferred))
+	default:
+		return
+	}
+	if creativeAgentTextOnly(text) || creativeAgentGenerationProhibited(text) || creativeAgentClarificationQuestion(text) || creativeAgentResearchOnly(text) {
+		return
+	}
+	if !creativeAgentMediaRequest(text) && !creativeAgentSpeechRequest(text) && !creativeAgentMusicRequest(text) {
+		return
+	}
+	if preferred == "image" && stringAny(plan["workflow_code"]) == "content_image_post" {
+		return
+	}
+	if stringAny(plan["intent"]) == preferred && strings.TrimSpace(stringAny(plan["workflow_code"])) == "" {
+		return
+	}
+	plan["intent"] = preferred
+	plan["action"] = "update"
+	plan["needs_confirm"] = true
+	delete(plan, "workflow_code")
+	updates, _ := plan["slot_updates"].(map[string]interface{})
+	if updates == nil {
+		updates = map[string]interface{}{}
+	}
+	updates["media_type"] = preferred
+	plan["slot_updates"] = updates
+}
+
+// creativeAgentExplicitMedia is the user's own generation request. A chat-shaped
+// model reply must not discard it.
+func creativeAgentExplicitMedia(text string) (string, bool) {
+	switch {
+	case creativeAgentSpeechRequest(text):
+		return "speech", true
+	case creativeAgentMusicRequest(text):
+		return "music", true
+	case creativeAgentContentImageWorkflowCue(text):
+		return "", false
+	case creativeAgentImageRequest(text):
+		return "image", true
+	case creativeAgentVideoRequest(text):
+		return "video", true
+	default:
+		return "", false
+	}
+}
+
+func creativeAgentSpokenText(text string) string {
+	if match := regexp.MustCompile(`(?:朗读|读出|配音)(?:一下|这段|这句话|下面这句话|以下内容)?[：:]\s*(.+)$`).FindStringSubmatch(strings.TrimSpace(text)); len(match) == 2 {
+		return strings.TrimSpace(match[1])
+	}
+	return strings.TrimSpace(text)
+}
+
 func creativeAgentGenerationProhibited(text string) bool {
 	return regexp.MustCompile(`^(取消|停止)|(?:先别|不要|不用|暂不|不需要)(再|继续|自动|立即|直接|现在|马上|帮我|去|先|\s)*(生成|制作|执行)`).MatchString(strings.TrimSpace(text))
 }
@@ -157,6 +223,15 @@ func (h *Handler) prepareCreativeAgentPlan(ctx context.Context, plan map[string]
 	return prepareCreativeAgentVideoPlan(plan, text, model)
 }
 
+// A negated mention such as "不要复刻" must not redirect a normal video plan.
+func creativeAgentExplicitRemake(text string) bool {
+	if !strings.Contains(text, "复刻") && !strings.Contains(text, "反推") {
+		return false
+	}
+	withoutNegation := regexp.MustCompile(`(?:不要|不用|别|无需|不需要|禁止)(?:再|去|帮我)?(?:复刻|反推)|不是(?:要)?(?:复刻|反推)`).ReplaceAllString(text, "")
+	return strings.Contains(withoutNegation, "复刻") || strings.Contains(withoutNegation, "反推")
+}
+
 func prepareCreativeAgentVideoPlan(plan map[string]interface{}, text string, model *service.ModelFull) map[string]interface{} {
 	params, _ := plan["params"].(map[string]interface{})
 	params = copyStringMap(params)
@@ -187,7 +262,7 @@ func prepareCreativeAgentVideoPlan(plan map[string]interface{}, text string, mod
 		if creativeAgentUsesCanvasWorkflow(requestedWorkflow) && requestedWorkflow != "content_image_post" {
 			plan["workflow_code"] = requestedWorkflow
 		}
-		if strings.Contains(text, "复刻") || strings.Contains(text, "反推") {
+		if creativeAgentExplicitRemake(text) {
 			plan["workflow_code"] = "one_click_viral_remake"
 		}
 		params["storyboard_grid"], params["segment_duration_sec"], params["_mode"] = count, seconds, "auto"

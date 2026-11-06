@@ -339,65 +339,89 @@ func processImageTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token st
 	selectedOK := false
 	// 仅多线路时启用自动切换/熔断降级；单线路保持旧的直连行为。
 	poolEnabled := len(routes) > 1
-routeLoop:
-	for _, route := range routes {
-		if poolEnabled && !acquireWorkerRouteProbe(ctx, pool, route) {
-			continue
-		}
-		if route.ID > 0 {
-			_, _ = pool.Exec(ctx, `UPDATE tasks SET route_id=$1,updated_at=now() WHERE task_no=$2`, route.ID, p.TaskNo)
-		}
-		// 迭代上限额外放开容量重试的次数：普通失败都会 break，只有「并发/额度不足」
-		// 需要比线路 MaxRetries 多试几次，等在途请求结清。
-		for retry := 0; retry <= route.MaxRetries+maxUpstreamCapacityRetries; retry++ {
-			if attempt >= maxWorkerRouteAttempts {
-				break routeLoop
-			}
-			attempt++
-			started := time.Now()
-			candidate, callErr := executeWorkerGenerationAttempt(ctx, pool, p, route, isVideo, isAudio, isImage, prompt)
-			latency := int(time.Since(started).Milliseconds())
-			if callErr == nil && candidate.StatusCode < 400 && len(candidate.ResultData) == 0 {
-				candidate.ResultData, candidate.UpstreamTaskID = parseUpstreamMedia(candidate.ResponseBody)
-				if len(candidate.ResultData) == 0 && candidate.UpstreamTaskID == "" {
-					callErr = fmt.Errorf("upstream returned no usable result")
-				}
-			}
-			if callErr == nil && candidate.StatusCode < 400 {
-				selected = candidate
-				selectedOK = true
-				markWorkerRouteSuccess(ctx, pool, route.ID)
-				logWorkerRouteAttempt(ctx, pool, p.TaskNo, p.ModelID, route.ID, attempt, "success", candidate.StatusCode, latency)
-				break
-			}
-			lastRouteErr = callErr
-			if callErr == nil {
-				lastRouteErr = fmt.Errorf("upstream HTTP %d: %s", candidate.StatusCode, upstreamErrorMessage(candidate.ResponseBody))
-			}
-			// 上游按「在途请求总额度」限流：并发打满时部分请求会被拒。
-			// 这是典型的并发不足（不是参数错误），退避重试比直接失败更有意义。
-			// 注意：账户额度不足以覆盖本次最高预估费用时重试无意义，直接给出充值提示。
-			if kind := classifyUpstreamCapacity(candidate.StatusCode, candidate.ResponseBody); callErr == nil && kind != upstreamCapacityNone {
-				logWorkerRouteAttempt(ctx, pool, p.TaskNo, p.ModelID, route.ID, attempt, "capacity", candidate.StatusCode, latency)
-				if kind == upstreamCapacityConcurrency && retry < maxUpstreamCapacityRetries && waitWorkerCapacityRetry(ctx, retry) {
+	if isVideo {
+		var existingUpstream string
+		var existingRoute int64
+		if err := pool.QueryRow(ctx, `SELECT coalesce(upstream_task_id,''), coalesce(route_id,0) FROM tasks WHERE task_no=$1 AND status='running'`, p.TaskNo).Scan(&existingUpstream, &existingRoute); err == nil && existingUpstream != "" {
+			for _, route := range routes {
+				if existingRoute != 0 && route.ID != existingRoute {
 					continue
 				}
-				return failTask(ctx, pool, p, "MODEL_PROVIDER_ERROR", upstreamCapacityMessage(kind))
+				selected = workerGenerationAttemptResult{
+					Route: route, RuntimeRule: route.RuntimeRule, Connection: route.Connection,
+					Endpoint: route.Endpoint, UpstreamModel: route.UpstreamModel,
+					StatusCode: 200, UpstreamTaskID: existingUpstream,
+				}
+				selectedOK = true
+				log.Printf("Task %s resume upstream id=%s route=%d without a new provider request", p.TaskNo, existingUpstream, route.ID)
+				break
 			}
-			if callErr == nil && !workerStatusCanFailover(candidate.StatusCode) {
-				logWorkerRouteAttempt(ctx, pool, p.TaskNo, p.ModelID, route.ID, attempt, "rejected", candidate.StatusCode, latency)
-				return failTask(ctx, pool, p, "MODEL_PROVIDER_ERROR", upstreamErrorMessage(candidate.ResponseBody))
+			if !selectedOK {
+				return failTask(ctx, pool, p, "MODEL_PROVIDER_ERROR", "已提交的上游视频任务无法在当前线路恢复，已停止重试以免重复生成")
 			}
-			markWorkerRouteFailure(ctx, pool, route.ID, poolEnabled)
-			logWorkerRouteAttempt(ctx, pool, p.TaskNo, p.ModelID, route.ID, attempt, "failed", candidate.StatusCode, latency)
-			log.Printf("Task %s route %d failed status=%d: %s", p.TaskNo, route.ID, candidate.StatusCode, truncateText(fmt.Sprint(lastRouteErr), 800))
-			if retry < route.MaxRetries && workerShouldRetrySameRoute(callErr, candidate.StatusCode, poolEnabled) && waitWorkerRouteRetry(ctx, retry) {
+		}
+	}
+	if !selectedOK {
+	routeLoop:
+		for _, route := range routes {
+			if poolEnabled && !acquireWorkerRouteProbe(ctx, pool, route) {
 				continue
 			}
-			break
-		}
-		if selectedOK {
-			break
+			if route.ID > 0 {
+				_, _ = pool.Exec(ctx, `UPDATE tasks SET route_id=$1,updated_at=now() WHERE task_no=$2`, route.ID, p.TaskNo)
+			}
+			// 迭代上限额外放开容量重试的次数：普通失败都会 break，只有「并发/额度不足」
+			// 需要比线路 MaxRetries 多试几次，等在途请求结清。
+			for retry := 0; retry <= route.MaxRetries+maxUpstreamCapacityRetries; retry++ {
+				if attempt >= maxWorkerRouteAttempts {
+					break routeLoop
+				}
+				attempt++
+				started := time.Now()
+				candidate, callErr := executeWorkerGenerationAttempt(ctx, pool, p, route, isVideo, isAudio, isImage, prompt)
+				latency := int(time.Since(started).Milliseconds())
+				if callErr == nil && candidate.StatusCode < 400 && len(candidate.ResultData) == 0 {
+					candidate.ResultData, candidate.UpstreamTaskID = parseUpstreamMedia(candidate.ResponseBody)
+					if len(candidate.ResultData) == 0 && candidate.UpstreamTaskID == "" {
+						callErr = fmt.Errorf("upstream returned no usable result")
+					}
+				}
+				if callErr == nil && candidate.StatusCode < 400 {
+					selected = candidate
+					selectedOK = true
+					markWorkerRouteSuccess(ctx, pool, route.ID)
+					logWorkerRouteAttempt(ctx, pool, p.TaskNo, p.ModelID, route.ID, attempt, "success", candidate.StatusCode, latency)
+					break
+				}
+				lastRouteErr = callErr
+				if callErr == nil {
+					lastRouteErr = fmt.Errorf("upstream HTTP %d: %s", candidate.StatusCode, upstreamErrorMessage(candidate.ResponseBody))
+				}
+				// 上游按「在途请求总额度」限流：并发打满时部分请求会被拒。
+				// 这是典型的并发不足（不是参数错误），退避重试比直接失败更有意义。
+				// 注意：账户额度不足以覆盖本次最高预估费用时重试无意义，直接给出充值提示。
+				if kind := classifyUpstreamCapacity(candidate.StatusCode, candidate.ResponseBody); callErr == nil && kind != upstreamCapacityNone {
+					logWorkerRouteAttempt(ctx, pool, p.TaskNo, p.ModelID, route.ID, attempt, "capacity", candidate.StatusCode, latency)
+					if kind == upstreamCapacityConcurrency && retry < maxUpstreamCapacityRetries && waitWorkerCapacityRetry(ctx, retry) {
+						continue
+					}
+					return failTask(ctx, pool, p, "MODEL_PROVIDER_ERROR", upstreamCapacityMessage(kind))
+				}
+				if callErr == nil && !workerStatusCanFailover(candidate.StatusCode) {
+					logWorkerRouteAttempt(ctx, pool, p.TaskNo, p.ModelID, route.ID, attempt, "rejected", candidate.StatusCode, latency)
+					return failTask(ctx, pool, p, "MODEL_PROVIDER_ERROR", upstreamErrorMessage(candidate.ResponseBody))
+				}
+				markWorkerRouteFailure(ctx, pool, route.ID, poolEnabled)
+				logWorkerRouteAttempt(ctx, pool, p.TaskNo, p.ModelID, route.ID, attempt, "failed", candidate.StatusCode, latency)
+				log.Printf("Task %s route %d failed status=%d: %s", p.TaskNo, route.ID, candidate.StatusCode, truncateText(fmt.Sprint(lastRouteErr), 800))
+				if retry < route.MaxRetries && workerShouldRetrySameRoute(callErr, candidate.StatusCode, poolEnabled) && waitWorkerRouteRetry(ctx, retry) {
+					continue
+				}
+				break
+			}
+			if selectedOK {
+				break
+			}
 		}
 	}
 	if !selectedOK {
@@ -415,9 +439,16 @@ routeLoop:
 
 	usage := upstreamUsageFromBody(respBody)
 	if !(isImage && isVideoImageAPI(endpoint, newAPIModel)) {
-		resultData, upstreamID = parseUpstreamMedia(respBody)
+		parsedData, parsedID := parseUpstreamMedia(respBody)
+		resultData = parsedData
+		if parsedID != "" {
+			upstreamID = parsedID
+		}
 		if upstreamID != "" {
 			pool.Exec(ctx, `UPDATE tasks SET upstream_task_id=$1, updated_at=now() WHERE task_no=$2`, upstreamID, p.TaskNo)
+		}
+		if len(resultData) == 0 && upstreamID != "" && isTencentAudioAdapter(runtimeRule) {
+			return failTask(ctx, pool, p, "MODEL_PROVIDER_ERROR", "上游未返回音频，已停止按请求编号轮询")
 		}
 		if len(resultData) == 0 && upstreamID != "" {
 			pollCfg := parsePollConfig(runtimeRule, endpoint)
@@ -456,6 +487,16 @@ routeLoop:
 	var estimated float64
 	pool.QueryRow(ctx, `SELECT id, estimated_cost FROM tasks WHERE task_no=$1`, p.TaskNo).Scan(&taskID, &estimated)
 	billingInput := inputWithActualUpstreamUsage(p.Input, usage)
+	if isImage && usage.ImageOutputTokens <= 0 {
+		if estimated := workerEstimatedImageOutputTokensForRequest(selected.Route.UserPriceRule, billingInput); estimated > 0 {
+			billingInput = mergeWorkerMaps(billingInput, map[string]interface{}{
+				"_estimated_image_output_tokens": float64(estimated),
+			})
+			if intAny(billingInput["_estimated_input_tokens"]) <= 0 {
+				billingInput["_estimated_input_tokens"] = float64(workerTextTokenEstimate(stringAny(billingInput["prompt"])))
+			}
+		}
+	}
 	costSource := workerRouteCostSource(selected.Route)
 	providerCost, costComplete := workerProviderCostFromRoute(selected.Route, billingInput, usage.PromptTokens, usage.OutputTokens, 0, 0)
 	usd := usage.CostUSD
@@ -474,7 +515,7 @@ routeLoop:
 	if len(selected.Route.UserPriceRule) > 0 {
 		chargeCost = workerRouteProviderCostRule(selected.Route.UserPriceRule, billingInput, usage.PromptTokens, usage.OutputTokens, 0, 0)
 	}
-	charge, err := workerChargeRouteProviderCost(ctx, pool, providerCost, chargeCost, costSource)
+	charge, err := workerChargeRouteProviderCost(ctx, pool, providerCost, chargeCost, costSource, workerRouteUserPriceIsFinal(selected.Route.UserPriceRule))
 	if err != nil {
 		message := "上游未返回可核验成本，已停止扣费：" + err.Error()
 		_, _ = pool.Exec(ctx,
@@ -603,7 +644,7 @@ routeLoop:
 		if newAPIModel != "" {
 			audioOutput["upstream_model"] = newAPIModel
 		}
-		if timing, ok := p.Input["_speech_timing"].(map[string]interface{}); ok {
+		if timing, ok := p.Input["_speech_timing"].(map[string]interface{}); ok && floatAny(timing["duration"]) > 0 {
 			timed, err := finalizeTimedSpeech(ctx, p.TaskNo, audioURL, timing, stringAny(p.Input["format"]))
 			if err != nil {
 				preserved, _ := json.Marshal(timed)
@@ -695,7 +736,8 @@ routeLoop:
 		}
 		return nil
 	}); err != nil {
-		return fmt.Errorf("task %s billing/finalize: %w", p.TaskNo, err)
+		log.Printf("Task %s billing/finalize failed without retrying upstream: %v", p.TaskNo, err)
+		return failTask(ctx, pool, p, "BILLING_SETTLEMENT_FAILED", "费用结算失败，已停止重试，避免重复请求上游")
 	}
 
 	if boolInput(p.Input, "_product_refine") && boolInput(p.Input, "_skip_billing") {
@@ -1195,15 +1237,35 @@ func workerRouteProviderCostBase(route workerModelRoute, input map[string]interf
 	}
 	switch typeName {
 	case "per_token":
-		if !hasPositive("input_cost_per_m", "output_cost_per_m", "cache_read_cost_per_m", "cache_write_cost_per_m", "audio_input_cost_per_m", "audio_output_cost_per_m") {
+		if !hasPositive("input_cost_per_m", "text_input_cost_per_m", "image_input_cost_per_m", "output_cost_per_m", "image_output_cost_per_m", "text_output_cost_per_m", "cache_read_cost_per_m", "text_cache_read_cost_per_m", "cache_write_cost_per_m", "audio_input_cost_per_m", "audio_output_cost_per_m") {
 			return 0
 		}
 		inputCost := value("input_cost_per_m")
+		textInputCost := value("text_input_cost_per_m")
+		if textInputCost <= 0 {
+			textInputCost = inputCost
+		}
+		imageInputCost := value("image_input_cost_per_m")
+		if imageInputCost <= 0 {
+			imageInputCost = inputCost
+		}
+		imageOutputCost := value("image_output_cost_per_m")
+		if imageOutputCost <= 0 {
+			imageOutputCost = value("output_cost_per_m")
+		}
+		textOutputCost := value("output_cost_per_m")
+		if _, exists := route.CostRule["text_output_cost_per_m"]; exists {
+			textOutputCost = value("text_output_cost_per_m")
+		}
 		audioInputCost := value("audio_input_cost_per_m")
 		audioOutputCost := value("audio_output_cost_per_m")
 		cacheReadCost := value("cache_read_cost_per_m")
 		if cacheReadCost <= 0 {
 			cacheReadCost = inputCost
+		}
+		textCacheReadCost := value("text_cache_read_cost_per_m")
+		if textCacheReadCost <= 0 {
+			textCacheReadCost = cacheReadCost
 		}
 		cacheWriteCost := value("cache_write_cost_per_m")
 		if cacheWriteCost <= 0 {
@@ -1217,6 +1279,9 @@ func workerRouteProviderCostBase(route workerModelRoute, input map[string]interf
 		}
 		audioInputTokens := intAny(firstNonNil(input["_actual_audio_input_tokens"], input["audio_input_tokens"], input["estimated_audio_input_tokens"]))
 		audioOutputTokens := intAny(firstNonNil(input["_actual_audio_output_tokens"], input["audio_output_tokens"], input["estimated_audio_output_tokens"]))
+		imageInputTokens := intAny(firstNonNil(input["_actual_image_input_tokens"], input["image_input_tokens"], input["estimated_image_input_tokens"]))
+		imageOutputTokens := intAny(firstNonNil(input["_actual_image_output_tokens"], input["_estimated_image_output_tokens"]))
+		imageOutputIncluded, _ := input["_actual_image_output_tokens_included"].(bool)
 		if audioInputTokens < 0 {
 			audioInputTokens = 0
 		}
@@ -1226,6 +1291,16 @@ func workerRouteProviderCostBase(route workerModelRoute, input map[string]interf
 		if promptTokens <= 0 {
 			// 上游未上报用量时回退到任务输入里的估算值（音频类为精确字符数）。
 			promptTokens = intAny(firstNonNil(input["_estimated_input_tokens"], input["estimated_input_tokens"]))
+		}
+		if outputTokens <= 0 {
+			if imageOutputIncluded {
+				outputTokens = imageOutputTokens
+			} else {
+				outputTokens = intAny(input["_estimated_output_tokens"])
+			}
+		}
+		if imageOutputTokens <= 0 {
+			imageOutputTokens = workerEstimatedImageOutputTokens(route.CostRule, input)
 		}
 		if promptTokens <= 0 && audioInputTokens > 0 {
 			promptTokens = audioInputTokens
@@ -1239,13 +1314,41 @@ func workerRouteProviderCostBase(route workerModelRoute, input map[string]interf
 		if audioOutputTokens > outputTokens {
 			audioOutputTokens = outputTokens
 		}
-		textPromptTokens := promptTokens - audioInputTokens
-		textOutputTokens := outputTokens - audioOutputTokens
-		if cacheReadTokens+cacheWriteTokens > textPromptTokens {
-			cacheReadTokens, cacheWriteTokens = 0, 0
+		if imageOutputIncluded {
+			if imageOutputTokens < 0 {
+				imageOutputTokens = 0
+			}
+			availableImageOutputTokens := outputTokens - audioOutputTokens
+			if imageOutputTokens > availableImageOutputTokens {
+				imageOutputTokens = availableImageOutputTokens
+			}
 		}
-		uncached := textPromptTokens - cacheReadTokens - cacheWriteTokens
-		return (float64(uncached)*inputCost + float64(cacheReadTokens)*cacheReadCost + float64(cacheWriteTokens)*cacheWriteCost + float64(textOutputTokens)*value("output_cost_per_m") + float64(audioInputTokens)*audioInputCost + float64(audioOutputTokens)*audioOutputCost) / 1_000_000
+		if imageInputTokens < 0 {
+			imageInputTokens = 0
+		}
+		availableImageTokens := promptTokens - audioInputTokens
+		if imageInputTokens > availableImageTokens {
+			imageInputTokens = availableImageTokens
+		}
+		textPromptTokens := promptTokens - audioInputTokens
+		textPromptTokens -= imageInputTokens
+		textOutputTokens := outputTokens - audioOutputTokens
+		if imageOutputIncluded {
+			textOutputTokens -= imageOutputTokens
+		}
+		if textOutputTokens < 0 {
+			textOutputTokens = 0
+		}
+		if cacheWriteTokens > textPromptTokens {
+			cacheWriteTokens = textPromptTokens
+		}
+		textCacheReadTokens := cacheReadTokens
+		if textCacheReadTokens > textPromptTokens-cacheWriteTokens {
+			textCacheReadTokens = textPromptTokens - cacheWriteTokens
+		}
+		imageCacheReadTokens := cacheReadTokens - textCacheReadTokens
+		uncachedText := textPromptTokens - textCacheReadTokens - cacheWriteTokens
+		return (float64(uncachedText)*textInputCost + float64(imageInputTokens)*imageInputCost + float64(textCacheReadTokens)*textCacheReadCost + float64(imageCacheReadTokens)*cacheReadCost + float64(cacheWriteTokens)*cacheWriteCost + float64(imageOutputTokens)*imageOutputCost + float64(textOutputTokens)*textOutputCost + float64(audioInputTokens)*audioInputCost + float64(audioOutputTokens)*audioOutputCost) / 1_000_000
 	case "per_image", "per_request":
 		if value("unit_cost") <= 0 && !hasPositiveMap("unit_cost_by_size") && !hasPositiveMap("unit_cost_by_resolution") && !hasPositiveMap("unit_cost_by_variant") {
 			return 0
@@ -1371,7 +1474,14 @@ func executeWorkerGenerationAttempt(ctx context.Context, pool *pgxpool.Pool, p I
 		if endpoint == "" {
 			endpoint = "/v1/video/generations"
 		}
-		if isOpenRouterVideoAdapter(route.RuntimeRule) {
+		if isQiniuVideoAdapter(route.RuntimeRule) {
+			// 七牛 Fal 队列的端点随生成模式变化，需在构建请求体时一并决定。
+			qiniuEndpoint, qiniuPayload := buildQiniuVideoRequest(ctx, upstreamModel, p.ModelCode, prompt, route.RuntimeRule, p.Input)
+			if qiniuEndpoint != "" {
+				endpoint = qiniuEndpoint
+			}
+			body, _ = json.Marshal(qiniuPayload)
+		} else if isOpenRouterVideoAdapter(route.RuntimeRule) {
 			body, _ = json.Marshal(buildOpenRouterVideoPayload(ctx, upstreamModel, p.ModelCode, prompt, route.RuntimeRule, p.Input))
 		} else {
 			body, _ = json.Marshal(videoparams.BuildUpstreamVideoPayload(p.ModelCode, upstreamModel, route.RuntimeRule, extraParams, p.Input))
@@ -1908,6 +2018,228 @@ func buildOpenRouterVideoPayload(ctx context.Context, upstreamModel, modelCode, 
 	return payload
 }
 
+// ---------------------------------------------------------------------------
+// 七牛云（Modelink / api.qnaigc.com）视频适配器
+//
+// 七牛的视频生成走 Fal 格式队列协议：
+//   创建 POST /queue/<vendor>/<model>/<op>          Authorization: Key {api_key}
+//   查询 GET  /queue/<vendor>/<model>/requests/{id}/status
+// 创建响应返回 {status, request_id, status_url, ...}，Worker 的
+// upstreamPollPath 会自动采用其中的 status_url，因此 poll_path 仅作兜底。
+//
+// 与 OpenRouter 的差异：
+//   1. 端点随「文生视频 / 图生视频 / 参考生视频」变化，无法写死在 route.endpoint，
+//      因此由 runtime_rule.upstream.endpoints 提供模式到路径的映射；
+//   2. 首帧字段名各厂商不同（kling 用 start_image_url、vidu/minimax 用 image_url）；
+//   3. minimax 的分辨率档位是大写 2K/768P。
+// ---------------------------------------------------------------------------
+
+func isQiniuVideoAdapter(runtimeRule map[string]interface{}) bool {
+	upstream, _ := runtimeRule["upstream"].(map[string]interface{})
+	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(upstream["adapter"])), "qiniu_video")
+}
+
+func qiniuUpstreamConfig(runtimeRule map[string]interface{}) map[string]interface{} {
+	upstream, _ := runtimeRule["upstream"].(map[string]interface{})
+	return upstream
+}
+
+// qiniuVideoModeKey 把平台参数归一成 endpoints 映射里的模式键。
+func qiniuVideoModeKey(input map[string]interface{}) string {
+	referenceCount := len(referenceImageSources(input["reference_images"])) +
+		len(referenceImageSources(input["reference_videos"]))
+	first := strings.TrimSpace(fmt.Sprint(input["first_frame"]))
+	last := strings.TrimSpace(fmt.Sprint(input["last_frame"]))
+	hasFirst := first != "" && first != "<nil>"
+	hasLast := last != "" && last != "<nil>"
+
+	mode := strings.ToLower(strings.TrimSpace(fmt.Sprint(input["generation_mode"])))
+	if mode == "<nil>" {
+		mode = ""
+	}
+	switch mode {
+	case "reference", "image", "video", "image_audio", "image_video", "video_audio", "image_video_audio":
+		if referenceCount > 0 {
+			return "reference"
+		}
+	case "first_last":
+		if hasFirst && hasLast {
+			return "first_last"
+		}
+	case "first_frame", "last_frame":
+		if hasFirst || hasLast {
+			return "first_frame"
+		}
+	case "text", "":
+		// 落到下面的结构判断
+	default:
+		if referenceCount > 0 {
+			return "reference"
+		}
+	}
+	if referenceCount > 0 {
+		return "reference"
+	}
+	if hasFirst && hasLast {
+		return "first_last"
+	}
+	if hasFirst || hasLast {
+		return "first_frame"
+	}
+	return "text"
+}
+
+func qiniuVideoEndpoint(upstream map[string]interface{}, modeKey string) string {
+	endpoints, _ := upstream["endpoints"].(map[string]interface{})
+	if endpoints == nil {
+		return ""
+	}
+	pick := func(key string) string {
+		if raw, ok := endpoints[key].(string); ok {
+			if trimmed := strings.TrimSpace(raw); trimmed != "" {
+				return trimmed
+			}
+		}
+		return ""
+	}
+	if path := pick(modeKey); path != "" {
+		return path
+	}
+	// 首尾帧退化到首帧端点；参考生视频退化到文生视频。
+	switch modeKey {
+	case "first_last":
+		if path := pick("first_frame"); path != "" {
+			return path
+		}
+	case "reference":
+		if path := pick("text"); path != "" {
+			return path
+		}
+	}
+	return pick("text")
+}
+
+// qiniuVideoResolution 归一化分辨率档位：minimax 需要大写 2K/768P，
+// 其余厂商使用小写 480p/540p/720p/1080p。
+func qiniuVideoResolution(family string, input map[string]interface{}) string {
+	raw := strings.TrimSpace(fmt.Sprint(input["resolution"]))
+	if raw == "<nil>" {
+		raw = ""
+	}
+	lower := strings.ToLower(raw)
+	if family != "minimax" {
+		return lower
+	}
+	switch lower {
+	case "", "2k", "1080p":
+		return "2K"
+	case "768p", "720p":
+		return "768P"
+	case "480p":
+		return "480P"
+	}
+	return raw
+}
+
+func buildQiniuVideoRequest(
+	ctx context.Context,
+	upstreamModel, modelCode, prompt string,
+	runtimeRule, input map[string]interface{},
+) (string, map[string]interface{}) {
+	upstream := qiniuUpstreamConfig(runtimeRule)
+	modeKey := qiniuVideoModeKey(input)
+	endpoint := qiniuVideoEndpoint(upstream, modeKey)
+
+	family := strings.ToLower(strings.TrimSpace(fmt.Sprint(upstream["family"])))
+	if family == "<nil>" {
+		family = ""
+	}
+
+	model := strings.TrimSpace(upstreamModel)
+	if model == "" {
+		model = modelCode
+	}
+
+	payload := map[string]interface{}{}
+	// videoparams.SanitizeUpstreamPayload 默认会删掉 duration（平台内部字段），
+	// 七牛的 Fal 队列接口确实需要 duration，故显式保留。
+	payload["_preserve_video_params"] = true
+	if strings.TrimSpace(prompt) != "" {
+		payload["prompt"] = prompt
+	}
+	if duration := intAny(input["duration"]); duration > 0 {
+		payload["duration"] = duration
+	}
+	if ratio := strings.TrimSpace(fmt.Sprint(input["aspect_ratio"])); ratio != "" && ratio != "<nil>" {
+		payload["aspect_ratio"] = ratio
+	}
+	if resolution := qiniuVideoResolution(family, input); resolution != "" {
+		payload["resolution"] = resolution
+	}
+
+	firstFrame := qiniuFrameURL(ctx, input["first_frame"])
+	lastFrame := qiniuFrameURL(ctx, input["last_frame"])
+	references := qiniuReferenceURLs(ctx, input)
+
+	switch family {
+	case "kling", "kling4":
+		// 可灵 Fal：首帧 start_image_url、尾帧 end_image_url。
+		if modeKey == "first_frame" || modeKey == "first_last" {
+			if firstFrame != "" {
+				payload["start_image_url"] = firstFrame
+			}
+			if modeKey == "first_last" && lastFrame != "" {
+				payload["end_image_url"] = lastFrame
+			}
+		}
+		if modeKey == "reference" && len(references) > 0 {
+			payload["reference_image_urls"] = references
+		}
+		// 可灵 v3 及以上默认出原生音频。
+		if family == "kling" {
+			if _, exists := input["generate_audio"]; exists {
+				payload["generate_audio"] = boolInput(input, "generate_audio")
+			}
+		}
+	default:
+		// vidu / minimax：首帧字段为 image_url，参考生视频为 reference_image_urls。
+		if modeKey == "first_frame" || modeKey == "first_last" {
+			if firstFrame != "" {
+				payload["image_url"] = firstFrame
+			}
+			if modeKey == "first_last" && lastFrame != "" {
+				payload["end_image_url"] = lastFrame
+			}
+		}
+		if modeKey == "reference" && len(references) > 0 {
+			payload["reference_image_urls"] = references
+		}
+	}
+	return endpoint, payload
+}
+
+func qiniuFrameURL(ctx context.Context, raw interface{}) string {
+	value := strings.TrimSpace(fmt.Sprint(raw))
+	if value == "" || value == "<nil>" {
+		return ""
+	}
+	url := normalizeReferenceImage(ctx, value)
+	if url == "" || url == "<nil>" {
+		return ""
+	}
+	return url
+}
+
+func qiniuReferenceURLs(ctx context.Context, input map[string]interface{}) []string {
+	var out []string
+	for _, raw := range referenceImageSources(input["reference_images"]) {
+		if url := qiniuFrameURL(ctx, raw); url != "" {
+			out = append(out, url)
+		}
+	}
+	return out
+}
+
 func firstUnsignedVideoURL(raw map[string]interface{}) string {
 	urls, ok := raw["unsigned_urls"].([]interface{})
 	if !ok {
@@ -2435,9 +2767,9 @@ func upstreamCapacityLimited(status int, body []byte) bool {
 
 func upstreamCapacityMessage(kind upstreamCapacityKind) string {
 	if kind == upstreamCapacityCredits {
-		return "上游额度不足：本张图片的最高预估费用超过上游账户剩余额度（与实际扣费无关）。请为上游账户充值，或改用更便宜的图片模型 / 降低清晰度后再试"
+		return "上游额度不足：本次请求的最高预估费用超过上游账户剩余额度（与实际扣费无关）。请为上游账户充值，或缩短时长、降低清晰度后再试"
 	}
-	return "并发不足：上游账户的在途请求额度已占满（同时生成的图片过多或上游余额不足）。已自动重试仍失败，请稍后再试、减少同时生成的数量，或为上游账户充值"
+	return "并发不足：上游账户的在途请求额度已占满（同时进行的生成过多或上游余额不足）。已自动重试仍失败，请稍后再试、减少同时生成的数量，或为上游账户充值"
 }
 
 const maxWorkerRouteAttempts = 8
@@ -3496,6 +3828,13 @@ func collapseMediaToString(v interface{}) string {
 	return ""
 }
 
+// isFalQueueEndpoint reports whether the upstream speaks the FAL queue protocol.
+// Those endpoints only accept JSON bodies and take reference images inline as
+// data URLs, so the multipart file-upload branch must not be used for them.
+func isFalQueueEndpoint(endpoint string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(endpoint)), "/queue/")
+}
+
 // postVideoUpstream uses JSON (public image_url) or multipart (local/private reference file).
 func postVideoUpstream(ctx context.Context, conn connectionConfig, endpoint string, payload map[string]interface{}, taskNo string) ([]byte, int, error) {
 	target := joinBaseEndpoint(conn.BaseURL, endpoint)
@@ -3503,7 +3842,7 @@ func postVideoUpstream(ctx context.Context, conn connectionConfig, endpoint stri
 	if s, ok := payload["image_url"].(string); ok {
 		refURL = strings.TrimSpace(s)
 	}
-	useMultipart := refURL != "" && (strings.HasPrefix(refURL, "data:") || isPrivateMediaURL(refURL))
+	useMultipart := refURL != "" && !isFalQueueEndpoint(endpoint) && (strings.HasPrefix(refURL, "data:") || isPrivateMediaURL(refURL))
 	if useMultipart {
 		fileData, contentType, err := loadMediaBytes(ctx, refURL)
 		if err != nil {
@@ -3923,7 +4262,9 @@ func mediaItemFromMap(m map[string]interface{}) (mediaItem, bool) {
 	if b64 := firstString(m, encodedMediaKeys()...); b64 != "" && looksLikeEncodedMediaWithHint(b64, m) {
 		return mediaItem{B64JSON: b64, MimeType: firstString(m, "media_type", "mime_type", "mime", "content_type", "format", "audio_format")}, true
 	}
-	for _, key := range []string{"data", "result", "output", "message", "content", "audio", "audio_result", "images", "videos", "audios", "results", "files", "choices"} {
+	// "video"/"image"/"audio" 是七牛 Fal 队列（result.video.url）等上游的单数包裹键，
+	// 漏掉它们会导致只能退化到 firstSuccessMediaURL 猜出来的 /content 地址。
+	for _, key := range []string{"data", "result", "output", "message", "content", "audio", "audio_result", "video", "image", "images", "videos", "audios", "results", "files", "choices"} {
 		if it, ok := mediaItemFromValue(m[key], m); ok {
 			return it, true
 		}
@@ -4320,7 +4661,7 @@ func buildMediaDownloadCandidates(conn connectionConfig, mediaURL, upstreamID st
 		out = append(out, u)
 	}
 	if upstreamID != "" && strings.TrimSpace(conn.BaseURL) != "" {
-		add(strings.TrimRight(conn.BaseURL, "/") + "/v1/videos/" + url.PathEscape(upstreamID) + "/content")
+		add(joinBaseEndpoint(conn.BaseURL, "/v1/videos/"+url.PathEscape(upstreamID)+"/content"))
 	}
 	add(mediaURL)
 	return out
@@ -4349,6 +4690,10 @@ func downloadRetryDelay(attempt, statusCode int) time.Duration {
 }
 
 func downloadAuthenticatedMedia(ctx context.Context, conn connectionConfig, mediaURL string, maxBytes int64) ([]byte, string, error) {
+	parsedURL, err := url.Parse(strings.TrimSpace(mediaURL))
+	if err != nil || parsedURL.Host == "" || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		return nil, "", fmt.Errorf("无法下载媒体：地址不是可访问的 http(s) URL")
+	}
 	client := &http.Client{Timeout: 15 * time.Minute}
 	const maxAttempts = 45
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
@@ -4716,7 +5061,7 @@ func pollUpstreamTask(ctx context.Context, pool *pgxpool.Pool, conn connectionCo
 				continue
 			}
 			return nil, upstreamUsageDetails{}, fmt.Errorf("上游未返回可下载的视频地址，请稍后重试: %s", truncateText(string(body), 400))
-		case "queued", "in_progress", "processing", "pending", "running", "not_start", "":
+		case "queued", "in_queue", "in_progress", "processing", "pending", "running", "not_start", "":
 			// keep polling
 		default:
 			if attempt <= 3 || attempt%12 == 0 {
@@ -4729,26 +5074,29 @@ func pollUpstreamTask(ctx context.Context, pool *pgxpool.Pool, conn connectionCo
 }
 
 type upstreamUsageDetails struct {
-	PromptTokens       int
-	OutputTokens       int
-	AudioInputTokens   int
-	AudioOutputTokens  int
-	VideoTokens        int
-	InputSeconds       float64
-	OutputSeconds      float64
-	InputImageCount    int
-	HasInputSeconds    bool
-	HasOutputSeconds   bool
-	HasInputImageCount bool
-	CostUSD            float64
+	PromptTokens        int
+	OutputTokens        int
+	ImageInputTokens    int
+	ImageOutputTokens   int
+	ImageOutputIncluded bool
+	AudioInputTokens    int
+	AudioOutputTokens   int
+	VideoTokens         int
+	InputSeconds        float64
+	OutputSeconds       float64
+	InputImageCount     int
+	HasInputSeconds     bool
+	HasOutputSeconds    bool
+	HasInputImageCount  bool
+	CostUSD             float64
 }
 
 func (u upstreamUsageDetails) hasAny() bool {
-	return u.PromptTokens > 0 || u.OutputTokens > 0 || u.AudioInputTokens > 0 || u.AudioOutputTokens > 0 || u.VideoTokens > 0 || u.HasInputSeconds || u.HasOutputSeconds || u.HasInputImageCount
+	return u.PromptTokens > 0 || u.OutputTokens > 0 || u.ImageInputTokens > 0 || u.ImageOutputTokens > 0 || u.AudioInputTokens > 0 || u.AudioOutputTokens > 0 || u.VideoTokens > 0 || u.HasInputSeconds || u.HasOutputSeconds || u.HasInputImageCount
 }
 
 func inputWithActualUpstreamUsage(input map[string]interface{}, usage upstreamUsageDetails) map[string]interface{} {
-	if usage.VideoTokens <= 0 && usage.AudioInputTokens <= 0 && usage.AudioOutputTokens <= 0 && !usage.HasInputSeconds && !usage.HasOutputSeconds && !usage.HasInputImageCount {
+	if usage.VideoTokens <= 0 && usage.ImageInputTokens <= 0 && usage.ImageOutputTokens <= 0 && usage.AudioInputTokens <= 0 && usage.AudioOutputTokens <= 0 && !usage.HasInputSeconds && !usage.HasOutputSeconds && !usage.HasInputImageCount {
 		return input
 	}
 	out := make(map[string]interface{}, len(input)+4)
@@ -4766,6 +5114,15 @@ func inputWithActualUpstreamUsage(input map[string]interface{}, usage upstreamUs
 	}
 	if usage.VideoTokens > 0 {
 		out["_actual_video_tokens"] = usage.VideoTokens
+	}
+	if usage.ImageInputTokens > 0 {
+		out["_actual_image_input_tokens"] = usage.ImageInputTokens
+	}
+	if usage.ImageOutputTokens > 0 {
+		out["_actual_image_output_tokens"] = usage.ImageOutputTokens
+	}
+	if usage.ImageOutputIncluded {
+		out["_actual_image_output_tokens_included"] = true
 	}
 	if usage.AudioInputTokens > 0 {
 		out["_actual_audio_input_tokens"] = usage.AudioInputTokens
@@ -4793,9 +5150,19 @@ func upstreamUsageFromBody(body []byte) upstreamUsageDetails {
 		if usage, ok := current["usage"].(map[string]interface{}); ok {
 			promptDetails, _ := usage["prompt_tokens_details"].(map[string]interface{})
 			completionDetails, _ := usage["completion_tokens_details"].(map[string]interface{})
+			inputDetails, _ := usage["input_tokens_details"].(map[string]interface{})
+			outputDetails, _ := usage["output_tokens_details"].(map[string]interface{})
+			imageOutputTokens := intAny(outputDetails["image_tokens"])
+			imageOutputIncluded := imageOutputTokens > 0
+			if imageOutputTokens <= 0 {
+				imageOutputTokens = intAny(usage["image_output_tokens"])
+			}
 			details := upstreamUsageDetails{
-				PromptTokens: intAny(firstNonNil(usage["prompt_tokens"], usage["input_tokens"], usage["text_tokens"])),
-				OutputTokens: intAny(firstNonNil(usage["completion_tokens"], usage["output_tokens"])),
+				PromptTokens:        intAny(firstNonNil(usage["prompt_tokens"], usage["input_tokens"], usage["text_tokens"], inputDetails["image_tokens"])),
+				OutputTokens:        intAny(firstNonNil(usage["completion_tokens"], usage["output_tokens"], outputDetails["image_tokens"])),
+				ImageInputTokens:    intAny(firstNonNil(inputDetails["image_tokens"], usage["image_input_tokens"])),
+				ImageOutputTokens:   imageOutputTokens,
+				ImageOutputIncluded: imageOutputIncluded,
 				AudioInputTokens: intAny(firstNonNil(
 					usage["audio_input_tokens"], usage["input_audio_tokens"], promptDetails["audio_tokens"],
 				)),
