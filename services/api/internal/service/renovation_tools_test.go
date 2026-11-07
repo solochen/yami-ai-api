@@ -89,6 +89,30 @@ func TestKeywordSearchRanksRelevantTopic(t *testing.T) {
 	}
 }
 
+func TestRenovationChatEstimateIncludesSystemPrompt(t *testing.T) {
+	withMessage := renovationChatEstimateTokens("客厅 5 米铺砖")
+	empty := renovationChatEstimateTokens("")
+	if withMessage <= empty {
+		t.Fatalf("message tokens %d should exceed empty prompt %d", withMessage, empty)
+	}
+	if empty < 200 {
+		t.Fatalf("system prompt estimate %d is too small", empty)
+	}
+}
+
+func TestKnowledgeVectorUsableRequiresSameModel(t *testing.T) {
+	vec := []float64{0.1, 0.2}
+	if !knowledgeVectorUsable("qwen3-7-text-embedding", "qwen3-7-text-embedding", vec) {
+		t.Fatal("same model vector should be reused")
+	}
+	if knowledgeVectorUsable("embedding_demo_v1", "qwen3-7-text-embedding", vec) {
+		t.Fatal("vector from another model must be recomputed")
+	}
+	if knowledgeVectorUsable("qwen3-7-text-embedding", "", vec) {
+		t.Fatal("empty target model should not reuse a stored vector")
+	}
+}
+
 func TestCosineSimilarity(t *testing.T) {
 	a := []float64{1, 0, 1}
 	if s := cosineSimilarity(a, a); s < 0.999 {

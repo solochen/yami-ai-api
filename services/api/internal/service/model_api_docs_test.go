@@ -1,6 +1,9 @@
 package service
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestStandardAPIDocContentNormalizesLegacyChatResponse(t *testing.T) {
 	doc := &APIDocDTO{Slug: "chat-model", ModelCode: "chat-model", RequestMode: "chat_completions", Endpoint: "/v1/chat/completions"}
@@ -139,5 +142,16 @@ func TestStandardAPIDocContentExplainsMiniMaxMusicInputs(t *testing.T) {
 		if parameter["name"] == "input" && parameter["required"] != false {
 			t.Fatalf("MiniMax Music input must follow the model's optional-prompt rule: %#v", parameter)
 		}
+	}
+}
+
+func TestFinishAPIDocUsesPublicAlias(t *testing.T) {
+	item := finishAPIDoc(&APIDocDTO{ModelCode: "gpt-6-sol", RequestMode: "chat_completions"}, []byte(`{}`), []byte(`{}`), []byte(`{}`), []byte(`{}`), time.Time{}, time.Time{}, " hl-6-sol ")
+	if item.PublicCode != "hl-6-sol" {
+		t.Fatalf("public code = %q", item.PublicCode)
+	}
+	fallback := finishAPIDoc(&APIDocDTO{ModelCode: "qwen3-8-flash", RequestMode: "chat_completions"}, []byte(`{}`), []byte(`{}`), []byte(`{}`), []byte(`{}`), time.Time{}, time.Time{}, " ")
+	if fallback.PublicCode != "qwen3-8-flash" {
+		t.Fatalf("fallback public code = %q", fallback.PublicCode)
 	}
 }

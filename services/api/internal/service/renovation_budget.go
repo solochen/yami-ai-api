@@ -62,6 +62,71 @@ func (s *RenovationService) LoadRenovationRunConfig(ctx context.Context) (Renova
 	return cfg, nil
 }
 
+// RenovationPricing 是发给用户看的单轮费用预估，口径与实际冻结一致：
+// 对话按系统提示词加当前输入估算，输出沿用对话计费的默认额度；
+// 知识库向量只按这一次问题的输入 token 估算。
+type RenovationPricing struct {
+	ChatModelCode      string  `json:"chat_model_code"`
+	ChatModelName      string  `json:"chat_model_name"`
+	EmbeddingModelCode string  `json:"embedding_model_code,omitempty"`
+	EmbeddingModelName string  `json:"embedding_model_name,omitempty"`
+	ChatRoundCost      float64 `json:"chat_round_cost"`
+	EmbeddingQueryCost float64 `json:"embedding_query_cost"`
+}
+
+func (s *RenovationService) QuotePricing(ctx context.Context, message string) (RenovationPricing, error) {
+	cfg, err := s.LoadRenovationRunConfig(ctx)
+	if err != nil {
+		return RenovationPricing{}, err
+	}
+	quote := RenovationPricing{ChatModelCode: cfg.ChatModelCode, EmbeddingModelCode: cfg.EmbeddingModelCode}
+	chatModel, err := s.chat.models.GetFullByCode(ctx, cfg.ChatModelCode)
+	if err != nil {
+		return quote, fmt.Errorf("对话模型不可用: %w", err)
+	}
+	quote.ChatModelName = chatModel.DisplayName
+	if quote.ChatModelName == "" {
+		quote.ChatModelName = chatModel.Code
+	}
+	chatCost, _, err := s.chat.models.RouteBillingEstimate(ctx, chatModel, map[string]interface{}{
+		"_estimated_input_tokens": renovationChatEstimateTokens(message),
+	}, 0, 0)
+	if err != nil {
+		return quote, err
+	}
+	quote.ChatRoundCost = chatCost
+
+	if cfg.EmbeddingModelCode == "" {
+		return quote, nil
+	}
+	embedModel, err := s.chat.models.GetFullByCode(ctx, cfg.EmbeddingModelCode)
+	if err != nil {
+		return quote, fmt.Errorf("知识库向量模型不可用: %w", err)
+	}
+	quote.EmbeddingModelName = embedModel.DisplayName
+	if quote.EmbeddingModelName == "" {
+		quote.EmbeddingModelName = embedModel.Code
+	}
+	query := strings.TrimSpace(message)
+	if query == "" {
+		query = "奶油风适合小户型吗"
+	}
+	embedCost, _, err := s.chat.models.RouteBillingEstimate(ctx, embedModel, map[string]interface{}{
+		"_estimated_input_tokens":  estimateTextTokens(query),
+		"_estimated_output_tokens": 1,
+	}, 0, 0)
+	if err != nil {
+		return quote, err
+	}
+	quote.EmbeddingQueryCost = embedCost
+	return quote, nil
+}
+
+// renovationChatEstimateTokens 与对话冻结使用同一套文本估算：角色和内容拼在一起计数。
+func renovationChatEstimateTokens(message string) int {
+	return estimateTextTokens("system\n" + renovationSystemPrompt + "\nuser\n" + message)
+}
+
 const renovationSystemPrompt = `你是"装修预算助理"，一位专业的家装预算与软装顾问，用中文服务用户。
 
 工作纪律：

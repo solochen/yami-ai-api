@@ -19,11 +19,11 @@ type RenovationKB struct {
 	db   *pgxpool.Pool
 	chat *ChatService
 
-	mu            sync.Mutex
-	loaded        bool
-	embedModel    string
-	embedBad      bool // embedding 模型探测失败，降级关键词模式
-	entries       []kbEntry
+	mu         sync.Mutex
+	loaded     bool
+	embedModel string
+	embedBad   bool // embedding 模型探测失败，降级关键词模式
+	entries    []kbEntry
 }
 
 type kbEntry struct {
@@ -84,8 +84,9 @@ func (kb *RenovationKB) ensureLoaded(ctx context.Context, modelCode string) {
 	}
 	kb.loaded = true
 	kb.embedModel = modelCode
+	kb.embedBad = false
 
-	rows, err := kb.db.Query(ctx, `SELECT id, topic, tags, content, embedding FROM renovation_knowledge ORDER BY id`)
+	rows, err := kb.db.Query(ctx, `SELECT id, topic, tags, content, embedding, COALESCE(embedding_model, '') FROM renovation_knowledge ORDER BY id`)
 	if err != nil {
 		log.Printf("[renovation_kb] load knowledge failed: %v", err)
 		return
@@ -95,13 +96,14 @@ func (kb *RenovationKB) ensureLoaded(ctx context.Context, modelCode string) {
 	for rows.Next() {
 		var e kbEntry
 		var embedding []byte
-		if err := rows.Scan(&e.id, &e.topic, &e.tags, &e.content, &embedding); err != nil {
+		var storedModel string
+		if err := rows.Scan(&e.id, &e.topic, &e.tags, &e.content, &embedding, &storedModel); err != nil {
 			log.Printf("[renovation_kb] scan knowledge row failed: %v", err)
 			return
 		}
 		if len(embedding) > 0 {
 			var vec []float64
-			if err := json.Unmarshal(embedding, &vec); err == nil && len(vec) > 0 {
+			if err := json.Unmarshal(embedding, &vec); err == nil && knowledgeVectorUsable(storedModel, modelCode, vec) {
 				e.vec = vec
 			}
 		}
@@ -239,6 +241,11 @@ func vectorsToF64(vecs [][]float32) [][]float64 {
 		}
 	}
 	return out
+}
+
+// knowledgeVectorUsable 只复用同一模型写下的向量。换模型后维度和空间都变了，必须重算。
+func knowledgeVectorUsable(storedModel, modelCode string, vec []float64) bool {
+	return modelCode != "" && storedModel == modelCode && len(vec) > 0
 }
 
 func cosineSimilarity(a, b []float64) float64 {

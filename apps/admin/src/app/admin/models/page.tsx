@@ -61,7 +61,7 @@ interface UpstreamModel {
   created?: number;
 }
 
-const REQUEST_MODES = ["chat_completions", "responses", "images", "video", "audio", "custom"];
+const REQUEST_MODES = ["chat_completions", "responses", "images", "video", "audio", "embeddings", "custom"];
 const PAGE_SIZE = 10;
 const IMAGE_QUALITY_TIERS = ["1K", "2K", "4K"] as const;
 const OPENAI_IMAGE_QUALITIES = ["auto", "low", "medium", "high"] as const;
@@ -467,13 +467,14 @@ interface BatchRow {
 }
 
 const emptyBatchRow = (): BatchRow => ({ model: "", code: "", name: "", codeTouched: false, nameTouched: false });
-const CATEGORIES = ["chat", "multi_collab", "image", "video", "audio"];
+const CATEGORIES = ["chat", "multi_collab", "image", "video", "audio", "embedding"];
 const ENDPOINT_BY_MODE: Record<string, string> = {
   chat_completions: "/v1/chat/completions",
   responses: "/v1/responses",
   images: "/v1/images/generations",
   video: "/v1/video/generations",
   audio: "/v1/audio/speech",
+  embeddings: "/v1/embeddings",
   custom: "",
 };
 

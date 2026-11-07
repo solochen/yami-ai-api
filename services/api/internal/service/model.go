@@ -67,6 +67,9 @@ func (s *ModelService) ListPublic(ctx context.Context, category string) ([]Model
 			q += ` AND category=$1`
 			args = append(args, category)
 		}
+	} else {
+		// 向量模型只供给知识库检索，工作台没有对应的对话或生图界面。
+		q += ` AND category <> 'embedding'`
 	}
 	q += ` ORDER BY sort_order ASC, id ASC`
 	rows, err := s.db.Query(ctx, q, args...)
@@ -1016,7 +1019,8 @@ type APIDocDTO struct {
 	ModelDesc     string                 `json:"model_description"`
 	Category      string                 `json:"category"`
 	RequestMode   string                 `json:"request_mode"`
-	NewAPIModel   string                 `json:"new_api_model"`
+	PublicCode    string                 `json:"public_code"`
+	NewAPIModel   string                 `json:"new_api_model,omitempty"`
 	Slug          string                 `json:"slug"`
 	Title         string                 `json:"title"`
 	Summary       string                 `json:"summary"`
@@ -1093,7 +1097,7 @@ func (s *ModelService) ListAPIDocs(ctx context.Context, includeUnpublished bool)
 		SELECT d.id, d.model_id, d.slug, d.title, COALESCE(d.summary,''), d.protocol, d.base_url, d.endpoint,
 		       d.auth_header, COALESCE(d.sdk,''), d.content, d.is_published, d.sort_order, d.created_at, d.updated_at,
 		       m.code, m.display_name, m.category, m.request_mode, m.new_api_model, m.icon_url, COALESCE(m.description,''),
-		       m.input_schema, m.default_params, m.runtime_rule
+		       m.input_schema, m.default_params, m.runtime_rule, COALESCE(m.public_alias,'')
 		FROM api_docs d JOIN models m ON m.id=d.model_id`
 	if !includeUnpublished {
 		q += ` WHERE d.is_published=true AND m.is_enabled=true`
@@ -1120,7 +1124,7 @@ func (s *ModelService) GetAPIDoc(ctx context.Context, slug string, publicOnly bo
 		SELECT d.id, d.model_id, d.slug, d.title, COALESCE(d.summary,''), d.protocol, d.base_url, d.endpoint,
 		       d.auth_header, COALESCE(d.sdk,''), d.content, d.is_published, d.sort_order, d.created_at, d.updated_at,
 		       m.code, m.display_name, m.category, m.request_mode, m.new_api_model, m.icon_url, COALESCE(m.description,''),
-		       m.input_schema, m.default_params, m.runtime_rule
+		       m.input_schema, m.default_params, m.runtime_rule, COALESCE(m.public_alias,'')
 		FROM api_docs d JOIN models m ON m.id=d.model_id
 		WHERE d.slug=$1`
 	if publicOnly {
@@ -1184,7 +1188,7 @@ func (s *ModelService) GetAPIDocByID(ctx context.Context, id int64) (*APIDocDTO,
 		SELECT d.id, d.model_id, d.slug, d.title, COALESCE(d.summary,''), d.protocol, d.base_url, d.endpoint,
 		       d.auth_header, COALESCE(d.sdk,''), d.content, d.is_published, d.sort_order, d.created_at, d.updated_at,
 		       m.code, m.display_name, m.category, m.request_mode, m.new_api_model, m.icon_url, COALESCE(m.description,''),
-		       m.input_schema, m.default_params, m.runtime_rule
+		       m.input_schema, m.default_params, m.runtime_rule, COALESCE(m.public_alias,'')
 		FROM api_docs d JOIN models m ON m.id=d.model_id WHERE d.id=$1`, id))
 }
 
@@ -1309,6 +1313,8 @@ func defaultAPIDocEndpoint(requestMode, upstreamEndpoint string) string {
 		return "/v1/video/generations"
 	case "audio":
 		return "/v1/audio/speech"
+	case "embeddings":
+		return "/v1/embeddings"
 	case "custom":
 		if upstreamEndpoint != "" {
 			return upstreamEndpoint
@@ -1321,40 +1327,43 @@ func scanAPIDoc(rows pgx.Rows) (*APIDocDTO, error) {
 	var item APIDocDTO
 	var content, inputSchema, defaultParams, runtimeRule []byte
 	var created, updated time.Time
+	var publicAlias string
 	if err := rows.Scan(&item.ID, &item.ModelID, &item.Slug, &item.Title, &item.Summary, &item.Protocol,
 		&item.BaseURL, &item.Endpoint, &item.AuthHeader, &item.SDK, &content, &item.IsPublished, &item.SortOrder,
 		&created, &updated, &item.ModelCode, &item.ModelName, &item.Category, &item.RequestMode,
-		&item.NewAPIModel, &item.ModelIconURL, &item.ModelDesc, &inputSchema, &defaultParams, &runtimeRule); err != nil {
+		&item.NewAPIModel, &item.ModelIconURL, &item.ModelDesc, &inputSchema, &defaultParams, &runtimeRule, &publicAlias); err != nil {
 		return nil, err
 	}
-	json.Unmarshal(content, &item.Content)
-	json.Unmarshal(inputSchema, &item.InputSchema)
-	json.Unmarshal(defaultParams, &item.DefaultParams)
-	json.Unmarshal(runtimeRule, &item.RuntimeRule)
-	item.Content = standardAPIDocContent(&item, item.Content)
-	item.CreatedAt = parseTime(created)
-	item.UpdatedAt = parseTime(updated)
-	return &item, nil
+	return finishAPIDoc(&item, content, inputSchema, defaultParams, runtimeRule, created, updated, publicAlias), nil
 }
 
 func scanAPIDocRow(row pgx.Row) (*APIDocDTO, error) {
 	var item APIDocDTO
 	var content, inputSchema, defaultParams, runtimeRule []byte
 	var created, updated time.Time
+	var publicAlias string
 	if err := row.Scan(&item.ID, &item.ModelID, &item.Slug, &item.Title, &item.Summary, &item.Protocol,
 		&item.BaseURL, &item.Endpoint, &item.AuthHeader, &item.SDK, &content, &item.IsPublished, &item.SortOrder,
 		&created, &updated, &item.ModelCode, &item.ModelName, &item.Category, &item.RequestMode,
-		&item.NewAPIModel, &item.ModelIconURL, &item.ModelDesc, &inputSchema, &defaultParams, &runtimeRule); err != nil {
+		&item.NewAPIModel, &item.ModelIconURL, &item.ModelDesc, &inputSchema, &defaultParams, &runtimeRule, &publicAlias); err != nil {
 		return nil, err
 	}
+	return finishAPIDoc(&item, content, inputSchema, defaultParams, runtimeRule, created, updated, publicAlias), nil
+}
+
+func finishAPIDoc(item *APIDocDTO, content, inputSchema, defaultParams, runtimeRule []byte, created, updated time.Time, publicAlias string) *APIDocDTO {
 	json.Unmarshal(content, &item.Content)
 	json.Unmarshal(inputSchema, &item.InputSchema)
 	json.Unmarshal(defaultParams, &item.DefaultParams)
 	json.Unmarshal(runtimeRule, &item.RuntimeRule)
-	item.Content = standardAPIDocContent(&item, item.Content)
+	item.Content = standardAPIDocContent(item, item.Content)
 	item.CreatedAt = parseTime(created)
 	item.UpdatedAt = parseTime(updated)
-	return &item, nil
+	item.PublicCode = strings.TrimSpace(publicAlias)
+	if item.PublicCode == "" {
+		item.PublicCode = item.ModelCode
+	}
+	return item
 }
 
 func standardAPIDocContent(doc *APIDocDTO, content map[string]interface{}) map[string]interface{} {
@@ -2110,10 +2119,11 @@ func validateModelConnection(input CreateModelInput) error {
 		"images":           true,
 		"video":            true,
 		"audio":            true,
+		"embeddings":       true,
 		"custom":           true,
 	}
 	if !allowedModes[input.RequestMode] {
-		return fmt.Errorf("不支持的 request_mode: %s，允许的值：chat_completions, responses, images, video, audio, custom", input.RequestMode)
+		return fmt.Errorf("不支持的 request_mode: %s，允许的值：chat_completions, responses, images, video, audio, embeddings, custom", input.RequestMode)
 	}
 
 	if IsMultiCollab(input.Category, input.Code) {

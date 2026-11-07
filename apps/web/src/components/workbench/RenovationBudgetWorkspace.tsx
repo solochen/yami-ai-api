@@ -66,7 +66,23 @@ function prettyJSON(value: unknown): string {
   }
 }
 
-function ToolTraceCard({ trace }: { trace: ToolTrace }) {
+type PricingQuote = {
+  chat_model_code: string;
+  chat_model_name: string;
+  embedding_model_code?: string;
+  embedding_model_name?: string;
+  chat_round_cost: number;
+  embedding_query_cost: number;
+};
+
+function formatCredits(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0.00";
+  if (value >= 0.01) return value.toFixed(2);
+  if (value >= 0.0001) return value.toFixed(4);
+  return "< 0.0001";
+}
+
+function ToolTraceCard({ trace, embeddingModelName }: { trace: ToolTrace; embeddingModelName?: string }) {
   const [open, setOpen] = useState(false);
   const failed = trace.ok && trace.result && typeof trace.result === "object" && "error" in (trace.result as Record<string, unknown>);
   const resultText = prettyJSON(trace.result);
@@ -79,7 +95,10 @@ function ToolTraceCard({ trace }: { trace: ToolTrace }) {
       >
         {open ? <ChevronDown size={13} className="shrink-0 text-gray-400" /> : <ChevronRight size={13} className="shrink-0 text-gray-400" />}
         <Wrench size={13} className={failed ? "shrink-0 text-amber-500" : "shrink-0 text-emerald-500"} />
-        <span className="font-medium text-gray-700 dark:text-gray-200">{TOOL_LABELS[trace.name] || trace.name}</span>
+        <span className="font-medium text-gray-700 dark:text-gray-200">
+          {TOOL_LABELS[trace.name] || trace.name}
+          {trace.name === "search_knowledge" && embeddingModelName ? ` · ${embeddingModelName}` : ""}
+        </span>
         <span className="min-w-0 flex-1 truncate text-gray-400">第 {trace.round} 轮 · {prettyJSON(trace.arguments).replace(/\s+/g, " ").slice(0, 60)}</span>
         <span className={failed ? "shrink-0 text-amber-500" : "shrink-0 text-emerald-500"}>{failed ? "已反馈重试" : "成功"}</span>
       </button>
@@ -120,6 +139,7 @@ export function RenovationBudgetWorkspace({ workflow }: { workflow: WorkflowLike
   const [error, setError] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [quote, setQuote] = useState<PricingQuote | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -136,6 +156,16 @@ export function RenovationBudgetWorkspace({ workflow }: { workflow: WorkflowLike
   useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const message = input.trim();
+      void api<PricingQuote>(`/api/renovation-budget/pricing?message=${encodeURIComponent(message)}`)
+        .then(setQuote)
+        .catch(() => setQuote(null));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [input]);
 
   useEffect(() => {
     if (stickRef.current) messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -286,7 +316,10 @@ export function RenovationBudgetWorkspace({ workflow }: { workflow: WorkflowLike
 
   const agentName = workflow.name || ts("装修预算助理");
   const subtitle = (workflow.display_config?.toolbox?.subtitle as string | undefined) || ts("询价、算量、出预算报告一步到位");
-  const chatModelCode = (workflow.runtime_config?.chat_model_code as string | undefined) || "";
+  const chatModelCode = quote?.chat_model_code || (workflow.runtime_config?.chat_model_code as string | undefined) || "";
+  const chatModelName = quote?.chat_model_name || chatModelCode;
+  const embeddingModelCode = quote?.embedding_model_code || (workflow.runtime_config?.embedding_model_code as string | undefined) || "";
+  const embeddingModelName = quote?.embedding_model_name || embeddingModelCode;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -298,8 +331,11 @@ export function RenovationBudgetWorkspace({ workflow }: { workflow: WorkflowLike
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h2 className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{agentName}</h2>
-              {chatModelCode ? (
-                <span className="hidden shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 dark:bg-white/10 dark:text-gray-400 sm:inline">{chatModelCode}</span>
+              {chatModelName ? (
+                <span className="hidden shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 dark:bg-white/10 dark:text-gray-400 sm:inline" title={chatModelCode}>{ts("对话")} · {chatModelName}</span>
+              ) : null}
+              {embeddingModelName ? (
+                <span className="hidden shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 dark:bg-white/10 dark:text-gray-400 md:inline" title={embeddingModelCode}>{ts("知识库向量")} · {embeddingModelName}</span>
               ) : null}
             </div>
             <p className="truncate text-xs text-gray-400">{subtitle}</p>
@@ -363,6 +399,7 @@ export function RenovationBudgetWorkspace({ workflow }: { workflow: WorkflowLike
               <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{agentName}</h3>
               <p className="mt-1 text-xs text-gray-400">
                 {ts("描述房间尺寸和材料偏好，我会自动完成询价、算量并生成可下载的预算报告。")}
+                {embeddingModelName ? <> {ts("风格和材料问题会用知识库向量模型")}「{embeddingModelName}」{ts("检索。")}</> : null}
               </p>
               <div className="mt-4 grid gap-2 text-left sm:grid-cols-2">
                 {HOT_PROMPTS.map((prompt) => (
@@ -389,7 +426,7 @@ export function RenovationBudgetWorkspace({ workflow }: { workflow: WorkflowLike
                 <div className="w-full max-w-[92%] space-y-2">
                   {message.tools && message.tools.length > 0 ? (
                     <div className="space-y-1.5">
-                      {message.tools.map((trace, i) => <ToolTraceCard key={i} trace={trace} />)}
+                      {message.tools.map((trace, i) => <ToolTraceCard key={i} trace={trace} embeddingModelName={embeddingModelName} />)}
                     </div>
                   ) : null}
                   {message.content ? (
@@ -455,6 +492,13 @@ export function RenovationBudgetWorkspace({ workflow }: { workflow: WorkflowLike
             {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>
         </form>
+        {quote ? (
+          <p className="mx-auto mt-1.5 max-w-5xl text-center text-[10px] leading-4 text-gray-400">
+            {ts("对话模型")} {chatModelName}，{ts("单轮预估")} {formatCredits(quote.chat_round_cost)} {ts("算力")}
+            {embeddingModelName ? `。${ts("知识库向量")} ${embeddingModelName}，${ts("单次检索预估")} ${formatCredits(quote.embedding_query_cost)} ${ts("算力")}` : ""}
+            。{ts("多轮工具调用按实际轮次结算。")}
+          </p>
+        ) : null}
         <p className="mx-auto mt-1.5 max-w-5xl text-center text-[10px] text-gray-400">
           {ts("材料价格为参考库数据，实际以市场报价为准；算量结果已含常规损耗。")}
         </p>

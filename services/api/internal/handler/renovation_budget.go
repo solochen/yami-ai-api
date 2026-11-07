@@ -17,6 +17,15 @@ type renovationChatRequest struct {
 	Message        string `json:"message"`
 }
 
+func (h *Handler) RenovationBudgetPricing(c *gin.Context) {
+	quote, err := h.renovation.QuotePricing(c.Request.Context(), c.Query("message"))
+	if err != nil {
+		util.BadRequest(c, err.Error())
+		return
+	}
+	util.OK(c, quote)
+}
+
 // RenovationBudgetChat 装修预算助理 Agent 的 SSE 入口。
 // 事件协议：meta / round / status / tool_result / delta / done / error
 func (h *Handler) RenovationBudgetChat(c *gin.Context) {

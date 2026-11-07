@@ -90,6 +90,18 @@ func TestExplicitFalseAndRoutesCannotGrantMissingCapability(t *testing.T) {
 	}
 }
 
+func TestEmbeddingSlotAcceptsVectorModels(t *testing.T) {
+	slot := slot(t, "renovation_budget_agent", "embedding_model_code")
+	model := Model{Code: "qwen3-7-text-embedding", Name: "Qwen3.7 Text Embedding", Category: "embedding", Mode: "embeddings", Enabled: true, Routes: []Route{{Enabled: true}}}
+	if err := Validate(slot, model); err != nil {
+		t.Fatal(err)
+	}
+	chatModel := chat(nil)
+	if Validate(slot, chatModel) == nil {
+		t.Fatal("chat model accepted as embedding")
+	}
+}
+
 func TestSchemaModeAndReferenceRestrictions(t *testing.T) {
 	m := Model{Code: "video", Category: "video", Mode: "video", Enabled: true, Rule: map[string]interface{}{"video": map[string]interface{}{"upload_profile": "first_last", "max_reference_images": 3}}, Schema: map[string]interface{}{"properties": map[string]interface{}{"generation_mode": map[string]interface{}{"enum": []string{"text"}}, "reference_images": map[string]interface{}{}}}}
 	if Validate(slot(t, "ai_comic_drama", "video_model_code"), m) == nil {

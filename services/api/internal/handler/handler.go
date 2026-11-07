@@ -203,6 +203,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			auth.POST("/creative-agent/cancel-plan", h.CreativeAgentCancelPlan)
 			auth.POST("/creative-agent/feedback", h.RecordCreativeAgentFeedback)
 			auth.POST("/creative-agent/run-workflow", h.CreativeAgentRunWorkflow)
+			auth.GET("/renovation-budget/pricing", h.RenovationBudgetPricing)
 			auth.POST("/renovation-budget/chat", h.RenovationBudgetChat)
 			auth.POST("/agents/:code/chat", h.PromptAgentChat)
 			auth.GET("/agents/:code/conversations", h.ListPromptAgentConversations)
@@ -7560,6 +7561,9 @@ func (h *Handler) ListAPIDocs(c *gin.Context) {
 		targets[items[i].Slug] = &items[i]
 	}
 	_ = h.contentI18n.ApplyBatch(c.Request.Context(), "api_doc", requestContentLocale(c), targets)
+	for i := range items {
+		items[i].NewAPIModel = ""
+	}
 	util.OK(c, map[string]interface{}{"items": items})
 }
 
@@ -7574,6 +7578,7 @@ func (h *Handler) GetAPIDoc(c *gin.Context) {
 		return
 	}
 	_ = h.contentI18n.Apply(c.Request.Context(), "api_doc", item.Slug, requestContentLocale(c), item)
+	item.NewAPIModel = ""
 	util.OK(c, item)
 }
 
