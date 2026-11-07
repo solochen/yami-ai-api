@@ -82,8 +82,8 @@ services:
 
   api:
     build:
-      context: ../../services/api
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: services/api/Dockerfile
     ports:
       - "8080:8080"
     environment:
@@ -101,6 +101,8 @@ services:
       NEW_API_BASE_URL: http://mock-new-api:3002
       NEW_API_TOKEN: change-me-dev-model-gateway-token
       API_PORT: 8080
+      DOUYIN_API_BASE: ${DOUYIN_API_BASE:-https://api.douyin.wtf}
+      DOUYIN_API_KEY: ${DOUYIN_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -113,8 +115,8 @@ services:
 
   worker:
     build:
-      context: ../../services/worker
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: services/worker/Dockerfile
     environment:
       DATABASE_URL: postgres://starai:starai@postgres:5432/starai?sslmode=disable
       REDIS_URL: redis://redis:6379/0

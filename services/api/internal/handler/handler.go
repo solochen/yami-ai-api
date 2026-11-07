@@ -407,6 +407,9 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			adm.PATCH("/gallery/:id", h.AdminAuditGallery)
 			adm.DELETE("/gallery/:id", h.AdminDeleteGallery)
 			adm.GET("/agents", h.AdminListAgents)
+			adm.GET("/agent-models", h.AdminListAgentModels)
+			adm.GET("/agents/:code/models/:slot/candidates", h.AdminAgentModelCandidates)
+			adm.PUT("/agents/:code/models/:slot", h.AdminUpdateAgentModel)
 			adm.GET("/agents/:code/policy", h.AdminAgentPolicy)
 			adm.PUT("/agents/:code/policy", h.AdminAgentPolicy)
 			adm.POST("/agents", h.AdminCreateAgent)
@@ -792,15 +795,24 @@ func (h *Handler) GetWorkbenchSession(c *gin.Context) {
 	}()
 	wg.Wait()
 	if meErr != nil {
-		util.InternalError(c, meErr.Error())
+		h.failWorkbenchSession(c, meErr)
 		return
 	}
 	if walletErr != nil {
-		util.InternalError(c, walletErr.Error())
+		h.failWorkbenchSession(c, walletErr)
 		return
 	}
 	c.Header("Cache-Control", "private, no-store")
 	util.OK(c, map[string]interface{}{"user": me, "wallet": wallet})
+}
+
+func (h *Handler) failWorkbenchSession(c *gin.Context, err error) {
+	if errors.Is(err, pgx.ErrNoRows) {
+		h.clearSessionCookie(c, "starai_session")
+		util.Unauthorized(c, "登录状态已失效，请重新登录")
+		return
+	}
+	util.InternalError(c, err.Error())
 }
 
 func (h *Handler) UpdateProfile(c *gin.Context) {
@@ -7927,7 +7939,7 @@ func (h *Handler) AdminTestWebSearch(c *gin.Context) {
 	response := map[string]interface{}{
 		"provider": actualProvider, "primary_provider": cfg.Provider,
 		"fallback_used": actualProvider != service.WebSearchPrimaryLayer(cfg.Provider),
-		"result_count": len(results), "latency_ms": time.Since(started).Milliseconds(),
+		"result_count":  len(results), "latency_ms": time.Since(started).Milliseconds(),
 	}
 	util.OK(c, response)
 }

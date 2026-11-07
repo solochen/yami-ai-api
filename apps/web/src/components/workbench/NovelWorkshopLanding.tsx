@@ -17,9 +17,13 @@ const LENGTHS = [["short", "短篇 · 3万字内", "短篇·3万字内"], ["medi
 export function NovelWorkshopLanding({ workflowCode, workflowName, workflowDescription, roles, defaultModelCode, error, onSubmit, onLoadHistory }: Props) {
   const { t, ts } = useI18n();
   const [mode, setMode] = useState<"auto" | "step">("auto");
-  const [prompt, setPrompt] = useState("请帮我从头创作一部小说"); const [intent, setIntent] = useState("new"); const [genre, setGenre] = useState("玄幻"); const [length, setLength] = useState("short"); const [language, setLanguage] = useState("zh-CN"); const [guideOpen, setGuideOpen] = useState(false); const [submitting, setSubmitting] = useState(false); const [models, setModels] = useState<{ code: string; display_name?: string; category?: string }[]>([]); const [model, setModel] = useState(defaultModelCode || ""); const [fileName, setFileName] = useState(""); const [historyOpen, setHistoryOpen] = useState(false); const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]); const [historyError, setHistoryError] = useState("");
+  const [prompt, setPrompt] = useState(""); const [intent, setIntent] = useState("new"); const [genre, setGenre] = useState("玄幻"); const [length, setLength] = useState("short"); const [language, setLanguage] = useState("zh-CN"); const [guideOpen, setGuideOpen] = useState(false); const [submitting, setSubmitting] = useState(false); const [models, setModels] = useState<{ code: string; display_name?: string; category?: string }[]>([]); const [model, setModel] = useState(defaultModelCode || ""); const [fileName, setFileName] = useState(""); const [historyOpen, setHistoryOpen] = useState(false); const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]); const [historyError, setHistoryError] = useState("");
   useEffect(() => { apiCached<{ code: string; display_name?: string; category?: string }[]>("/api/models?category=chat").then((items) => { const list = (items || []).filter((item) => item.category !== "multi_collab" && item.code !== "multi_collab_chat" && !/多模型协作|multi.?collab/i.test(`${item.code} ${item.display_name || ""}`)); setModels(list); setModel((old) => list.some((item) => item.code === old) ? old : list[0]?.code || ""); }).catch(() => setModels([])); }, [defaultModelCode]);
-  const chooseIntent = (id: string, text: string) => { setIntent((old) => old === id ? "" : id); setPrompt((old) => old === text ? "" : old && !old.startsWith(text) ? `${text}\n\n${old}` : text); };
+  const chooseIntent = (id: string, text: string) => {
+    if (intent === id) { setIntent(""); setPrompt((old) => old === text ? "" : old); return; }
+    setIntent(id);
+    setPrompt((old) => old === text ? old : old && !old.startsWith(text) ? `${text}\n\n${old}` : text);
+  };
   const attach = (file?: File) => { if (!file) return; setFileName(file.name); setPrompt((old) => `${old}${old ? "\n\n" : ""}[文档：${file.name}]`); };
   const submit = async () => {
     if (!prompt.trim() || submitting) return;
@@ -35,7 +39,7 @@ export function NovelWorkshopLanding({ workflowCode, workflowName, workflowDescr
       });
     } finally { setSubmitting(false); }
   };
-  const reset = () => { setPrompt("请帮我从头创作一部小说"); setIntent("new"); setGenre("玄幻"); setLength("short"); setMode("auto"); setFileName(""); };
+  const reset = () => { setPrompt(""); setIntent("new"); setGenre("玄幻"); setLength("short"); setMode("auto"); setFileName(""); };
   const toggleHistory = async () => { const next = !historyOpen; setHistoryOpen(next); if (!next) return; setHistoryError(""); try { const result = await api<{ items: HistoryItem[] }>(`/api/agent-projects?workflow_code=${encodeURIComponent(workflowCode)}&page=1&page_size=20`); setHistoryItems(result.items || []); } catch (e) { setHistoryItems([]); setHistoryError(e instanceof Error ? e.message : "历史记录加载失败"); } };
 
   const intentLabel = INTENTS.find((item) => item[0] === intent)?.[1] || "创作意图";

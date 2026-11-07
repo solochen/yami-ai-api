@@ -54,7 +54,11 @@ async function start() {
     return;
   }
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("DEV_PORT 必须是有效端口");
-  prepareDocker();
+  if (process.env.DEV_SKIP_DOCKER === "1") {
+    console.log("跳过 Docker 后端准备（DEV_SKIP_DOCKER=1）。");
+  } else {
+    prepareDocker();
+  }
   // Check before starting the compilers; never terminate an unrelated listener.
   const probe = net.createServer();
   await new Promise((resolve, reject) => { probe.once("error", reject); probe.listen(port, host, resolve); });

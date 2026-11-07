@@ -870,8 +870,8 @@ function makeEmptyForm(): FormState {
     analysis_model_code: "",
     fallback_model_code: "",
     generation_model_code: "",
-    image_model_code: "image_fast_v1",
-    video_model_code: "video_demo_v1",
+    image_model_code: "",
+    video_model_code: "",
     speech_model_code: "",
     music_model_code: "",
     narration_model_code: "",
@@ -879,7 +879,7 @@ function makeEmptyForm(): FormState {
     default_segment_duration: 8,
     default_story_review_required: true,
     audio_strategy: "video_native",
-    dialogue_model_codes: "chat_demo_v1",
+    dialogue_model_codes: "",
     style_reference_mode: "image_reference",
     duration_mode: "standard",
     storyboard_grid: 6,
@@ -1082,8 +1082,8 @@ export default function AgentsAdminPage() {
       analysis_model_code: runtime.analysis_model_code || "",
       fallback_model_code: runtime.fallback_model_code || "",
       generation_model_code: runtime.generation_model_code || "",
-      image_model_code: runtime.image_model_code || (w.code === "general_creative_agent" || systemWorkspace ? "" : "image_fast_v1"),
-      video_model_code: w.code === "general_creative_agent" ? (runtime.video_model_code || "") : (runtime.video_model_code || runtime.generation_model_code || (systemWorkspace ? "" : "video_demo_v1")),
+      image_model_code: runtime.image_model_code || "",
+      video_model_code: runtime.video_model_code || runtime.generation_model_code || "",
       speech_model_code: runtime.speech_model_code || "",
       music_model_code: runtime.music_model_code || "",
       narration_model_code: runtime.audio_model_code || runtime.narration_model_code || "",
@@ -1093,7 +1093,7 @@ export default function AgentsAdminPage() {
       audio_strategy: runtime.audio_strategy === "video_native" || runtime.audio_strategy === "tts_only" || runtime.audio_strategy === "hybrid"
         ? runtime.audio_strategy
         : runtime.narration_model_code ? "hybrid" : "video_native",
-      dialogue_model_codes: Array.isArray(runtime.dialogue_model_codes) ? runtime.dialogue_model_codes.join(",") : runtime.analysis_model_code || "chat_demo_v1",
+      dialogue_model_codes: Array.isArray(runtime.dialogue_model_codes) ? runtime.dialogue_model_codes.join(",") : runtime.analysis_model_code || "",
       style_reference_mode: runtime.style_reference_mode || "image_reference",
       duration_mode: runtime.duration_mode || "standard",
       storyboard_grid: Number(runtime.storyboard_grid || 6),
@@ -1116,7 +1116,7 @@ export default function AgentsAdminPage() {
       redraw_operation: runtime.redraw_operation || "video_redraw",
       redraw_prompt: runtime.redraw_prompt || "Redraw the source video in the requested visual style while preserving timing, motion, composition, subject identity and scene continuity. Avoid flicker and temporal inconsistency.",
       default_subtitle_mode: runtime.default_subtitle_mode || "auto",
-      default_subtitle_region: runtime.default_subtitle_region || "bottom_25",
+      default_subtitle_region: runtime.default_subtitle_region === "full_frame" ? "full" : (runtime.default_subtitle_region || "bottom_25"),
       protect_watermark: runtime.protect_watermark !== false,
       subtitle_remove_operation: runtime.subtitle_remove_operation || "subtitle_remove",
       subtitle_remove_prompt: runtime.subtitle_remove_prompt || "Remove burned-in subtitles from the selected region and naturally reconstruct the background. Preserve people, products, logos, watermarks outside the subtitle region, motion, timing and audio.",
@@ -1779,7 +1779,7 @@ export default function AgentsAdminPage() {
                   <Field label="最大文件大小（MB）"><input type="number" min={1} max={10240} className="admin-input" value={form.max_input_size_mb} onChange={(e) => setForm({ ...form, max_input_size_mb: Math.max(1, Number(e.target.value) || 500) })} /></Field>
                   <Field label="上游操作值"><input className="admin-input" value={form.subtitle_remove_operation} onChange={(e) => setForm({ ...form, subtitle_remove_operation: e.target.value })} placeholder="subtitle_remove" /></Field>
                   <Field label="硬字幕修复指令" wide><textarea className="admin-input min-h-24 py-2" value={form.subtitle_remove_prompt} onChange={(e) => setForm({ ...form, subtitle_remove_prompt: e.target.value })} /></Field>
-                  <p className="md:col-span-2 rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs leading-5 text-emerald-700">自动模式会先用 FFprobe 检测独立字幕轨；检测到后由 FFmpeg 无损封装移除。未检测到时才调用 AI 修复模型，不会把硬字幕任务伪装成成功。</p>
+                  <p className="md:col-span-2 rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs leading-5 text-emerald-700">自动模式先无损移除独立字幕轨。只有确认画面仍有硬字幕、或视频没有字幕轨时，才按修复模型冻结费用并调用。区域保护会在模型返回后把修改限制在字幕区域，保留原音会强制使用源音轨。未配置模型时，硬字幕任务会明确失败。</p>
                 </section>
               )}
 

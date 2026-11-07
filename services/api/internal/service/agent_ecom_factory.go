@@ -423,13 +423,18 @@ func (s *AgentService) ResolveEcomReverseModel(ctx context.Context, requested st
 
 func (s *AgentService) resolveEcomReverseModel(ctx context.Context, requested string) (string, error) {
 	if strings.TrimSpace(requested) != "" {
+		if err := s.validateModelOverrides(ctx, WorkflowDTO{Code: "ecom_factory"}, map[string]interface{}{"analysis_model_code": requested}); err != nil {
+			return "", err
+		}
 		return strings.TrimSpace(requested), nil
 	}
 	var bound string
 	err := s.db.QueryRow(ctx, `SELECT w.runtime_config->>'analysis_model_code'
 		FROM workflow_definitions w WHERE w.code='ecom_factory' AND w.is_enabled`).Scan(&bound)
 	if err == nil && strings.TrimSpace(bound) != "" {
-		return bound, nil
+		if err := s.validateModelOverrides(ctx, WorkflowDTO{Code: "ecom_factory"}, map[string]interface{}{"analysis_model_code": bound}); err == nil {
+			return bound, nil
+		}
 	}
 	fallback := ""
 	err = s.db.QueryRow(ctx, `SELECT m.code FROM models m
@@ -437,6 +442,9 @@ func (s *AgentService) resolveEcomReverseModel(ctx context.Context, requested st
 		ORDER BY m.sort_order NULLS LAST, m.id LIMIT 1`).Scan(&fallback)
 	if err != nil || fallback == "" {
 		return "", errors.New("反推模型未配置，请联系管理员")
+	}
+	if err := s.validateModelOverrides(ctx, WorkflowDTO{Code: "ecom_factory"}, map[string]interface{}{"analysis_model_code": fallback}); err != nil {
+		return "", err
 	}
 	return fallback, nil
 }

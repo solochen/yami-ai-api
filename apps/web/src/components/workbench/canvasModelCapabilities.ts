@@ -33,3 +33,17 @@ export function canvasAnalysisMediaKinds(nodes: { data: Record<string, unknown> 
       || (data.outputKind === kind && Boolean(data.outputUrl));
   }));
 }
+
+// Models configured without an input_schema still declare their supported
+// aspect ratios in runtime_rule.image/video.supported_ratios (the admin form
+// writes them there). Use that list when the schema exposes no ratio control,
+// otherwise keyframes silently fall back to the model default (often 1:1) even
+// though the node asks for 9:16.
+export function supportsRuntimeAspectRatio(
+  model: { category?: string; runtime_rule?: Record<string, unknown> } | undefined,
+  ratio: string,
+) {
+  const mediaRule = (model?.runtime_rule?.[model.category === "video" ? "video" : "image"] || {}) as Record<string, unknown>;
+  const supported = Array.isArray(mediaRule.supported_ratios) ? mediaRule.supported_ratios.map((item) => String(item).replace(/\s/g, "")) : [];
+  return supported.includes(ratio.replace(/\s/g, ""));
+}

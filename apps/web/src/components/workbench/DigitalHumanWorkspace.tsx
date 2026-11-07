@@ -1,11 +1,55 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useI18n } from "@/i18n/I18nProvider";
-import { api } from "@/lib/api";
+import { api, uploadFile } from "@/lib/api";
 
 const RELATIONS = ["父亲", "母亲", "伴侣", "朋友", "兄弟", "姐妹", "祖父", "祖母", "助理", "其他"];
 const RTC_SDK = "https://g.alicdn.com/apsara-media-box/imp-web-rtc/7.1.9/aliyun-rtc-sdk.js";
+
+// 音色取 Vidu 官方「音色列表」中 provider=qwen_omni 的实时版音色。
+const VOICE_GROUPS: { label: string; items: { id: string; name: string; desc: string }[] }[] = [
+  {
+    label: "女声",
+    items: [
+      { id: "Tina", name: "甜甜 Tina", desc: "奶茶小姐姐，甜甜的、暖暖的" },
+      { id: "Cindy", name: "林欣宜 Cindy", desc: "台湾说话嗲嗲的小姐姐" },
+      { id: "Liora Mira", name: "清欢 Liora Mira", desc: "温柔治愈" },
+      { id: "Serena", name: "苏瑶 Serena", desc: "温柔小姐姐" },
+      { id: "Mia", name: "舒然 Mia", desc: "慢生活美学，日常治愈" },
+      { id: "Maia", name: "四月 Maia", desc: "知性与温柔" },
+      { id: "Sunnybobi", name: "知芝 Sunnybobi", desc: "大大咧咧的社恐邻家姑娘" },
+      { id: "Momo", name: "茉兔 Momo", desc: "撒娇搞怪，逗你开心" },
+      { id: "Katerina", name: "卡捷琳娜 Katerina", desc: "御姐音色，韵律回味十足" },
+      { id: "Jennifer", name: "詹妮弗 Jennifer", desc: "电影质感美语女声" },
+    ],
+  },
+  {
+    label: "男声",
+    items: [
+      { id: "Raymond", name: "林川野 Raymond", desc: "声音清亮，宅男感" },
+      { id: "Ethan", name: "晨煦 Ethan", desc: "阳光、温暖、有朝气" },
+      { id: "Theo Calm", name: "予安 Theo Calm", desc: "在静默处传递理解" },
+      { id: "Harvey", name: "厚 Harvey", desc: "低沉温和，岁月沉淀" },
+      { id: "Evan", name: "江晨 Evan", desc: "男大学生，年下奶狗" },
+      { id: "Ryan", name: "甜茶 Ryan", desc: "节奏拉满，戏感炸裂" },
+      { id: "Joyner", name: "阿逗 Joyner", desc: "搞笑夸张，接地气" },
+    ],
+  },
+  {
+    label: "方言 / 特色",
+    items: [
+      { id: "Sunny", name: "晴儿 Sunny", desc: "甜到心里的川妹子" },
+      { id: "Dylan", name: "晓东 Dylan", desc: "北京胡同里长大的少年" },
+      { id: "Eric", name: "程川 Eric", desc: "四川成都男子" },
+      { id: "Peter", name: "李彼得 Peter", desc: "天津相声，专业捧哏" },
+      { id: "Rocky", name: "阿强 Rocky", desc: "广东话幽默陪聊" },
+      { id: "Kiki", name: "阿清 Kiki", desc: "甜美的港妹闺蜜" },
+      { id: "Gold", name: "金爷 Gold", desc: "西海岸 Rapper" },
+    ],
+  },
+];
 
 type RoleSummary = {
   public_id: string;
@@ -75,7 +119,7 @@ async function loadRtcEngine() {
     const found = document.querySelector<HTMLScriptElement>("script[data-ali-rtc='1']");
     if (found) {
       found.addEventListener("load", () => resolve(), { once: true });
-      found.addEventListener("error", () => reject(new Error("语音组件加载失败")), { once: true });
+      found.addEventListener("error", () => reject(new Error("音视频组件加载失败")), { once: true });
       return;
     }
     const script = document.createElement("script");
@@ -83,10 +127,10 @@ async function loadRtcEngine() {
     script.async = true;
     script.dataset.aliRtc = "1";
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("语音组件加载失败"));
+    script.onerror = () => reject(new Error("音视频组件加载失败"));
     document.body.appendChild(script);
   });
-  if (!host.AliRtcEngine) throw new Error("语音组件没有就绪");
+  if (!host.AliRtcEngine) throw new Error("音视频组件没有就绪");
   return host.AliRtcEngine;
 }
 
@@ -109,6 +153,251 @@ function rtcSubscribed(value: unknown) {
   return value === 3 || value === "3" || value === "subscribed";
 }
 
+type RoleFieldsProps = {
+  draft: Draft;
+  patch: (key: keyof Draft, value: string) => void;
+  uploadingAvatar: boolean;
+  onUploadAvatar: (file: File | undefined) => void;
+};
+
+// 三个长文本字段各给几个现成示例：点一下填入，再点一下取消，也可以直接手写。
+const FIELD_PRESETS: Record<"persona" | "memory" | "style", { label: string; value: string }[]> = {
+  persona: [
+    { label: "温柔倾听", value: "先接住情绪，再慢慢给建议；不急着下结论，也不说教。" },
+    { label: "元气搭子", value: "说话有精神，爱用轻松的方式逗人开心；聊到正事会立刻认真起来。" },
+    { label: "专业顾问", value: "先给结论，再讲理由，最后给一两个能马上做的动作；不确定就直说不确定。" },
+    { label: "邻家损友", value: "会开玩笑、会拆台，但对方真难受时立刻收起玩笑，站在对方这边。" },
+  ],
+  memory: [
+    { label: "备考压力", value: "对方最近在准备考试，压力大，容易熬夜。" },
+    { label: "养了只猫", value: "对方养了一只猫，叫年糕，最喜欢聊猫。" },
+    { label: "小店生意", value: "对方在开一家小店，最近在纠结要不要扩店。" },
+    { label: "爱跑步", value: "对方喜欢跑步，每周三次，最近在准备半马。" },
+  ],
+  style: [
+    { label: "短句慢语", value: "短句，语速偏慢，常用「嗯」「其实吧」开头。" },
+    { label: "轻松幽默", value: "轻松幽默，爱打比方，偶尔自嘲。" },
+    { label: "简洁理性", value: "简洁理性，先说结论，少用形容词。" },
+    { label: "温柔细碎", value: "温柔细碎，喜欢重复对方的话来确认感受。" },
+  ],
+};
+
+const CHIP_BASE = "rounded-full border px-3 py-1 text-[0.6875rem] font-medium transition duration-200";
+const CHIP_ON = "border-[color:var(--mcdl-accent-border)] bg-[color:var(--mcdl-accent-soft)] text-[color:var(--mcdl-color-accent)]";
+const CHIP_OFF = "border-[color:var(--mcdl-border-ghost)] text-[color:var(--mcdl-text-body)] hover:border-[color:var(--mcdl-hover-border)] hover:bg-[color:var(--mcdl-hover-surface)]";
+
+const FIELD_CLASS =
+  "w-full rounded-xl border border-[color:var(--mcdl-border-ghost)] bg-[color:var(--mcdl-field-surface)] px-3.5 py-2.5 text-sm text-[color:var(--mcdl-text-title)] outline-none transition placeholder:text-[color:var(--mcdl-text-muted)] focus:border-[color:var(--mcdl-accent-border)] focus:ring-2 focus:ring-[color:var(--mcdl-accent-soft)]";
+
+function Field({ label, badge, hint, children }: { label: string; badge?: ReactNode; hint?: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[0.75rem] font-medium text-[color:var(--mcdl-text-body)]">{label}</span>
+        {badge}
+      </div>
+      {hint ? <p className="mcdl-muted-copy mt-1.5 text-[0.6875rem] leading-5">{hint}</p> : null}
+      <div className="mt-2.5">{children}</div>
+    </div>
+  );
+}
+
+function PresetChips({
+  field,
+  value,
+  onPick,
+}: {
+  field: "persona" | "memory" | "style";
+  value: string;
+  onPick: (text: string) => void;
+}) {
+  const { ts } = useI18n();
+  return (
+    <div className="flex flex-wrap gap-2">
+      {FIELD_PRESETS[field].map((preset) => {
+        const active = value.trim() === preset.value;
+        return (
+          <button
+            key={preset.label}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onPick(active ? "" : preset.value)}
+            className={`${CHIP_BASE} ${active ? CHIP_ON : CHIP_OFF}`}
+          >
+            {ts(preset.label)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// 新建弹窗与右侧编辑面板共用同一套字段，避免两处结构漂移。
+function RoleFields({ draft, patch, uploadingAvatar, onUploadAvatar }: RoleFieldsProps) {
+  const { ts } = useI18n();
+  const required = <span className="rounded-full bg-[color:var(--mcdl-accent-soft)] px-2 py-0.5 text-[0.625rem] font-semibold text-[color:var(--mcdl-color-accent)]">{ts("必填")}</span>;
+  const optional = <span className="text-[0.625rem] text-[color:var(--mcdl-text-muted)]">{ts("选填")}</span>;
+
+  const nameField = (
+    <Field key="name" label={ts("名字")} badge={required}>
+      <input value={draft.name} onChange={(event) => patch("name", event.target.value)} placeholder={ts("例如：丽丽")} className={FIELD_CLASS} />
+    </Field>
+  );
+
+  const relationField = (
+    <Field key="relation" label={ts("关系")} badge={optional} hint={ts("决定数字人怎么理解你们之间的距离。")}>
+      <div className="flex flex-wrap gap-2">
+        {RELATIONS.map((item) => (
+          <button key={item} type="button" onClick={() => patch("relation", item)} className={`${CHIP_BASE} ${draft.relation === item ? CHIP_ON : CHIP_OFF}`}>{ts(item)}</button>
+        ))}
+      </div>
+    </Field>
+  );
+
+  const userTitleField = (
+    <Field key="user_title" label={ts("用户称呼")} badge={optional}>
+      <input value={draft.user_title} onChange={(event) => patch("user_title", event.target.value)} placeholder={ts("例如：小陈、宝贝、老板")} className={FIELD_CLASS} />
+    </Field>
+  );
+
+  const knowledgeTitleField = (
+    <Field key="knowledge_title" label={ts("知识库标题")} badge={optional} hint={ts("给这个角色的资料起个名字，方便以后查找。")}>
+      <input value={draft.knowledge_title} onChange={(event) => patch("knowledge_title", event.target.value)} placeholder={ts("例如：花店价目与配送规则")} className={FIELD_CLASS} />
+    </Field>
+  );
+
+  const personaField = (
+    <Field key="persona" label={ts("人设撰写")} badge={optional} hint={ts("点下面的标签直接套用，也可以自己改写。")}>
+      <PresetChips field="persona" value={draft.persona} onPick={(text) => patch("persona", text)} />
+      <textarea
+        aria-label={ts("人设撰写")}
+        value={draft.persona}
+        onChange={(event) => patch("persona", event.target.value)}
+        rows={4}
+        placeholder={ts("例如：你是丽丽，29 岁，在杭州开一家小花店。说话像老朋友，先接住情绪再给建议，偶尔拿自己开玩笑，但不说教。")}
+        className={`${FIELD_CLASS} mt-3 resize-y leading-6`}
+      />
+    </Field>
+  );
+
+  const memoryField = (
+    <Field key="memory" label={ts("核心记忆")} badge={optional} hint={ts("数字人会一直记住这些事，用来做承接和追问。")}>
+      <PresetChips field="memory" value={draft.memory} onPick={(text) => patch("memory", text)} />
+      <textarea
+        aria-label={ts("核心记忆")}
+        value={draft.memory}
+        onChange={(event) => patch("memory", event.target.value)}
+        rows={3}
+        placeholder={ts("例如：用户叫小陈，做产品经理，养了一只叫豆豆的柯基。最近在准备半马，睡眠不太好，不喜欢被催进度。")}
+        className={`${FIELD_CLASS} mt-3 resize-y leading-6`}
+      />
+    </Field>
+  );
+
+  const styleField = (
+    <Field key="style" label={ts("说话风格")} badge={optional} hint={ts("说得快还是慢、句子长还是短，都会影响真实感。")}>
+      <PresetChips field="style" value={draft.style} onPick={(text) => patch("style", text)} />
+      <textarea
+        aria-label={ts("说话风格")}
+        value={draft.style}
+        onChange={(event) => patch("style", event.target.value)}
+        rows={2}
+        placeholder={ts("例如：语速偏慢，句子短，常用「嗯」「其实吧」开头；不堆形容词，一次只说一件事。")}
+        className={`${FIELD_CLASS} mt-3 resize-y leading-6`}
+      />
+    </Field>
+  );
+
+  const voiceField = (
+    <Field key="voice" label={ts("音色")} badge={optional} hint={ts("克隆音色后续开放")}>
+      <select value={draft.voice} onChange={(event) => patch("voice", event.target.value)} className={FIELD_CLASS}>
+        {!VOICE_GROUPS.some((group) => group.items.some((item) => item.id === draft.voice)) && draft.voice ? (
+          <option value={draft.voice}>{draft.voice}</option>
+        ) : null}
+        {VOICE_GROUPS.map((group) => (
+          <optgroup key={group.label} label={ts(group.label)}>
+            {group.items.map((item) => (
+              <option key={item.id} value={item.id}>{item.name} · {ts(item.desc)}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </Field>
+  );
+
+  const avatarField = (
+    <Field key="avatar_url" label={ts("头像")} badge={optional} hint={ts("开始视频通话前需要先填好头像。")}>
+      <div className="flex items-start gap-4">
+        <div className="h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-2xl border border-[color:var(--mcdl-border-ghost)] bg-[color:var(--mcdl-color-surface-subtle)]">
+          {draft.avatar_url ? (
+            <img src={draft.avatar_url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center text-[0.625rem] text-[color:var(--mcdl-text-muted)]">{ts("预览")}</div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <input
+            value={draft.avatar_url}
+            onChange={(event) => patch("avatar_url", event.target.value)}
+            placeholder={ts("https:// 公网图片地址")}
+            className={FIELD_CLASS}
+          />
+          <label className="mcdl-button-secondary mcdl-hover-control mt-2.5 inline-flex cursor-pointer px-4 py-2 text-[0.75rem]">
+            {uploadingAvatar ? ts("上传中…") : ts("上传图片")}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              disabled={uploadingAvatar}
+              onChange={(event) => {
+                onUploadAvatar(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+      </div>
+    </Field>
+  );
+
+  // 每行可以并排放 1~2 个字段：短字段并排省高度，长字段独占一行。
+  const groups: { title: string; description: string; rows: ReactNode[][] }[] = [
+    {
+      title: ts("角色信息"),
+      description: ts("先定下 TA 是谁、和你是什么关系，其余细节随时能再调。"),
+      rows: [[nameField, userTitleField], [relationField], [knowledgeTitleField]],
+    },
+    {
+      title: ts("语气与人设"),
+      description: ts("这三项决定 TA 说话像不像一个人。不会写就直接点标签套一个。"),
+      rows: [[personaField], [memoryField], [styleField]],
+    },
+    {
+      title: ts("形象与声音"),
+      description: ts("头像和音色是视频通话里最直观的部分。"),
+      rows: [[voiceField], [avatarField]],
+    },
+  ];
+
+  return (
+    <div className="space-y-5">
+      {groups.map((group) => (
+        <section key={group.title} className="rounded-[1.5rem] bg-[color:var(--mcdl-color-surface-subtle)] p-6 sm:p-7">
+          <h3 className="text-[0.9375rem] font-semibold tracking-normal text-[color:var(--mcdl-text-title)]">{group.title}</h3>
+          <p className="mcdl-muted-copy mt-2 text-[0.75rem] leading-6">{group.description}</p>
+          <div className="mt-6 space-y-6">
+            {group.rows.map((row, rowIndex) => (
+              <div key={rowIndex} className={row.length > 1 ? "grid gap-6 sm:grid-cols-2" : undefined}>
+                {row.map((field, index) => <div key={index}>{field}</div>)}
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export function DigitalHumanWorkspace() {
   const { ts } = useI18n();
   const [roles, setRoles] = useState<RoleSummary[]>([]);
@@ -122,13 +411,18 @@ export function DigitalHumanWorkspace() {
   const [docTitle, setDocTitle] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
-  const [prices, setPrices] = useState({ voice: 100, video: 3500 });
-  const [creating, setCreating] = useState(false);
+  const [prices, setPrices] = useState({ voice: 0, video: 0 });
   const [videoStage, setVideoStage] = useState<"idle" | "connecting" | "live">("idle");
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState<"create" | "edit">("create");
+  const [editorDraft, setEditorDraft] = useState<Draft>(emptyDraft);
+  const [editorError, setEditorError] = useState("");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const sessionRef = useRef<LiveSession | null>(null);
   const engineRef = useRef<RtcEngine | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -143,6 +437,10 @@ export function DigitalHumanWorkspace() {
     previewStreamRef.current = null;
     if (localVideoRef.current?.srcObject) localVideoRef.current.srcObject = null;
   };
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     sessionRef.current = session;
@@ -191,7 +489,7 @@ export function DigitalHumanWorkspace() {
   }, []);
 
   useEffect(() => {
-    if (!roleId || creating) return;
+    if (!roleId) return;
     let stop = false;
     api<RoleDetail>(`/api/digital-human/roles/${roleId}`)
       .then((role) => {
@@ -205,7 +503,7 @@ export function DigitalHumanWorkspace() {
     return () => {
       stop = true;
     };
-  }, [creating, roleId]);
+  }, [roleId]);
 
   useEffect(() => {
     if (!session?.public_id || !roleId) return;
@@ -224,27 +522,78 @@ export function DigitalHumanWorkspace() {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [messages]);
 
+  useEffect(() => {
+    if (!editorOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setEditorOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editorOpen]);
+
   const visibleRoles = roles.filter((role) => {
     const q = query.trim();
     return !q || role.name.includes(q) || role.relation.includes(q);
   });
 
-  const patch = (key: keyof Draft, value: string) => setDraft((prev) => ({ ...prev, [key]: value }));
+  const patchEditor = (key: keyof Draft, value: string) => setEditorDraft((prev) => ({ ...prev, [key]: value }));
 
-  const saveRole = async () => {
-    setBusy("保存中");
-    setNotice("");
+  const openCreate = () => {
+    setEditorMode("create");
+    setEditorDraft(emptyDraft());
+    setEditorError("");
+    setEditorOpen(true);
+  };
+
+  const openRoleEditor = () => {
+    if (!roleId) return;
+    setEditorMode("edit");
+    setEditorDraft({ ...draft });
+    setEditorError("");
+    setEditorOpen(true);
+  };
+
+  const uploadAvatar = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setEditorError(ts("请选择图片文件"));
+      return;
+    }
+    setUploadingAvatar(true);
     try {
-      const saved = await api<RoleDetail>(!roleId || creating ? "/api/digital-human/roles" : `/api/digital-human/roles/${roleId}`, {
-        method: !roleId || creating ? "POST" : "PUT",
-        body: JSON.stringify(draft),
+      const url = await uploadFile(file);
+      setEditorDraft((prev) => ({ ...prev, avatar_url: url }));
+    } catch (err) {
+      setEditorError(err instanceof Error ? ts(err.message) : ts("上传失败"));
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const refreshRoles = async () => {
+    setRoles(await api<RoleSummary[]>("/api/digital-human/roles"));
+  };
+
+  const saveEditor = async () => {
+    if (!editorDraft.name.trim()) {
+      setEditorError(ts("请填写角色名字"));
+      return;
+    }
+    const creating = editorMode === "create";
+    setBusy("保存中");
+    setEditorError("");
+    try {
+      const saved = await api<RoleDetail>(creating ? "/api/digital-human/roles" : `/api/digital-human/roles/${roleId}`, {
+        method: creating ? "POST" : "PUT",
+        body: JSON.stringify(editorDraft),
       });
-      setCreating(false);
-      setRoleId(saved.public_id);
-      setRoles(await api<RoleSummary[]>("/api/digital-human/roles"));
+      await refreshRoles();
+      setEditorOpen(false);
+      if (creating) setRoleId(saved.public_id);
+      else setDraft(draftFromRole(saved));
       setNotice(ts("角色已保存"));
     } catch (err) {
-      setNotice(err instanceof Error ? ts(err.message) : ts("保存失败"));
+      setEditorError(err instanceof Error ? ts(err.message) : ts("保存失败"));
     } finally {
       setBusy("");
     }
@@ -257,7 +606,7 @@ export function DigitalHumanWorkspace() {
       await api(`/api/digital-human/roles/${roleId}`, { method: "DELETE" });
       const items = await api<RoleSummary[]>("/api/digital-human/roles");
       setRoles(items);
-      setCreating(false);
+      setEditorOpen(false);
       setRoleId(items[0]?.public_id || "");
       if (!items[0]) {
         setDraft(emptyDraft());
@@ -265,7 +614,7 @@ export function DigitalHumanWorkspace() {
         setKnowledge([]);
       }
     } catch (err) {
-      setNotice(err instanceof Error ? ts(err.message) : ts("删除失败"));
+      setEditorError(err instanceof Error ? ts(err.message) : ts("删除失败"));
     } finally {
       setBusy("");
     }
@@ -291,31 +640,29 @@ export function DigitalHumanWorkspace() {
     bindRemoteVideo(engine, userId, 2);
   };
 
-  const joinMedia = async (rtc: RtcInfo | undefined, withVideo: boolean) => {
+  const joinMedia = async (rtc: RtcInfo | undefined) => {
     if (!rtc?.token || !rtc.user_id) throw new Error("没有拿到通话房间凭证");
     const sdk = await loadRtcEngine();
     const engine = sdk.getInstance();
     engineRef.current = engine;
     await engine.setChannelProfile?.("communication");
     await engine.setDefaultSubscribeAllRemoteAudioStreams?.(true);
-    if (withVideo) {
-      await engine.setDefaultSubscribeAllRemoteVideoStreams?.(true);
-      await engine.subscribeAllRemoteVideoStreams?.(true);
-    }
+    await engine.setDefaultSubscribeAllRemoteVideoStreams?.(true);
+    await engine.subscribeAllRemoteVideoStreams?.(true);
     const onVideo = (userId: unknown, _oldState: unknown, newState: unknown) => {
-      if (!withVideo || userId == null) return;
+      if (userId == null) return;
       if (rtcSubscribed(newState) || newState === 2 || newState === "2") bindRemoteVideo(engine, String(userId), 1);
     };
     const onScreen = (userId: unknown, _oldState: unknown, newState: unknown) => {
-      if (!withVideo || userId == null) return;
+      if (userId == null) return;
       if (rtcSubscribed(newState) || newState === 2 || newState === "2") bindRemoteVideo(engine, String(userId), 2);
     };
     engine.on?.("videoSubscribeStateChanged", onVideo);
     engine.on?.("screenShareSubscribeStateChanged", onScreen);
     engine.on?.("remoteUserOnLineNotify", (userId) => {
-      if (withVideo) void subscribeRemote(engine, String(userId || ""));
+      void subscribeRemote(engine, String(userId || ""));
     });
-    if (withVideo && localVideoRef.current) {
+    if (localVideoRef.current) {
       stopLocalPreview();
       await engine.setLocalViewConfig?.(localVideoRef.current, 1);
     }
@@ -332,18 +679,16 @@ export function DigitalHumanWorkspace() {
       await engine.joinChannel(rtc.token, rtc.user_id);
     }
     await engine.publishLocalAudioStream?.(true);
-    if (withVideo) {
-      await engine.publishLocalVideoStream?.(true);
-      window.setTimeout(() => {
-        const listed = (engine as RtcEngine & { getOnlineRemoteUsers?: () => string[] }).getOnlineRemoteUsers?.() || [];
-        listed.forEach((userId) => void subscribeRemote(engine, String(userId)));
-      }, 1500);
-    }
+    await engine.publishLocalVideoStream?.(true);
+    window.setTimeout(() => {
+      const listed = (engine as RtcEngine & { getOnlineRemoteUsers?: () => string[] }).getOnlineRemoteUsers?.() || [];
+      listed.forEach((userId) => void subscribeRemote(engine, String(userId)));
+    }, 1500);
     setMicOn(true);
-    setCameraOn(withVideo);
+    setCameraOn(true);
   };
 
-  const startSession = async (mode: "text" | "audio" | "video") => {
+  const startSession = async (mode: "text" | "video") => {
     if (!roleId) throw new Error("请先保存角色");
     if (session?.public_id && session.call_mode !== mode) {
       await api(`/api/digital-human/sessions/${session.public_id}/end`, { method: "POST" });
@@ -357,15 +702,6 @@ export function DigitalHumanWorkspace() {
       body: JSON.stringify({ mode }),
     });
     setSession(started);
-    if (mode === "audio") {
-      try {
-        await joinMedia(started.rtc, false);
-      } catch (err) {
-        await api(`/api/digital-human/sessions/${started.public_id}/end`, { method: "POST" }).catch(() => undefined);
-        setSession(null);
-        throw err;
-      }
-    }
     if (mode === "video") videoJoinRef.current = started.rtc || null;
     return started;
   };
@@ -377,7 +713,7 @@ export function DigitalHumanWorkspace() {
     if (!remoteVideoRef.current || !localVideoRef.current) return;
     joinedVideoRef.current = id;
     videoJoinRef.current = null;
-    joinMedia(rtc, true)
+    joinMedia(rtc)
       .then(() => setVideoStage("live"))
       .catch(async (err: unknown) => {
         joinedVideoRef.current = "";
@@ -431,23 +767,10 @@ export function DigitalHumanWorkspace() {
         body: JSON.stringify({ content }),
       });
       setMessages((prev) => [...prev, result.user, ...(result.assistant ? [result.assistant] : [])]);
-      if (!result.assistant) setNotice(ts("文字已送出。如果这是语音通话，直接听对方说话即可。"));
+      if (!result.assistant) setNotice(ts("文字已送出，对方还没有回复。若无响应，请结束会话后重试。"));
     } catch (err) {
       setText(content);
       setNotice(err instanceof Error ? ts(err.message) : ts("发送失败"));
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const startVoice = async () => {
-    setBusy("连接中");
-    setNotice("");
-    try {
-      await startSession("audio");
-      setNotice(ts("语音已接通，可以直接说话"));
-    } catch (err) {
-      setNotice(err instanceof Error ? ts(err.message) : ts("语音连接失败"));
     } finally {
       setBusy("");
     }
@@ -526,33 +849,33 @@ export function DigitalHumanWorkspace() {
     return () => window.clearInterval(timer);
   }, [videoStage]);
 
-  const status = videoStage !== "idle" ? "视频通话中" : session?.call_mode === "audio" ? "语音通话中" : session ? "控制链路已就绪" : "已结束";
+  const status = videoStage !== "idle" ? "视频通话中" : session ? "控制链路已就绪" : "已结束";
   const elapsedLabel = `${String(Math.floor(elapsedSec / 60)).padStart(2, "0")}:${String(elapsedSec % 60).padStart(2, "0")}`;
-  const estimatedCost = Math.round((elapsedSec / 60) * prices.video * 100) / 100;
+  const minutePrice = prices.video > 0 ? prices.video : prices.voice;
+  const estimatedCost = Math.round((elapsedSec / 60) * minutePrice * 100) / 100;
 
   return (
     <div className="mcdl-workspace mcdl-workspace--digital-human flex h-full min-h-0 flex-col text-gray-900 dark:text-gray-100">
       <header className="flex h-[73px] shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-4 dark:border-white/10 dark:bg-gray-900">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <h1 className="text-base font-semibold">{ts("实时数字人对话")}</h1>
           <span className={`text-xs ${status === "已结束" ? "text-red-500" : "text-gray-500"}`}>{ts(status)}</span>
+          {roleId && <span className="truncate text-xs text-gray-400">· {draft.name || ts("未命名")}</span>}
         </div>
+        {roleId && (
+          <button type="button" onClick={openRoleEditor} className="mcdl-button-secondary mcdl-hover-control ml-auto shrink-0 px-4 py-1.5 text-xs">
+            {ts("角色设置")}
+          </button>
+        )}
       </header>
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_320px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col border-b border-gray-200 bg-white dark:border-white/10 dark:bg-gray-900 lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between px-3 py-3">
             <span className="text-sm font-medium">{ts("角色列表")}</span>
             <button
               type="button"
               className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-dark"
-              onClick={() => {
-                setCreating(true);
-                setRoleId("");
-                setSession(null);
-                setMessages([]);
-                setKnowledge([]);
-                setDraft(emptyDraft());
-              }}
+              onClick={openCreate}
             >
               {ts("新建角色")}
             </button>
@@ -574,10 +897,9 @@ export function DigitalHumanWorkspace() {
                     videoJoinRef.current = null;
                     joinedVideoRef.current = "";
                   }
-                  setCreating(false);
                   setRoleId(role.public_id);
                 }}
-                className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${role.public_id === roleId && !creating ? "bg-primary/10 text-primary dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-white/5"}`}
+                className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${role.public_id === roleId ? "bg-primary/10 text-primary dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-white/5"}`}
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-xs dark:bg-white/10">
                   {role.avatar_url ? <img src={role.avatar_url} alt="" className="h-full w-full object-cover" /> : role.name.slice(0, 1) || ts("人")}
@@ -594,7 +916,7 @@ export function DigitalHumanWorkspace() {
 
         <section className="relative flex min-h-0 flex-col">
           <div className="border-b border-gray-200 px-4 py-2 text-[11px] text-gray-500 dark:border-white/10">
-            {ts("文字按会话消耗计费，语音")} {prices.voice.toFixed(2)} {ts("算力/分钟，视频")} {prices.video.toFixed(2)} {ts("算力/分钟")}
+            {ts("文字按模型计费，视频")} {minutePrice > 0 ? minutePrice.toFixed(2) : "—"} {ts("算力/分钟")}
           </div>
           <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {messages.map((message, index) => (
@@ -622,9 +944,6 @@ export function DigitalHumanWorkspace() {
               className="min-w-0 flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none dark:border-white/10 dark:bg-gray-950"
             />
             <div className="flex flex-col gap-2">
-              <button type="button" disabled={!!busy || videoStage !== "idle"} onClick={() => void (session?.call_mode === "audio" ? hangup() : startVoice())} className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs text-white disabled:opacity-50 dark:bg-white dark:text-gray-900">
-                {session?.call_mode === "audio" ? ts("挂断") : ts("语音通话")}
-              </button>
               <button type="button" disabled={!!busy || videoStage !== "idle"} onClick={() => void startVideo()} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs disabled:opacity-50 dark:border-white/10">
                 {videoStage === "connecting" ? ts("接通中") : ts("视频通话")}
               </button>
@@ -671,68 +990,83 @@ export function DigitalHumanWorkspace() {
           )}
         </section>
 
-        <aside className="flex min-h-0 flex-col border-t border-gray-200 bg-white dark:border-white/10 dark:bg-gray-900 lg:border-l lg:border-t-0">
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <div className="mb-3 text-sm font-medium">{creating ? ts("新建角色") : ts("编辑当前角色")}</div>
-          <label className="mb-2 block text-xs text-gray-500">{ts("名字")}
-            <input value={draft.name} onChange={(event) => patch("name", event.target.value)} className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-gray-950" />
-          </label>
-          <div className="mb-2 text-xs text-gray-500">{ts("关系")}</div>
-          <div className="mb-3 flex flex-wrap gap-1">
-            {RELATIONS.map((item) => (
-              <button key={item} type="button" onClick={() => patch("relation", item)} className={`rounded-full px-2 py-1 text-[11px] ${draft.relation === item ? "bg-primary text-dark" : "bg-gray-100 text-gray-600 dark:bg-white/10"}`}>{ts(item)}</button>
-            ))}
-          </div>
-          <label className="mb-2 block text-xs text-gray-500">{ts("你对用户的称呼")}
-            <input value={draft.user_title} onChange={(event) => patch("user_title", event.target.value)} className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-gray-950" />
-          </label>
-          <label className="mb-2 block text-xs text-gray-500">{ts("人设撰写")}
-            <textarea value={draft.persona} onChange={(event) => patch("persona", event.target.value)} rows={4} className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-gray-950" />
-          </label>
-          <label className="mb-2 block text-xs text-gray-500">{ts("核心记忆")}
-            <textarea value={draft.memory} onChange={(event) => patch("memory", event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-gray-950" />
-          </label>
-          <label className="mb-2 block text-xs text-gray-500">{ts("说话风格")}
-            <textarea value={draft.style} onChange={(event) => patch("style", event.target.value)} rows={2} className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-gray-950" />
-          </label>
-          <label className="mb-2 block text-xs text-gray-500">{ts("音色")}
-            <input value={draft.voice} onChange={(event) => patch("voice", event.target.value)} className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-gray-950" />
-          </label>
-          <p className="mb-3 text-[11px] leading-5 text-gray-400">{ts("预设音色 Tina。克隆音色即将开放。")}</p>
-          <label className="mb-2 block text-xs text-gray-500">{ts("头像 URL")}
-            <input value={draft.avatar_url} onChange={(event) => patch("avatar_url", event.target.value)} placeholder={ts("https:// 公网图片地址")} className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-gray-950" />
-          </label>
-          <label className="mb-3 block text-xs text-gray-500">{ts("知识库标题")}
-            <input value={draft.knowledge_title} onChange={(event) => patch("knowledge_title", event.target.value)} className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-gray-950" />
-          </label>
-          <div className="border-t border-gray-100 pt-3 dark:border-white/10">
-            <div className="mb-2 text-sm font-medium">{ts("知识库")}</div>
-            <p className="mb-2 text-[11px] leading-5 text-gray-400">{ts("上传 TXT、MD 或 JSON。通话中数字人只会检索这个角色的资料。后台需要填写 Vidu 能访问的公网地址。")}</p>
-            <input value={docTitle} onChange={(event) => setDocTitle(event.target.value)} placeholder={ts("资料标题，可留空用文件名")} className="mb-2 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-gray-950" />
-            <input type="file" accept=".txt,.md,.json,text/plain" onChange={(event) => void onFile(event.target.files?.[0])} className="mb-2 block w-full text-xs" />
-            <ul className="space-y-1">
-              {knowledge.map((doc) => (
-                <li key={doc.id} className="flex items-center justify-between gap-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs dark:bg-white/5">
-                  <span className="truncate">{doc.title}</span>
-                  <button
-                    type="button"
-                    className="text-red-500"
-                    onClick={() => void api(`/api/digital-human/roles/${roleId}/knowledge/${doc.id}`, { method: "DELETE" }).then(() => setKnowledge((prev) => prev.filter((item) => item.id !== doc.id))).catch((err: Error) => setNotice(err.message))}
-                  >
-                    {ts("移除")}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-          </div>
-          <div className="flex shrink-0 gap-2 border-t border-gray-200 p-3 dark:border-white/10">
-            <button type="button" disabled={!!busy} onClick={() => void saveRole()} className="min-w-0 flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-dark disabled:opacity-50">{busy === "保存中" ? ts("保存中") : ts("保存角色")}</button>
-            {!creating && roleId && <button type="button" onClick={() => void removeRole()} className="rounded-lg border border-red-200 px-3 py-2 text-xs text-red-600">{ts("删除")}</button>}
-            {session && <button type="button" onClick={() => void hangup()} className="rounded-lg border border-gray-200 px-3 py-2 text-xs">{ts("结束通话")}</button>}
-          </div>
-        </aside>
       </div>
+
+      {mounted && editorOpen && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-black/55 backdrop-blur-[6px]" onClick={() => setEditorOpen(false)} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="digital-human-editor-title"
+            className="mcdl-dialog-surface relative flex max-h-[calc(100dvh-2rem)] w-full max-w-[46rem] flex-col overflow-hidden rounded-[var(--mcdl-radius-card)]"
+          >
+            <header className="shrink-0 px-6 pb-5 pt-7 sm:px-9 sm:pt-8">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <span className="mcdl-eyebrow">{ts("数字人")}</span>
+                  <h2 id="digital-human-editor-title" className="mcdl-display mt-3 text-[1.625rem] leading-tight sm:text-[1.875rem]">
+                    {editorMode === "create" ? ts("新建角色") : ts("角色设置")}
+                  </h2>
+                  <p className="mcdl-muted-copy mt-2 text-[0.8125rem] leading-6">
+                    {editorMode === "create"
+                      ? ts("只有名字必填，其余都可以留空，保存后随时能补。")
+                      : ts("改完保存即刻生效，正在进行的通话仍沿用接通时的设定。")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditorOpen(false)}
+                  aria-label={ts("关闭")}
+                  className="mcdl-icon-button mcdl-hover-quiet mcdl-hover-press grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm"
+                >
+                  ✕
+                </button>
+              </div>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 sm:px-9">
+              <RoleFields draft={editorDraft} patch={patchEditor} uploadingAvatar={uploadingAvatar} onUploadAvatar={(file) => void uploadAvatar(file)} />
+              {editorMode === "edit" && (
+                <section className="mt-5 rounded-[1.5rem] bg-[color:var(--mcdl-color-surface-subtle)] p-6 sm:p-7">
+                  <h3 className="text-[0.9375rem] font-semibold tracking-normal text-[color:var(--mcdl-text-title)]">{ts("知识库")}</h3>
+                  <p className="mcdl-muted-copy mt-2 text-[0.75rem] leading-6">{ts("上传 TXT、MD 或 JSON。通话中数字人只会检索这个角色的资料。")}</p>
+                  <div className="mt-5 space-y-3">
+                    <input value={docTitle} onChange={(event) => setDocTitle(event.target.value)} placeholder={ts("资料标题，可留空用文件名")} className={FIELD_CLASS} />
+                    <input type="file" accept=".txt,.md,.json,text/plain" onChange={(event) => void onFile(event.target.files?.[0])} className="block w-full text-xs text-[color:var(--mcdl-text-body)]" />
+                    <ul className="space-y-2">
+                      {knowledge.map((doc) => (
+                        <li key={doc.id} className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--mcdl-border-ghost)] px-3.5 py-2.5 text-xs">
+                          <span className="truncate text-[color:var(--mcdl-text-body)]">{doc.title}</span>
+                          <button
+                            type="button"
+                            className="shrink-0 text-[color:var(--mcdl-color-negative)]"
+                            onClick={() => void api(`/api/digital-human/roles/${roleId}/knowledge/${doc.id}`, { method: "DELETE" }).then(() => setKnowledge((prev) => prev.filter((item) => item.id !== doc.id))).catch((err: Error) => setEditorError(err.message))}
+                          >
+                            {ts("移除")}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </section>
+              )}
+              {editorError && <p className="mt-5 rounded-xl bg-[color:var(--mcdl-accent-soft)] px-4 py-3 text-[0.75rem] leading-5 text-[color:var(--mcdl-color-negative)]">{editorError}</p>}
+            </div>
+            <footer className="flex shrink-0 items-center justify-end gap-3 bg-[color:var(--mcdl-color-surface-subtle)] px-6 py-4 sm:px-9 sm:py-5">
+              {editorMode === "edit" && (
+                <button type="button" disabled={busy === "删除中"} onClick={() => void removeRole()} className="mr-auto px-2 py-2 text-xs text-[color:var(--mcdl-color-negative)] disabled:opacity-50">
+                  {busy === "删除中" ? ts("删除中") : ts("删除角色")}
+                </button>
+              )}
+              <button type="button" onClick={() => setEditorOpen(false)} className="mcdl-button-secondary mcdl-hover-control px-6 py-2.5 text-sm">{ts("取消")}</button>
+              <button type="button" disabled={busy === "保存中"} onClick={() => void saveEditor()} className="mcdl-button-primary mcdl-hover-primary-action px-7 py-2.5 text-sm font-semibold disabled:opacity-50">
+                {busy === "保存中" ? ts("保存中") : ts("保存角色")}
+              </button>
+            </footer>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

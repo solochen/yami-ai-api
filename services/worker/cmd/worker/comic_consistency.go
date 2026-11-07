@@ -116,6 +116,22 @@ func comicShotInputs(inputs, shot map[string]interface{}) map[string]interface{}
 	return out
 }
 
+// AI 漫剧项目里的 quality 是成片分辨率（480P/720P/1080P），只对视频和合成
+// 有意义。图片模型使用自己的质量档位，直接透传会被上游判为非法枚举
+// （例如 Seedream 只接受 auto/low/medium/high/xhigh/max）。这里剥掉视频专用
+// 字段，并让资产图/关键帧按成片画幅生成，避免生成后再次裁切。
+func comicImageTaskInputs(inputs, runtimeCfg map[string]interface{}) map[string]interface{} {
+	out := copyMap(inputs)
+	for _, key := range []string{"quality", "resolution", "duration", "duration_sec", "generate_audio", "generation_mode"} {
+		delete(out, key)
+	}
+	if ratio := comicRequestedAspectRatio(inputs, runtimeCfg); ratio != "" {
+		out["aspect_ratio"] = ratio
+		out["ratio"] = ratio
+	}
+	return out
+}
+
 func prepareComicAssets(ctx context.Context, pool *pgxpool.Pool, baseURL, token string, p WorkflowTaskPayload, publicID string, runtimeCfg, inputs, plan map[string]interface{}, existing []interface{}) ([]map[string]interface{}, float64, string) {
 	var assets []map[string]interface{}
 	used := map[string]bool{}
@@ -189,7 +205,7 @@ func prepareComicAssets(ctx context.Context, pool *pgxpool.Pool, baseURL, token 
 			}
 			return []map[string]interface{}{asset}, 0, ""
 		}
-		assetInputs := copyMap(inputs)
+		assetInputs := comicImageTaskInputs(inputs, runtimeCfg)
 		assetInputs["count"], assetInputs["n"] = 1, 1
 		assetInputs["_asset_type"] = asset["asset_type"]
 		prompt := comicStylePrompt(inputs, "制作供后续镜头反复引用的单一资产定稿图。只表现指定资产；人物展示清晰五官、发型与完整服装，道具展示完整结构，场景不添加未指定人物。无文字、无水印。用户参考仅按其真实内容使用，不能把场景图认作人物。\n"+stringAny(asset["asset_type"])+" "+stringAny(asset["name"])+"\n"+firstNonEmpty(stringAny(asset["visual_prompt"]), stringAny(asset["description"])))
@@ -216,7 +232,7 @@ func prepareComicAssets(ctx context.Context, pool *pgxpool.Pool, baseURL, token 
 			total += sumAgentMediaTaskCost(results)
 			url = ""
 			if len(results) > 0 {
-				url = firstMediaURL(mapAnyOr(results[0]["output"], nil), "image_url", "url", "result_url")
+				url = comicMediaURL(mapAnyOr(results[0]["output"], nil), "image_url", "url", "result_url")
 			}
 			asset["task"] = firstMapOrNil(results)
 			if message == "" && url != "" {

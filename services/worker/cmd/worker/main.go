@@ -405,6 +405,11 @@ func processImageTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token st
 					if kind == upstreamCapacityConcurrency && retry < maxUpstreamCapacityRetries && waitWorkerCapacityRetry(ctx, retry) {
 						continue
 					}
+					// 同一账户没钱时重试这条线路没有意义，但下一条线路可能是别的供应商。
+					if kind == upstreamCapacityCredits && poolEnabled {
+						markWorkerRouteFailure(ctx, pool, route.ID, poolEnabled)
+						break
+					}
 					return failTask(ctx, pool, p, "MODEL_PROVIDER_ERROR", upstreamCapacityMessage(kind))
 				}
 				if callErr == nil && !workerStatusCanFailover(candidate.StatusCode) {
@@ -518,13 +523,11 @@ func processImageTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token st
 	charge, err := workerChargeRouteProviderCost(ctx, pool, providerCost, chargeCost, costSource, workerRouteUserPriceIsFinal(selected.Route.UserPriceRule))
 	if err != nil {
 		message := "上游未返回可核验成本，已停止扣费：" + err.Error()
-		_, _ = pool.Exec(ctx,
-			`UPDATE tasks SET status='failed',output=$1,actual_cost=0,provider_cost=$2,
-			 provider_cost_source='missing_route_cost',provider_cost_complete=false,
-			 error_code='BILLING_COST_MISSING',error_message=$3,finished_at=now(),updated_at=now()
-			 WHERE task_no=$4 AND status='running'`,
-			nil, providerCost, message, p.TaskNo,
-		)
+		// tasks.output 是 NOT NULL，这里必须写入合法 JSON，否则整条 UPDATE 会失败；
+		// 之前用 nil 且丢弃错误，导致任务永久停留在 running，前端画布节点一直转圈。
+		if updateErr := markTaskBillingCostMissing(ctx, pool, p.TaskNo, providerCost, message); updateErr != nil {
+			log.Printf("Task %s mark BILLING_COST_MISSING failed: %v", p.TaskNo, updateErr)
+		}
 		if releaseErr := unfreezeBillingWithFinalize(ctx, pool, p.UserID, estimated, "task", p.TaskNo, nil); releaseErr != nil {
 			return fmt.Errorf("task %s cost rejected and reservation release failed: %w", p.TaskNo, releaseErr)
 		}
@@ -1626,7 +1629,11 @@ func executeWorkerGenerationAttempt(ctx context.Context, pool *pgxpool.Pool, p I
 			payload["mask"] = mask
 		}
 	}
-	if isVideo {
+	if isVideo && !isOpenRouterVideoAdapter(route.RuntimeRule) {
+		// The OpenRouter video builder already emits the provider's exact schema.
+		// The generic sanitizer deletes duration (it only keeps it for two legacy
+		// endpoints), which silently turned every requested duration into the
+		// provider default.
 		payload = videoparams.SanitizeUpstreamPayload(payload, endpoint)
 	}
 	if err := normalizePayloadMedia(ctx, payload, endpoint); err != nil {
@@ -2667,7 +2674,7 @@ func applyRequestTransform(payload map[string]interface{}, extraParams map[strin
 
 func workerStatusCanFailover(status int) bool {
 	switch status {
-	case 0, 401, 403, 404, 408, 409, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524:
+	case 0, 401, 402, 403, 404, 408, 409, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524:
 		return true
 	default:
 		return false
@@ -2738,6 +2745,8 @@ func classifyUpstreamCapacity(status int, body []byte) upstreamCapacityKind {
 		"maximum cost exceeds your available credits",
 		"maximum cost",
 		"add credits, or request fewer images",
+		"insufficient credits",
+		"insufficient_credits",
 	} {
 		if strings.Contains(lower, marker) {
 			return upstreamCapacityCredits
@@ -4378,6 +4387,45 @@ func firstMediaURL(m map[string]interface{}, keys ...string) string {
 	return ""
 }
 
+// 迁移 169 之后，平台自己的生成结果保存为 /media/<bucket>/<key> 相对地址。
+// 判断“模型是否返回素材”时不能只认 http(s)，否则成功落库的图片/视频/音频
+// 会被当成空结果，AI 漫剧在资产、关键帧、分段视频和配音阶段全部失败。
+func comicMediaURL(m map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		s := strings.TrimSpace(scalarString(m, key))
+		if s == "" {
+			continue
+		}
+		if isHTTPURL(s) || strings.HasPrefix(s, "/media/") || strings.HasPrefix(s, "data:") {
+			return s
+		}
+	}
+	return ""
+}
+
+// downloadMediaSource 统一读取站内相对地址与外部 http(s) 地址。
+// 相对地址没有协议头，HTTP 下载必然失败，直接按对象 key 读取对象存储。
+func downloadMediaSource(ctx context.Context, conn connectionConfig, mediaURL string, maxBytes int64) ([]byte, string, error) {
+	mediaURL = strings.TrimSpace(mediaURL)
+	if strings.HasPrefix(mediaURL, "/") && objectStore != nil {
+		if key := objectStore.ObjectKeyFromURL(mediaURL); key != "" {
+			if maxBytes <= 0 {
+				maxBytes = 500 << 20
+			}
+			data, err := objectStore.ReadAll(ctx, key, maxBytes)
+			if err != nil {
+				return nil, "", err
+			}
+			contentType := http.DetectContentType(data[:min(len(data), 512)])
+			if contentType == "application/octet-stream" {
+				contentType = ""
+			}
+			return data, contentType, nil
+		}
+	}
+	return downloadAuthenticatedMedia(ctx, conn, mediaURL, maxBytes)
+}
+
 func isValidMediaItem(it mediaItem) bool {
 	return isHTTPURL(it.URL) || strings.TrimSpace(it.B64JSON) != ""
 }
@@ -4584,7 +4632,13 @@ func mirrorUpstreamMedia(ctx context.Context, conn connectionConfig, mediaURL, u
 		if !shouldMirrorMediaURL(candidate, conn) {
 			continue
 		}
-		data, contentType, err := downloadAuthenticatedMedia(ctx, conn, candidate, 250<<20)
+		// 候选里可能有我们拼出来的同源地址（/v1/videos/{id}/content），
+		// 上游不一定提供；对这类地址的 404 只做少量重试，尽快回落到真实结果地址。
+		notFoundAttempts := defaultDownloadAttempts
+		if candidate != mediaURL {
+			notFoundAttempts = maxDownloadAttemptsNotFound
+		}
+		data, contentType, err := downloadMediaWithNotFoundBudget(ctx, conn, candidate, 250<<20, notFoundAttempts)
 		if err == nil {
 			if !validDownloadedMedia(kind, contentType, data) {
 				return "", fmt.Errorf("上游返回的%s文件格式无效: content-type=%s body=%s", mediaKindLabel(kind), contentType, truncateText(string(data), 160))
@@ -4690,12 +4744,28 @@ func downloadRetryDelay(attempt, statusCode int) time.Duration {
 }
 
 func downloadAuthenticatedMedia(ctx context.Context, conn connectionConfig, mediaURL string, maxBytes int64) ([]byte, string, error) {
+	return downloadMediaWithNotFoundBudget(ctx, conn, mediaURL, maxBytes, defaultDownloadAttempts)
+}
+
+// defaultDownloadAttempts 是媒体下载的最大重试次数（沿用历史行为）。
+const defaultDownloadAttempts = 45
+
+// maxDownloadAttemptsNotFound 限制「地址不存在」类 404 的重试次数。
+// 多数上游的结果 CDN 用裸 404（nginx/S3 的 HTML 错误页）表示路径不存在，
+// 这类 404 不会自愈；按 45 次退避重试最长要等约 20 分钟，
+// 会让前端画布的视频节点先报「生成超时」，也会拖住后续候选地址。
+const maxDownloadAttemptsNotFound = 3
+
+func downloadMediaWithNotFoundBudget(ctx context.Context, conn connectionConfig, mediaURL string, maxBytes int64, notFoundAttempts int) ([]byte, string, error) {
 	parsedURL, err := url.Parse(strings.TrimSpace(mediaURL))
 	if err != nil || parsedURL.Host == "" || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
 		return nil, "", fmt.Errorf("无法下载媒体：地址不是可访问的 http(s) URL")
 	}
 	client := &http.Client{Timeout: 15 * time.Minute}
-	const maxAttempts = 45
+	const maxAttempts = defaultDownloadAttempts
+	if notFoundAttempts < 1 || notFoundAttempts > maxAttempts {
+		notFoundAttempts = maxAttempts
+	}
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, "GET", mediaURL, nil)
 		if err != nil {
@@ -4713,17 +4783,30 @@ func downloadAuthenticatedMedia(ctx context.Context, conn connectionConfig, medi
 			}
 			return nil, "", fmt.Errorf("下载上游视频失败: %w", err)
 		}
-		if isTransientDownloadStatus(resp.StatusCode) && attempt < maxAttempts {
-			body, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
-			resp.Body.Close()
-			if isHardDownload404(resp.StatusCode, body) {
-				return nil, "", fmt.Errorf("下载上游视频 HTTP 404: %s", truncateText(string(body), 200))
+		if isTransientDownloadStatus(resp.StatusCode) {
+			// 404 表示「该地址不存在」，不会自愈：读取 body 用于识别与报错，
+			// 少量重试后立刻返回，交给下一个候选地址。
+			if resp.StatusCode == 404 {
+				body, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+				resp.Body.Close()
+				if isHardDownload404(resp.StatusCode, body) || attempt >= notFoundAttempts {
+					return nil, "", fmt.Errorf("下载上游视频 HTTP 404: %s", truncateText(string(body), 200))
+				}
+				delay := downloadRetryDelay(attempt, resp.StatusCode)
+				log.Printf("download %s HTTP %d (attempt %d/%d), retry in %s: %s",
+					truncateText(mediaURL, 60), resp.StatusCode, attempt, maxAttempts, delay, truncateText(string(body), 100))
+				time.Sleep(delay)
+				continue
 			}
-			delay := downloadRetryDelay(attempt, resp.StatusCode)
-			log.Printf("download %s HTTP %d (attempt %d/%d), retry in %s: %s",
-				truncateText(mediaURL, 60), resp.StatusCode, attempt, maxAttempts, delay, truncateText(string(body), 100))
-			time.Sleep(delay)
-			continue
+			if attempt < maxAttempts {
+				body, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+				resp.Body.Close()
+				delay := downloadRetryDelay(attempt, resp.StatusCode)
+				log.Printf("download %s HTTP %d (attempt %d/%d), retry in %s: %s",
+					truncateText(mediaURL, 60), resp.StatusCode, attempt, maxAttempts, delay, truncateText(string(body), 100))
+				time.Sleep(delay)
+				continue
+			}
 		}
 		if resp.StatusCode >= 400 {
 			body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
@@ -5341,6 +5424,25 @@ func (e *RetryableError) Error() string {
 
 func failTask(ctx context.Context, pool *pgxpool.Pool, p ImageTaskPayload, code, msg string) error {
 	return failTaskWithStatusCode(ctx, pool, p, code, msg, 0)
+}
+
+// markTaskBillingCostMissing 在「上游未返回可核验成本」时终止任务并释放冻结。
+// tasks.output 是 NOT NULL，必须写合法 JSON；写成 NULL 会让整条 UPDATE 失败，
+// 任务会永久停留在 running，前端画布节点一直显示生成中。
+func markTaskBillingCostMissing(ctx context.Context, pool *pgxpool.Pool, taskNo string, providerCost float64, message string) error {
+	tag, err := pool.Exec(ctx,
+		`UPDATE tasks SET status='failed',output='{}'::jsonb,actual_cost=0,provider_cost=$1,
+		 provider_cost_source='missing_route_cost',provider_cost_complete=false,
+		 error_code='BILLING_COST_MISSING',error_message=$2,finished_at=now(),updated_at=now()
+		 WHERE task_no=$3 AND status IN ('pending','running')`,
+		providerCost, message, taskNo)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("task %s is no longer active", taskNo)
+	}
+	return nil
 }
 
 func failTaskWithStatusCode(ctx context.Context, pool *pgxpool.Pool, p ImageTaskPayload, code, msg string, statusCode int) error {

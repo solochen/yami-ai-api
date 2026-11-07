@@ -128,6 +128,10 @@ func (h *Handler) GetCanvas(c *gin.Context) {
 		util.InternalError(c, err.Error())
 		return
 	}
+	// 与创建/更新保持一致：summary=true 时只回传元信息，避免历史列表拉取 2MB 画布正文。
+	if c.Query("summary") == "true" {
+		item.Document = nil
+	}
 	util.OK(c, item)
 }
 

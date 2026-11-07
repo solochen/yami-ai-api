@@ -46,6 +46,7 @@ type MediaTask = { task_no: string; status: string; progress?: number; output?: 
 type Project = {
   public_id: string;
   status: string;
+  inputs?: Record<string, any>;
   estimated_cost?: number;
   actual_cost?: number;
   error_message?: string;
@@ -59,6 +60,28 @@ type UtilityFeature = { icon?: string; title: string; subtitle?: string; tags?: 
 function outputURL(task?: MediaTask) {
   const out = task?.output || {};
   return String(out.video_url || out.url || (Array.isArray(out.videos) && out.videos[0]?.url) || "");
+}
+
+function subtitleResultLabel(mode: string | undefined, ts: (source: string) => string) {
+  if (mode === "soft_track") return ts("已去掉单独的字幕轨");
+  if (mode === "soft_and_hard") return ts("已移除字幕轨并修复画面硬字幕");
+  return ts("AI 硬字幕修复");
+}
+
+function SubtitleLimitNotice({ ts }: { ts: (source: string) => string }) {
+  return (
+    <div className="rounded-2xl bg-amber-50 px-3 py-3 text-amber-950 dark:bg-amber-400/10 dark:text-amber-50">
+      <div className="text-sm font-semibold">{ts("只能去掉单独的字幕轨")}</div>
+      <p className="mt-1 text-xs leading-5 text-amber-900/80 dark:text-amber-50/80">{ts("这个功能只能去掉可以单独开关的字幕，画面本身不会改。字如果是直接做进画面里的，比如短视频底部那一行，这里去不掉。")}</p>
+    </div>
+  );
+}
+
+function assetDurationSeconds(asset: AssetItem) {
+  const meta = asset.metadata || {};
+  const raw = meta.duration_seconds ?? meta.duration_sec ?? meta.duration;
+  const value = Number(raw || 0);
+  return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 function formatBytes(value = 0) {
@@ -204,9 +227,6 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
   const [styleStrength, setStyleStrength] = useState(Number(config.default_style_strength ?? 0.65));
   const [preserveMotion, setPreserveMotion] = useState(config.preserve_motion !== false);
   const [preserveIdentity, setPreserveIdentity] = useState(config.preserve_identity !== false);
-  const [subtitleMode, setSubtitleMode] = useState(config.default_subtitle_mode || "auto");
-  const [subtitleRegion, setSubtitleRegion] = useState(config.default_subtitle_region || "bottom_25");
-  const [protectWatermark, setProtectWatermark] = useState(config.protect_watermark !== false);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [project, setProject] = useState<Project | null>(null);
@@ -232,9 +252,9 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
     : isSubtitle
       ? [
           { icon: "🎬", title: ts("上传源视频"), subtitle: ts("上传文件或从资产库引用已有视频"), tags: [ts("格式校验"), ts("时长检查")] },
-          { icon: "🔎", title: ts("识别字幕类型"), subtitle: ts("自动判断独立字幕轨或画面硬字幕"), tags: [ts("自动识别"), ts("区域检测")] },
-          { icon: "🧹", title: ts("智能清除字幕"), subtitle: ts("无损移除字幕轨或使用 AI 修复画面"), tags: [ts("保护水印"), ts("保留原音")] },
-          { icon: "📥", title: ts("预览与下载"), subtitle: ts("查看清理结果并下载完整视频"), tags: [ts("结果预览"), ts("实际计费")] },
+          { icon: "🧹", title: ts("去掉字幕轨"), subtitle: ts("只移除可以单独开关的那一层字幕"), tags: [ts("不改画面"), ts("保留原音")] },
+          { icon: "🚫", title: ts("印在画面上的去不掉"), subtitle: ts("直接做进画面里的字，这里处理不了"), tags: [ts("短视频字幕"), ts("烧进画面")] },
+          { icon: "📥", title: ts("预览与下载"), subtitle: ts("处理完成后查看并下载视频"), tags: [ts("结果预览"), ts("画面不变")] },
         ]
       : [
           { icon: "🎬", title: ts("上传源视频"), subtitle: ts("上传文件或从资产库引用已有视频"), tags: [ts("格式校验"), ts("时长检查")] },
@@ -251,8 +271,10 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
   const features = fallbackFeatures.map(
     (fallback) => configuredFeatures.find((item) => item.title === fallback.title) || fallback
   );
-  const heroTags = (display.hero_tags?.length ? display.hero_tags : fallbackFeatures.flatMap((item) => item.tags || []).slice(0, 4))
-    .map((tag) => td(`agent.${workflow.code}.heroTag.${tag}`, tag));
+  const heroTags = (isSubtitle
+    ? [ts("只去字幕轨"), ts("不改画面"), ts("印在画面上的去不掉")]
+    : (display.hero_tags?.length ? display.hero_tags : fallbackFeatures.flatMap((item) => item.tags || []).slice(0, 4))
+  ).map((tag) => td(`agent.${workflow.code}.heroTag.${tag}`, tag));
 
   useEffect(() => {
     if (!resolutions.includes(resolution)) setResolution(resolutions[0]);
@@ -277,6 +299,19 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
     api<Project>(`/api/agent-projects/${id}`)
       .then((saved) => {
         setProject(saved);
+        const savedInputs = saved.inputs || {};
+        const savedURL = String(savedInputs.video_url || savedInputs.source_video_url || "");
+        if (savedURL) {
+          setSource({
+            url: savedURL,
+            name: String(savedInputs.source_name || "源视频"),
+            public_id: savedInputs.source_asset_id ? String(savedInputs.source_asset_id) : undefined,
+            size_bytes: Number(savedInputs.size_bytes || 0) || undefined,
+            duration: Number(savedInputs.duration_sec || savedInputs.duration_seconds || 0) || undefined,
+          });
+        }
+        if (typeof savedInputs.preserve_audio === "boolean") setPreserveAudio(savedInputs.preserve_audio);
+        if (!isSubtitle && typeof savedInputs.prompt === "string") setPrompt(savedInputs.prompt);
         if (["pending", "running"].includes(saved.status)) startPolling(saved.public_id);
       })
       .catch(() => window.localStorage.removeItem(activeProjectKey));
@@ -413,9 +448,11 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
           inputs.reference_images = [styleReference.url];
         }
       } else {
-        inputs.subtitle_mode = subtitleMode;
-        inputs.subtitle_region = subtitleRegion;
-        inputs.protect_watermark = protectWatermark;
+        inputs.subtitle_mode = "soft_track";
+        inputs.prompt = "";
+        inputs.source_name = source.name;
+        if (source.size_bytes) inputs.size_bytes = source.size_bytes;
+        if (source.duration && source.duration > 0) inputs.duration_sec = source.duration;
       }
       const next = await api<Project>(`/api/agents/${workflow.code}/projects`, {
         method: "POST",
@@ -484,7 +521,7 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
             workflowCode={workflow.code}
             workflowIcon={workflow.icon || (isRedraw ? "🪄" : isSubtitle ? "🧹" : "✨")}
             workflowName={td(`agent.${workflow.code}.name`, workflow.name)}
-            workflowDescription={td(`agent.${workflow.code}.description`, workflow.description || "")}
+            workflowDescription={isSubtitle ? ts("只能去掉单独的字幕轨。已经印在画面上的字幕去不掉。") : td(`agent.${workflow.code}.description`, workflow.description || "")}
             heroTags={heroTags}
             features={features}
             activeIndex={activeFeature}
@@ -543,13 +580,17 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
                   </div>
                 )}
               </div>
-              <textarea
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                rows={3}
-                placeholder={isRedraw ? ts("描述目标画风，例如：日系动漫、厚涂插画、赛博朋克电影感") : isSubtitle ? ts("可选：补充字幕位置或需要保护的画面元素") : t("upscale.prompt")}
-                className="min-h-[72px] min-w-0 flex-1 resize-none bg-transparent px-1 py-1 text-sm leading-relaxed text-gray-700 outline-none placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-gray-500 sm:min-h-[88px]"
-              />
+              {isSubtitle ? (
+                <div className="min-w-0 flex-1 py-1"><SubtitleLimitNotice ts={ts} /></div>
+              ) : (
+                <textarea
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  rows={3}
+                  placeholder={isRedraw ? ts("描述目标画风，例如：日系动漫、厚涂插画、赛博朋克电影感") : t("upscale.prompt")}
+                  className="min-h-[72px] min-w-0 flex-1 resize-none bg-transparent px-1 py-1 text-sm leading-relaxed text-gray-700 outline-none placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-gray-500 sm:min-h-[88px]"
+                />
+              )}
             </div>
 
             <div className="flex items-end gap-2 border-t border-gray-50 px-3 py-3 dark:border-white/10 sm:items-center sm:px-4">
@@ -575,26 +616,6 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
                     </MediaOptionMenu>
                     <button type="button" onClick={() => setPreserveMotion((value) => !value)} className={`h-9 shrink-0 rounded-xl border px-3 text-xs font-medium transition ${preserveMotion ? "border-primary/30 bg-primary/10 text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary" : "border-gray-100 bg-gray-50 text-gray-500 hover:border-primary/30 dark:border-white/10 dark:bg-white/5 dark:text-gray-300"}`}>{ts("动作保持")}：{preserveMotion ? "ON" : "OFF"}</button>
                     <button type="button" onClick={() => setPreserveIdentity((value) => !value)} className={`h-9 shrink-0 rounded-xl border px-3 text-xs font-medium transition ${preserveIdentity ? "border-primary/30 bg-primary/10 text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary" : "border-gray-100 bg-gray-50 text-gray-500 hover:border-primary/30 dark:border-white/10 dark:bg-white/5 dark:text-gray-300"}`}>{ts("人物保持")}：{preserveIdentity ? "ON" : "OFF"}</button>
-                  </>
-                )}
-                {isSubtitle && (
-                  <>
-                    <MediaOptionMenu icon={<Sparkles size={14} />} activeLabel={subtitleMode === "soft_track" ? ts("字幕轨") : subtitleMode === "hardcoded_ai" ? ts("硬字幕 AI") : ts("自动识别")} title={ts("处理模式")} subtitle={ts("选择字幕识别与清除方式")}>
-                      {(close) => <div className="space-y-1.5">{[
-                        { value: "auto", label: ts("自动识别") },
-                        { value: "soft_track", label: ts("字幕轨") },
-                        { value: "hardcoded_ai", label: ts("硬字幕 AI") },
-                      ].map((item) => <MediaMenuOption key={item.value} selected={subtitleMode === item.value} onClick={() => { setSubtitleMode(item.value); close(); }}>{item.label}</MediaMenuOption>)}</div>}
-                    </MediaOptionMenu>
-                    <MediaOptionMenu icon={<Film size={14} />} activeLabel={subtitleRegion === "full" ? ts("全画面") : ts(`底部 ${subtitleRegion.replace("bottom_", "")}%`)} title={ts("字幕区域")} subtitle={ts("限定需要识别和清除的画面区域")}>
-                      {(close) => <div className="space-y-1.5">{[
-                        { value: "bottom_15", label: ts("底部 15%") },
-                        { value: "bottom_25", label: ts("底部 25%") },
-                        { value: "bottom_35", label: ts("底部 35%") },
-                        { value: "full", label: ts("全画面") },
-                      ].map((item) => <MediaMenuOption key={item.value} selected={subtitleRegion === item.value} onClick={() => { setSubtitleRegion(item.value); close(); }}>{item.label}</MediaMenuOption>)}</div>}
-                    </MediaOptionMenu>
-                    <button type="button" onClick={() => setProtectWatermark((value) => !value)} className={`h-9 shrink-0 rounded-xl border px-3 text-xs font-medium transition ${protectWatermark ? "border-primary/30 bg-primary/10 text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary" : "border-gray-100 bg-gray-50 text-gray-500 hover:border-primary/30 dark:border-white/10 dark:bg-white/5 dark:text-gray-300"}`}>{ts("保护水印")}：{protectWatermark ? "ON" : "OFF"}</button>
                   </>
                 )}
                 <button type="button" onClick={() => setPreserveAudio((value) => !value)} className={`h-9 shrink-0 rounded-xl border px-3 text-xs font-medium transition ${preserveAudio ? "border-primary/30 bg-primary/10 text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary" : "border-gray-100 bg-gray-50 text-gray-500 hover:border-primary/30 dark:border-white/10 dark:bg-white/5 dark:text-gray-300"}`}>{t("upscale.preserveAudio")}：{preserveAudio ? "ON" : "OFF"}</button>
@@ -666,28 +687,12 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
                 </div>
               </>
             )}
-            {isSubtitle && (
-              <>
-                <div className="mt-5">
-                  <div className="mb-2 text-xs text-gray-400">{ts("处理模式")}</div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[["auto", ts("自动识别")], ["soft_track", ts("字幕轨")], ["hardcoded_ai", ts("硬字幕 AI")]].map(([value, label]) => <button key={value} type="button" onClick={() => setSubtitleMode(value)} className={`min-h-10 rounded-xl border px-2 text-xs ${subtitleMode === value ? "border-primary bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary" : "border-gray-100 text-gray-500 dark:border-white/10"}`}>{label}</button>)}
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <div className="mb-2 text-xs text-gray-400">{ts("字幕区域")}</div>
-                  <select value={subtitleRegion} onChange={(e) => setSubtitleRegion(e.target.value)} className="h-11 w-full rounded-xl border border-gray-100 bg-gray-50 px-3 text-sm outline-none dark:border-white/10 dark:bg-white/5">
-                    <option value="bottom_15">底部 15%</option><option value="bottom_25">底部 25%</option><option value="bottom_35">底部 35%</option><option value="full">全画面</option>
-                  </select>
-                </div>
-                <label className="mt-4 flex items-center justify-between rounded-xl border border-gray-100 px-3 py-3 text-sm dark:border-white/10"><span><span className="font-medium">{ts("保护水印与 Logo")}</span><span className="mt-0.5 block text-[11px] text-gray-400">{ts("限制 AI 只修复指定字幕区域")}</span></span><input type="checkbox" checked={protectWatermark} onChange={(e) => setProtectWatermark(e.target.checked)} /></label>
-              </>
-            )}
+            {isSubtitle && <div className="mt-4"><SubtitleLimitNotice ts={ts} /></div>}
             <label className="mt-4 flex cursor-pointer items-center justify-between rounded-xl border border-gray-100 px-3 py-3 text-sm dark:border-white/10">
               <span><span className="font-medium">{t("upscale.preserveAudio")}</span><span className="mt-0.5 block text-[11px] text-gray-400">{t("upscale.preserveAudioDesc")}</span></span>
               <input type="checkbox" checked={preserveAudio} onChange={(event) => setPreserveAudio(event.target.checked)} className="h-4 w-4 accent-primary" />
             </label>
-            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={2} placeholder={isRedraw ? ts("描述目标画风，例如：日系动漫、厚涂插画、赛博朋克电影感") : isSubtitle ? ts("可选：补充字幕位置或需要保护的画面元素") : t("upscale.prompt")} className="mt-4 min-h-[64px] resize-none rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-primary/30 dark:border-white/10 dark:bg-white/5" />
+            {!isSubtitle && <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={2} placeholder={isRedraw ? ts("描述目标画风，例如：日系动漫、厚涂插画、赛博朋克电影感") : t("upscale.prompt")} className="mt-4 min-h-[64px] resize-none rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-primary/30 dark:border-white/10 dark:bg-white/5" />}
 
             {project && (
               <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/5">
@@ -697,7 +702,7 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-white/10"><div className={`h-full rounded-full transition-all ${project.status === "failed" ? "bg-red-500" : "bg-primary/100"}`} style={{ width: `${progress}%` }} /></div>
                 {project.status === "failed" && <div className="mt-2 text-xs leading-5 text-red-500">{project.error_message || latestTask?.error_message || "处理失败"}</div>}
-                {project.status === "succeeded" && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400"><span>{isUpscale ? `${t("upscale.target")}：${project.outputs?.target_resolution || resolution}` : isSubtitle ? `处理路径：${project.outputs?.subtitle_mode === "soft_track" ? ts("独立字幕轨无损移除") : ts("AI 硬字幕修复")}` : `风格强度：${Math.round(styleStrength * 100)}%`}</span><span>{t("upscale.actualCost", { value: Number(project.actual_cost || 0).toFixed(2) })}</span></div>}
+                {project.status === "succeeded" && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400"><span>{isUpscale ? `${t("upscale.target")}：${project.outputs?.target_resolution || resolution}` : isSubtitle ? `处理路径：${subtitleResultLabel(String(project.outputs?.subtitle_mode || ""), ts)}` : `风格强度：${Math.round(styleStrength * 100)}%`}</span><span>{t("upscale.actualCost", { value: Number(project.actual_cost || 0).toFixed(2) })}</span></div>}
               </div>
             )}
             {error && <div className="mt-3 text-xs leading-5 text-red-500">{error}</div>}
@@ -735,7 +740,14 @@ export function VideoUpscaleWorkspace({ workflow }: { workflow: WorkflowLike }) 
                   setAssetOpen(false);
                   return;
                 }
-                setSource({ url: asset.url, name: asset.name || "视频资产", public_id: asset.public_id, size_bytes: asset.size_bytes, duration: Number(asset.metadata?.duration || 0) });
+                const duration = assetDurationSeconds(asset);
+                const maxDuration = Math.max(1, Number(config.max_input_duration_sec || 300));
+                if (isSubtitle && duration > maxDuration) {
+                  setError(td("videoUpscale.maxDuration", "Video duration must not exceed {seconds} seconds", { seconds: maxDuration }));
+                  setAssetOpen(false);
+                  return;
+                }
+                setSource({ url: asset.url, name: asset.name || "视频资产", public_id: asset.public_id, size_bytes: asset.size_bytes, duration });
                 setProject(null);
                 window.localStorage.removeItem(activeProjectKey);
                 setAssetOpen(false);

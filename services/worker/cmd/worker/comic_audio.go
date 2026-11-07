@@ -66,7 +66,7 @@ func loadComicNarrationSources(ctx context.Context, dir string, narrations []int
 		item, _ := raw.(map[string]interface{})
 		item = copyMap(item)
 		if audioURL := stringAny(item["audio_url"]); audioURL != "" {
-			data, _, err := downloadAuthenticatedMedia(ctx, connectionConfig{}, audioURL, 100<<20)
+			data, _, err := downloadMediaSource(ctx, connectionConfig{}, audioURL, 100<<20)
 			if err != nil {
 				return nil, fmt.Errorf("下载分镜%d配音失败：%w", i+1, err)
 			}

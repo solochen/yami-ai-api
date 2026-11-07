@@ -68,7 +68,11 @@ func loadWorkerPricingConfig(ctx context.Context, pool *pgxpool.Pool) workerPric
 		}
 		switch key {
 		case "platform_gross_margin_percent":
-			if number, ok := workerFiniteNumber(value); ok && number < 100 {
+			// 0 是合法配置（表示平台不加毛利），必须与 API 侧 billing/pricing.go 的
+			// nonNegativeFinite 保持一致；旧实现用「必须大于 0」的判断把 0 当成未配置，
+			// 结果结算按默认 3% 加价，而冻结按 0% 估算，导致 estimated_cost < actual_cost，
+			// 余额刚好落在两者之间时会出现「上游已生成、结算失败、结果被丢弃」。
+			if number, ok := workerNonNegativeFinite(value); ok && number < 100 {
 				cfg.GrossMarginPercent = number
 			}
 		case "payment_compute_rate":
@@ -86,6 +90,11 @@ func loadWorkerPricingConfig(ctx context.Context, pool *pgxpool.Pool) workerPric
 		}
 	}
 	return cfg
+}
+
+func workerNonNegativeFinite(value interface{}) (float64, bool) {
+	number, ok := value.(float64)
+	return number, ok && number >= 0 && !math.IsNaN(number) && !math.IsInf(number, 0)
 }
 
 func workerFiniteNumber(value interface{}) (float64, bool) {

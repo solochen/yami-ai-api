@@ -391,6 +391,8 @@ func (s *Service) WorkflowCharge(ctx context.Context, projectID int64) (*Workflo
 	}
 	var provider float64
 	var missing int64
+	// upstream_reported 是上游真实回传的用量成本（provider_cost_complete=true），
+	// 与 route_cost 一样可核验；遗漏它会让“失败后重试”的项目被误判为成本缺失。
 	if err := s.db.QueryRow(ctx, `
 		WITH llm AS (
 			SELECT DISTINCT ON (request_id) provider_cost,
@@ -422,10 +424,10 @@ func (s *Service) WorkflowCharge(ctx context.Context, projectID int64) (*Workflo
 		       AND provider_cost_source NOT IN ('complimentary','local_free'))
 		  + (SELECT COUNT(*) FROM llm
 		     WHERE provider_cost_complete
-		       AND provider_cost_source NOT IN ('complimentary','local_free','route_cost'))
+		       AND provider_cost_source NOT IN ('complimentary','local_free','route_cost','upstream_reported'))
 		  + (SELECT COUNT(*) FROM media
 		     WHERE provider_cost_complete
-		       AND provider_cost_source NOT IN ('complimentary','local_free','route_cost'))`, projectID,
+		       AND provider_cost_source NOT IN ('complimentary','local_free','route_cost','upstream_reported'))`, projectID,
 	).Scan(&provider, &missing); err != nil {
 		return nil, err
 	}

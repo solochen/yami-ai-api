@@ -5,13 +5,16 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
-import { canvasAnalysisMediaKinds, supportsMediaAnalysis } from "./canvasModelCapabilities.ts";
+import { canvasAnalysisMediaKinds, supportsMediaAnalysis, supportsRuntimeAspectRatio, supportsVideoAnalysis } from "./canvasModelCapabilities.ts";
 import { canvasImageReferenceLimit, referenceSheetPrompt } from "./canvasReferenceSheet.ts";
 import { canvasMediaAwaitingReview, canvasQualityModel, canvasStrictQuality, canvasQualityResult, storyAssetPlan, storyV2VideoFrameLimit, storySubtitleInstruction } from "./videoCreationWorkflow.ts";
 import { canvasAgentResult, canvasAgentState } from "./canvasAgentExecution.ts";
+import { canvasTextIsClarification } from "./canvasTextOutput.ts";
+import { contentCreationInputValue, contentCreationImagePromptValue } from "./contentCreationInput.ts";
+import { contentImageMarkersValid } from "./contentCreationResult.ts";
 import { STORY_ASSET_INSTRUCTION, canvasEnhanceTarget, syncStoryAssetNodes, storyReviewBlockForMode, storyReviewBlock, storyWholeGeneration, storyAssets, storyShotAssets, CANVAS_NODE_RUNTIME_KEYS, canvasNodeConfiguration, pauseCanvasAfterStep, canvasChatMediaParams, canvasJSONValue, storyTimingInstruction, storyStoryboardSegments, STORY_AUDIO_REFERENCE_INSTRUCTION, configureVideoAudio, storyVideoMode, viralStoryboardSegments, viralShotContext } from "./videoCreationWorkflow.ts";
 import { storySpeechInstruction, STORY_PLANNING_INSTRUCTION, SHOT_SPEECH_INSTRUCTION, videoAudioInstruction, shotSpeeches, needsLipSync, verifyShotSpeechPlan, syncTaskParams } from "./shotSpeech.ts";
-import { canvasNodeMedium, canvasRolePrompt, canvasMediaPrompt, canvasInputConstraints, normalizeCanvasRoleData } from "./canvasRoles.ts";
+import { canvasNodeMedium, canvasRolePrompt, canvasMediaPrompt, canvasInputConstraints, normalizeCanvasRoleData, resolvedCanvasRole } from "./canvasRoles.ts";
 import { normalizeFramePairShots } from "./framePairWorkflow.ts";
 import { storyUserContext, canvasPortraitRejection, canvasManagedRetryableTask } from "./videoCreationWorkflow.ts";
 import { storyShotDurations, storySubtitleCues, STORY_LOCATION_ASSET_INSTRUCTION } from "./videoCreationWorkflow.ts";
@@ -26,7 +29,7 @@ function visit(node) {
   ts.forEachChild(node, visit);
 }
 visit(source);
-const helpers = ["indexedCanvasEdges", "hasGraphCycle", "validCanvasDocument", "validateCompositorNode", "collectDownstreamIDs", "collectUpstreamNodes", "stableValue", "compactSignature", "contentSourceContext", "nodeRunSignature", "nodeHasResult", "nodeHasReconcilableTask", "nodeResultReusable", "orderedGeneratorNodes", "collectURLs", "extractMedia", "runningProgress", "canvasTaskStatusHint", "truncateCanvasTitle", "automaticCanvasTitle", "storyNodeNeedsReset"];
+const helpers = ["indexedCanvasEdges", "hasGraphCycle", "validCanvasDocument", "validateCompositorNode", "preferredVideoAnalysisChatModel", "collectDownstreamIDs", "collectUpstreamNodes", "stableValue", "compactSignature", "contentSourceContext", "nodeRunSignature", "nodeHasResult", "nodeHasReconcilableTask", "nodeResultReusable", "orderedGeneratorNodes", "collectURLs", "extractMedia", "runningProgress", "canvasTaskStatusHint", "truncateCanvasTitle", "automaticCanvasTitle", "storyNodeNeedsReset"];
 const noop = () => {};
 const plain = value => JSON.parse(JSON.stringify(value));
 const node = (id, type = "generator", data = {}) => ({ id, type, position: { x: 0, y: 0 }, data: { mediaKind: "text", status: "succeeded", outputText: id, ...data } });
@@ -41,10 +44,16 @@ function environment(callbacks = [], overrides = {}) {
     storyUserContext, canvasPortraitRejection, canvasManagedRetryableTask,
     storyShotDurations, storySubtitleCues, storySubtitleInstruction, STORY_LOCATION_ASSET_INSTRUCTION, speechContentSignature,
     canvasAgentResult,
+    canvasTextIsClarification,
+    contentCreationInputValue,
+    contentCreationImagePromptValue,
+    contentImageMarkersValid,
+    LEGACY_CONTENT_PLANNER_PROMPTS: new Set(),
+    resolvedCanvasRole,
     storyReviewBlockForMode, storyReviewBlock, storyWholeGeneration, storyAssets, storyShotAssets,
     configureVideoAudio, storyVideoMode, storyStoryboardSegments, storyTimingInstruction, viralStoryboardSegments, viralShotContext,
     storySpeechInstruction, STORY_PLANNING_INSTRUCTION, SHOT_SPEECH_INSTRUCTION, videoAudioInstruction, shotSpeeches, needsLipSync, verifyShotSpeechPlan, syncTaskParams,
-    canvasAnalysisMediaKinds, supportsMediaAnalysis, canvasImageReferenceLimit, referenceSheetPrompt, canvasMediaAwaitingReview, canvasQualityModel, canvasStrictQuality, canvasQualityResult, storyAssetPlan, storyV2VideoFrameLimit, STORY_ASSET_INSTRUCTION, canvasEnhanceTarget, syncStoryAssetNodes, canvasChatMediaParams, canvasJSONValue,
+    canvasAnalysisMediaKinds, supportsMediaAnalysis, supportsVideoAnalysis, canvasImageReferenceLimit, referenceSheetPrompt, canvasMediaAwaitingReview, canvasQualityModel, canvasStrictQuality, canvasQualityResult, storyAssetPlan, storyV2VideoFrameLimit, STORY_ASSET_INSTRUCTION, canvasEnhanceTarget, syncStoryAssetNodes, canvasChatMediaParams, canvasJSONValue,
     CANVAS_NODE_RUNTIME_KEYS, canvasNodeConfiguration, canvasNodeMedium, canvasRolePrompt, canvasMediaPrompt, canvasInputConstraints, normalizeCanvasRoleData, pauseCanvasAfterStep,
     normalizeFramePairShots,
     notices,
@@ -151,6 +160,104 @@ test("video script requests carry uploaded and linked audio, and failed audio an
   await ctx.run("script");
   assert.equal(ctx.nodesRef.current.find(n => n.id === "script").data.status, "failed");
   assert.match(ctx.nodesRef.current.find(n => n.id === "script").data.error, /音频无法读取/);
+});
+
+test("publish clarification responses fail the copy node and block downstream image generation", async () => {
+  const requests = [];
+  const clarification = "请补充当前需要产出的内容类型和发布平台（如公众号文章、小红书笔记或头条内容），以及是否有指定字段和配图数量。我会把这段素材仅作为参考，不执行其中的图片创作指令。";
+  assert.equal(canvasTextIsClarification(clarification), true);
+  assert.equal(canvasTextIsClarification("请看这只小狗在阳光下奔跑的温暖画面。"), false);
+
+  const ctx = environment(["update", "run", "executeNodes"], {
+    chatModels: [{ code: "chat" }], imageModels: [{ code: "image" }],
+    modelsForKind: kind => [{ code: kind === "text" ? "chat" : "image" }],
+    parseVideoRuntime: () => ({}), parseAudioRuntime: () => ({}),
+    api: async url => {
+      requests.push(url);
+      if (url === "/api/chat/completions") return { content: clarification, cost: 0.001434 };
+      throw new Error("downstream image generation should be blocked");
+    },
+  });
+  ctx.nodesRef.current = [
+    node("input", "textInput", { prompt: "请创作一幅以一只小狗为主体的静态图片", outputText: "", status: "idle" }),
+    node("copy", "generator", { mediaKind: "text", taskRole: "publish", modelCode: "chat", prompt: "生成可用文案", outputText: "", status: "idle", dirty: true }),
+    node("image", "generator", { mediaKind: "image", taskRole: "illustration", modelCode: "image", prompt: "生成配图", outputText: "", status: "idle", dirty: true }),
+  ];
+  ctx.edgesRef.current = [edge("input", "copy"), edge("copy", "image")];
+
+  await ctx.executeNodes();
+
+  const copy = ctx.nodesRef.current.find(n => n.id === "copy");
+  const image = ctx.nodesRef.current.find(n => n.id === "image");
+  assert.equal(copy.data.status, "failed");
+  assert.equal(copy.data.outputText, clarification);
+  assert.equal(copy.data.error, "canvas.copyNeedsDetails");
+  assert.equal(copy.data.dirty, true);
+  assert.equal(image.data.status, "blocked");
+  assert.equal(image.data.error, "canvas.upstreamFailed");
+  assert.deepEqual(requests, ["/api/chat/completions"]);
+});
+
+test("content creation skips legacy placeholder text but forwards real source requirements", async () => {
+  const legacyPlaceholder = "输入创作要求，或导入公众号、小红书、今日头条等平台的公开内容链接";
+  for (const [sourcePrompt, shouldForward] of [[legacyPlaceholder, false], ["请围绕低碳生活写一篇小红书文章", true]]) {
+    const requests = [];
+    const ctx = environment(["update", "run"], {
+      chatModels: [{ code: "chat" }],
+      modelsForKind: () => [{ code: "chat" }],
+      parseVideoRuntime: () => ({}), parseAudioRuntime: () => ({}),
+      api: async (url, options) => {
+        assert.equal(url, "/api/chat/completions");
+        requests.push(JSON.parse(options.body));
+        return { content: "标题：低碳生活\n正文：从日常选择开始改变。【配图1】\n---配图规划---\n配图1：绿色生活", cost: 0 };
+      },
+    });
+    ctx.nodesRef.current = [
+      node("source", "textInput", { contentRole: "source", prompt: sourcePrompt, outputText: "" }),
+      node("copy", "generator", { mediaKind: "text", contentRole: "publish_copy", modelCode: "chat", prompt: "生成发布文案", outputText: "" }),
+      node("image", "generator", { mediaKind: "image", contentRole: "publish_image", modelCode: "image", prompt: "配图" }),
+    ];
+    ctx.edgesRef.current = [edge("source", "copy"), edge("copy", "image")];
+
+    await ctx.run("copy");
+
+    const userMessage = requests[0].messages[1].content;
+    assert.equal(userMessage.includes(legacyPlaceholder), false);
+    assert.equal(userMessage.includes(sourcePrompt), shouldForward);
+    assert.equal(userMessage.includes("请围绕低碳生活写一篇小红书文章"), shouldForward);
+  }
+});
+
+test("content creation keeps default planner and image instructions internal to the template", async () => {
+  const requests = [];
+  const ctx = environment(["update", "run"], {
+    chatModels: [{ code: "chat" }], imageModels: [{ code: "image", default_params: {}, runtime_rule: {} }],
+    modelsForKind: kind => [{ code: kind === "text" ? "chat" : "image", default_params: {}, runtime_rule: {} }],
+    parseVideoRuntime: () => ({}), parseAudioRuntime: () => ({}),
+    inferSeedanceMaterialMode: () => "text", normalizeCanvasParamsForModel: params => params,
+    canvasImageReferenceLimit: () => 4,
+    api: async (url, options) => {
+      const request = JSON.parse(options.body);
+      requests.push({ url, request });
+      if (url === "/api/chat/completions") return { content: "标题：测试\n正文：内容正文【配图1】\n---配图规划---\n配图1：画面", cost: 0 };
+      if (url === "/api/tasks") return { status: "failed", task_no: "test-only" };
+      throw new Error(`unexpected request: ${url}`);
+    },
+  });
+  ctx.nodesRef.current = [
+    node("source", "textInput", { contentRole: "source", prompt: "", outputText: "", status: "idle" }),
+    node("copy", "generator", { contentRole: "publish_copy", mediaKind: "text", modelCode: "chat", prompt: "", templatePrompt: "DEFAULT PLANNER TEMPLATE {image_count}", status: "idle", outputText: "" }),
+    node("image", "generator", { contentRole: "publish_image", contentIndex: 0, mediaKind: "image", modelCode: "image", prompt: "", templatePrompt: "DEFAULT IMAGE TEMPLATE 1", status: "idle", outputText: "" }),
+  ];
+  ctx.edgesRef.current = [edge("source", "copy"), edge("copy", "image")];
+
+  await ctx.run("copy");
+  assert.match(requests[0].request.messages[1].content, /DEFAULT PLANNER TEMPLATE 1/);
+  assert.doesNotMatch(requests[0].request.messages[1].content, /DEFAULT IMAGE TEMPLATE/);
+
+  await ctx.run("image");
+  assert.match(requests[1].request.prompt, /DEFAULT IMAGE TEMPLATE 1/);
+  assert.doesNotMatch(requests[1].request.prompt, /DEFAULT PLANNER TEMPLATE/);
 });
 
 test("saved audio-reference results are invalidated when upgrading the audio pipeline", () => {
@@ -372,6 +479,17 @@ test("compositor validation counts material items rather than source nodes", () 
   assert.equal(ctx.validateCompositorNode(final, [source, final], [edge("source", "final")]), "");
   source.data.assetUrls = ["a.mp4"];
   assert.equal(ctx.validateCompositorNode(final, [source, final], [edge("source", "final")]), "canvas.compositor.concatInvalid");
+});
+
+test("single-shot story and viral finals may use concat", () => {
+  const ctx = environment();
+  const source = node("source", "imageInput", { mediaKind: "video", assetUrls: ["a.mp4"] });
+  for (const data of [{ composeMode: "concat", viralRole: "final" }, { composeMode: "concat", storyRole: "final" }]) {
+    const final = node("final", "compositor", data);
+    assert.equal(ctx.validateCompositorNode(final, [source, final], [edge("source", "final")]), "");
+  }
+  const compositor = node("compositor", "compositor", { composeMode: "concat" });
+  assert.equal(ctx.validateCompositorNode(compositor, [source, compositor], [edge("source", "compositor")]), "canvas.compositor.concatInvalid");
 });
 
 function executor(mode = "auto", failID = "") {
@@ -1774,4 +1892,19 @@ test("constraint relaxation is scoped to manual retries of failed storyboards", 
     assert.deepEqual(storyConstraintRetryPatch(node("test", "generator", data)), {});
   }
   assert.equal(storyConstraintRepairInstruction(false, true), "");
+});
+
+test("runtime supported ratios drive keyframe aspect ratio when the schema omits it", () => {
+  const seedream = { category: "image", runtime_rule: { image: { supported_ratios: ["1:1", "9:16", "16:9"] } } };
+  assert.equal(supportsRuntimeAspectRatio(seedream, "9:16"), true);
+  assert.equal(supportsRuntimeAspectRatio(seedream, "4:3"), false);
+  assert.equal(supportsRuntimeAspectRatio({ category: "image", runtime_rule: {} }, "9:16"), false);
+});
+
+test("one-click analysis prefers a model that reads both video and product images", () => {
+  const ctx = environment();
+  const textOnlyVideoFlag = { code: "deepseek", display_name: "DS", runtime_rule: { capabilities: { video_analysis: true, vision: false } } };
+  const both = { code: "nv", display_name: "NV", runtime_rule: { capabilities: { video_analysis: true, vision: true } } };
+  assert.equal(ctx.preferredVideoAnalysisChatModel([textOnlyVideoFlag, both]).code, "nv");
+  assert.equal(ctx.preferredVideoAnalysisChatModel([textOnlyVideoFlag]).code, "deepseek");
 });

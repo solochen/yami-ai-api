@@ -593,6 +593,22 @@ export function AgentWorkspace({ code }: { code: string }) {
     dialogue_model_codes: [] as string[],
     narration_perspective: "smart",
   });
+  // 线路调整会停用旧模型：下拉框只展示启用模型，若运行时配置仍指向已停用的
+  // 代号，自动回退到当前可用的模型，避免把失效代号提交给后端。
+  useEffect(() => {
+    if (!isComicDrama) return;
+    setComicSettings((prev) => {
+      const imageCode = prev.image_model_code && comicImageModels.some((item) => item.code === prev.image_model_code)
+        ? prev.image_model_code
+        : comicImageModels[0]?.code || prev.image_model_code;
+      const videoCode = prev.video_model_code && comicVideoModels.some((item) => item.code === prev.video_model_code)
+        ? prev.video_model_code
+        : (comicVideoModels.find((item) => modelSupportsImageReference(item)) || comicVideoModels[0])?.code || prev.video_model_code;
+      return imageCode === prev.image_model_code && videoCode === prev.video_model_code
+        ? prev
+        : { ...prev, image_model_code: imageCode, video_model_code: videoCode };
+    });
+  }, [isComicDrama, comicImageModels, comicVideoModels]);
   const [comicProjects, setComicProjects] = useState<ComicProject[]>([]);
 	const [showArchivedProjects, setShowArchivedProjects] = useState(false);
   const [activeComicProject, setActiveComicProject] = useState<ComicProject | null>(null);
@@ -862,6 +878,7 @@ export function AgentWorkspace({ code }: { code: string }) {
       const scenePrompt = clientScenePrompt(selectedSceneMeta.code, selectedSceneMeta.label, generationType);
       const visualBrief = commerceBrief.visual ? `视觉风格：${commerceBrief.visual}${commerceVisualStyleHint(commerceBrief.visual) ? `（${commerceVisualStyleHint(commerceBrief.visual)}）` : ""}` : "";
       const userPrompt = [prompt.trim(), code === "ecommerce_image" ? [commerceBrief.channel && `发布渠道：${commerceBrief.channel}`, commerceBrief.audience && `目标受众：${commerceBrief.audience}`, visualBrief].filter(Boolean).join("\n") : ""].filter(Boolean).join("\n\n");
+      const commerceReferenceURLs = (code === "ecommerce_image" || code === "ecommerce_video") ? currentComicReferences().map((item) => item.url) : [];
       const p = await api<Project>(`/api/agents/${code}/projects`, {
         method: "POST",
         body: JSON.stringify({
@@ -893,7 +910,8 @@ export function AgentWorkspace({ code }: { code: string }) {
             } : {}),
             count: Number((videoParams as any).count ?? (imageParams as any).count ?? params.count ?? count),
             n: Number((videoParams as any).count ?? (imageParams as any).n ?? params.count ?? count),
-            image_url: imageURL || undefined,
+            image_url: (code === "ecommerce_video" ? commerceReferenceURLs[0] : imageURL) || undefined,
+            ...(code === "ecommerce_video" ? { reference_images: Array.from(new Set([...(Array.isArray((videoParams as { reference_images?: string[] }).reference_images) ? (videoParams as { reference_images?: string[] }).reference_images || [] : []), ...commerceReferenceURLs])) } : {}),
             ...(!isVideoGeneration && imageURL ? { reference_images: code === "ecommerce_image" ? comicReferenceURLs : [imageURL] } : {}),
             reference_asset_ids: referenceAssetIds,
             _mode: !enableStepConfirm || mode === "auto" ? "auto" : "step",
@@ -929,7 +947,9 @@ export function AgentWorkspace({ code }: { code: string }) {
         commerceBrief.audience ? `目标受众：${commerceBrief.audience}` : "",
         commerceBrief.visual ? `视觉风格：${commerceBrief.visual}` : "",
         currentComicReferences().length ? `已上传 ${currentComicReferences().length} 张商品参考图；首图为主体视觉真值。` : "",
-        "增强时补齐构图、信息层级、卡片/图标/渐变/装饰及全页统一性要求；不得虚构商品功效、参数、材质、品牌或参考图中不可见的结构。品牌、型号、规格等信息互相冲突时，必须在增强结果中标记需确认，不得擅自选择。",
+        generationType === "video"
+          ? "这是带货短视频指令：补齐商品保真、起始构图、主体动作、运镜和时长内的结束状态。不要改成详情长页、卡片排版或静态海报任务；不得虚构功效、参数、材质或参考图中不可见的结构。"
+          : "增强时补齐构图、信息层级、卡片/图标/渐变/装饰及全页统一性要求；不得虚构商品功效、参数、材质、品牌或参考图中不可见的结构。品牌、型号、规格等信息互相冲突时，必须在增强结果中标记需确认，不得擅自选择。",
       ].filter(Boolean).join("\n");
       const result = await api<{ content: string }>("/api/canvases/enhance-prompt", {
         method: "POST",
@@ -1071,7 +1091,7 @@ export function AgentWorkspace({ code }: { code: string }) {
     if (!project) return;
     // The commerce pipeline has just one confirmation step. Commit edits before
     // continuing instead of enabling autopilot with the old recommended prompt.
-    if (code === "ecommerce_image" && project.status === "waiting_confirm") {
+    if ((code === "ecommerce_image" || code === "ecommerce_video") && project.status === "waiting_confirm") {
       await confirmStep();
       return;
     }
@@ -2054,6 +2074,7 @@ export function AgentWorkspace({ code }: { code: string }) {
                           })}
                         </div>
                       )}
+                      {code === "ecommerce_video" && <p className="text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">{ts("可修改发布文案、海报画面和视频镜头。请保留「发布文案」「海报画面」「视频镜头」三个标题，确认后按修改结果生成海报，并以海报作为视频首帧。")}</p>}
                       <textarea
                         value={confirmPrompt}
                         readOnly={!allowPromptEdit}
@@ -2073,6 +2094,12 @@ export function AgentWorkspace({ code }: { code: string }) {
                     </div>
                   )}
 
+                  {code === "ecommerce_video" && textOf(analysis.summary) && (
+                    <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                      <div className="text-xs font-semibold text-gray-500 dark:text-gray-300">{ts("发布文案")}</div>
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-800 dark:text-gray-100">{textOf(analysis.summary)}</p>
+                    </div>
+                  )}
                   {finalVideoURL && <FinalComicVideo url={finalVideoURL} />}
                   {detailPage && <DetailPagePanel detailPage={detailPage} projectId={code === "ecommerce_image" ? project.public_id : undefined} onRetrySection={code === "ecommerce_image" ? retryDetailSection : undefined} retryingSection={retryingSection} />}
                   {mediaTasks.length > 0 && !(detailPage && textOf(detailPage.long_image_url)) && <MediaTaskGrid tasks={mediaTasks} generationType={generationType} onMore={() => router.push("/app/works")} />}
@@ -2102,17 +2129,17 @@ export function AgentWorkspace({ code }: { code: string }) {
                     showUpload={false}
                     showRole={false}
                     referencePickMode
-                    referenceImages={isVideoGeneration ? videoMedia.reference_images : code === "ecommerce_image" ? currentComicReferences() : productImage ? [productImage] : []}
+                    referenceImages={code === "ecommerce_video" || code === "ecommerce_image" ? currentComicReferences() : isVideoGeneration ? videoMedia.reference_images : productImage ? [productImage] : []}
                     onReferenceImagesChange={(imgs) => {
-                      if (isVideoGeneration) {
-                        setVideoMedia((prev) => ({ ...prev, reference_images: imgs }));
-                      } else if (code === "ecommerce_image") {
+                      if (code === "ecommerce_video" || code === "ecommerce_image") {
                         setComicReferences(imgs);
+                      } else if (isVideoGeneration) {
+                        setVideoMedia((prev) => ({ ...prev, reference_images: imgs }));
                       } else {
                         setProductImage(imgs[0] || null);
                       }
                     }}
-                    maxReferenceImages={code === "ecommerce_image" ? 8 : supportMultipleReferences ? (isVideoGeneration ? maxVideoAssetRefs : 6) : 1}
+                    maxReferenceImages={code === "ecommerce_image" || code === "ecommerce_video" ? 8 : supportMultipleReferences ? (isVideoGeneration ? maxVideoAssetRefs : 6) : 1}
                   />
                   {(enableStepConfirm || canUseAutopilot) && (
                     <div className="flex items-center bg-gray-100 rounded-xl p-0.5 dark:bg-white/10">
@@ -2180,7 +2207,7 @@ export function AgentWorkspace({ code }: { code: string }) {
             </div>}
 
             <div className="relative flex min-w-0 items-start">
-              {code === "ecommerce_image" && supportReferenceImage && (() => {
+              {(code === "ecommerce_image" || code === "ecommerce_video") && supportReferenceImage && (() => {
                 const refs = currentComicReferences();
                 const referenceThumb = (hoverable: boolean) => refs.map((item, index) => (
                   <div key={item.url} title={hoverable ? undefined : (item.name || `${ts("商品参考")} ${index + 1}`)} className="group/img relative h-16 w-16 shrink-0">
@@ -2339,7 +2366,7 @@ export function AgentWorkspace({ code }: { code: string }) {
                 <div className="mt-2 text-[11px] text-gray-400">{ts("支持选择已启用的视频模型；每个分镜按所选模型生成并统一计费。")}</div>
               </ComicSettingCard>
               <ComicSettingCard title={ts("对话模型")}>
-                <input className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-primary dark:border-white/10 dark:bg-white/5 dark:text-white" value={comicSettings.dialogue_model_codes.join(",")} onChange={(e) => setComicSettings((prev) => ({ ...prev, dialogue_model_codes: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) }))} placeholder="chat_demo_v1" />
+                <input className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-primary dark:border-white/10 dark:bg-white/5 dark:text-white" value={comicSettings.dialogue_model_codes.join(",")} onChange={(e) => setComicSettings((prev) => ({ ...prev, dialogue_model_codes: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) }))} placeholder="留空跟随已配置的对话模型" />
                 <div className="mt-2 text-[11px] text-gray-400">{ts("多个模型用英文逗号分隔，首个为主模型。")}</div>
               </ComicSettingCard>
             </div>

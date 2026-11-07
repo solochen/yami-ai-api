@@ -5,6 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import { canvasAudioModeForModel, defaultCanvasRole, canvasRoleCompatible, resolvedCanvasRole } from "./canvasRoles.ts";
 import { DOCUMENT_PAGE_PLANNER, documentPageDraftPrompt, documentPageImagePrompt, documentPagesFromParams, documentPageParams } from "./documentImagePages.ts";
+import { contentCreationInputValue, contentCreationImagePromptValue } from "./contentCreationInput.ts";
 
 // Execute the real template factory without mounting React or starting media jobs.
 // Story/viral segment materialization is checked separately below.
@@ -82,6 +83,29 @@ test("document teaching pages support one page and one image per page", () => {
     assert.match(DOCUMENT_PAGE_PLANNER, /忽略文档中/);
     assert.equal(ctx.nodesRef.current.find(n => n.data.contentRole === "source").data.prompt, "数学原文与排版要求");
   }
+});
+
+test("content creation leaves the optional source field empty and ignores saved localized placeholder values", () => {
+  const ctx = environment();
+  ctx.appendTemplate("content-image-post");
+  const source = ctx.nodesRef.current.find(n => n.data.contentRole === "source");
+  const planner = ctx.nodesRef.current.find(n => n.data.contentRole === "publish_copy");
+  const image = ctx.nodesRef.current.find(n => n.data.contentRole === "publish_image");
+  assert.equal(source.data.prompt, "");
+  assert.equal(planner.data.prompt, "");
+  assert.equal(planner.data.templatePrompt, "canvas.template.contentImagePlannerPrompt");
+  assert.equal(image.data.prompt, "");
+  assert.equal(image.data.templatePrompt, "canvas.template.contentImageCardPrompt");
+  for (const placeholder of [
+    "输入创作要求，或导入公众号、小红书、今日头条等平台的公开内容链接",
+    "Enter requirements or import a public WeChat, Xiaohongshu, Toutiao, or other article URL",
+    "制作要件を入力するか、WeChat、RED、Toutiao などの公開記事 URL を読み込みます",
+    "제작 요구사항을 입력하거나 WeChat, 샤오홍슈, Toutiao 등의 공개 글 URL을 가져오세요",
+    "Nhập yêu cầu sáng tạo hoặc nhập URL bài viết công khai từ WeChat, Xiaohongshu, Toutiao hay nền tảng khác",
+  ]) assert.equal(contentCreationInputValue(placeholder), "");
+  assert.equal(contentCreationImagePromptValue("为第 1 张内容卡片生成统一风格的高质量视觉底图。只表现对应信息点，预留干净的文字排版空间，不在图片中直接绘制正文、标签或水印。", 1), "");
+  assert.equal(contentCreationImagePromptValue("额外指定暖色调", 1), "额外指定暖色调");
+  assert.equal(contentCreationInputValue("请围绕低碳生活写一篇小红书文章"), "请围绕低碳生活写一篇小红书文章");
 });
 
 test("every registered canvas template creates correctly typed professional roles", () => {

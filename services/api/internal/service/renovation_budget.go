@@ -56,6 +56,9 @@ func (s *RenovationService) LoadRenovationRunConfig(ctx context.Context) (Renova
 	if v, ok := raw["max_tool_calls_per_round"].(float64); ok && v > 0 && v <= 12 {
 		cfg.MaxToolCallsPerRound = int(v)
 	}
+	if err := (&AgentService{db: s.db}).validateModelOverrides(ctx, WorkflowDTO{Code: RenovationAgentCode, RuntimeConfig: raw}, map[string]interface{}{"chat_model_code": cfg.ChatModelCode, "embedding_model_code": cfg.EmbeddingModelCode}); err != nil {
+		return cfg, err
+	}
 	return cfg, nil
 }
 

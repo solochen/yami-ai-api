@@ -3,6 +3,7 @@ module github.com/starai/api
 go 1.25.0
 
 require (
+	github.com/starai/modelcontract v0.0.0
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
@@ -16,6 +17,8 @@ require (
 	golang.org/x/crypto v0.51.0
 	golang.org/x/net v0.53.0
 )
+
+replace github.com/starai/modelcontract => ../modelcontract
 
 require (
 	github.com/bytedance/sonic v1.11.6 // indirect

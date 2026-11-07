@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/starai/worker/internal/storage"
 )
 
 func TestComposeOutputDimensionsKeepUsesSource(t *testing.T) {
@@ -158,5 +161,39 @@ func TestComposeSubtitleHelpersAndBurnIn(t *testing.T) {
 	info, err := os.Stat(output)
 	if err != nil || info.Size() == 0 || count != 1 || output == source {
 		t.Fatalf("burn output=%q count=%d info=%v err=%v", output, count, info, err)
+	}
+}
+
+func TestReadComposeSourceReadsRelativeMediaURL(t *testing.T) {
+	dir := t.TempDir()
+	store, err := storage.NewLocal(dir, "/media")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldStore := objectStore
+	objectStore = store
+	t.Cleanup(func() { objectStore = oldStore })
+
+	// Minimal ISO-BMFF header so content sniffing recognizes a video.
+	data := append([]byte{0x00, 0x00, 0x00, 0x18}, []byte("ftypisom")...)
+	data = append(data, []byte{0x00, 0x00, 0x02, 0x00}...)
+	data = append(data, []byte("isomiso2")...)
+	target := filepath.Join(dir, "starai-works", "works", "compose", "clip.mp4")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, contentType, err := readComposeSource(context.Background(), "/media/starai-works/works/compose/clip.mp4", 1<<20)
+	if err != nil {
+		t.Fatalf("read relative compose source: %v", err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Fatalf("unexpected compose source bytes: %d", len(got))
+	}
+	if !strings.HasPrefix(contentType, "video/") {
+		t.Fatalf("unexpected content type: %q", contentType)
 	}
 }

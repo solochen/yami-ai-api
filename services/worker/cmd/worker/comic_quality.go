@@ -122,7 +122,7 @@ func comicNeedsQualityReview(items []interface{}, runtimeCfg map[string]interfac
 }
 
 func comicVideoSamples(ctx context.Context, url string) ([]string, error) {
-	data, _, err := downloadAuthenticatedMedia(ctx, connectionConfig{}, url, 500<<20)
+	data, _, err := downloadMediaSource(ctx, connectionConfig{}, url, 500<<20)
 	if err != nil {
 		return nil, err
 	}

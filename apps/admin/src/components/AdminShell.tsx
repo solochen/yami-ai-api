@@ -49,6 +49,7 @@ const NAV_GROUPS = [
       { href: "/admin/models", label: "模型管理", icon: Boxes },
       { href: "/admin/upstream-prices", label: "上游价格监控", icon: TrendingUp },
       { href: "/admin/agents", label: "工作流", icon: GitBranch },
+      { href: "/admin/agent-models", label: "智能体模型配置", icon: Boxes },
       { href: "/admin/home-cards", label: "多模型卡片", icon: Layers3 },
       { href: "/admin/channel-presets", label: "渠道预设", icon: ChartNoAxesCombined },
       { href: "/admin/role-templates", label: "角色模板", icon: MessageSquareText },
@@ -109,8 +110,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#f3f5f9] text-gray-900">
-      <aside className="sticky top-0 flex h-screen w-[272px] shrink-0 flex-col border-r border-gray-200/80 bg-white/95 backdrop-blur">
+    <div className="flex min-h-screen flex-col bg-[#f3f5f9] text-gray-900 lg:flex-row">
+      <details className="bg-white px-5 py-4 lg:hidden">
+        <summary className="cursor-pointer rounded-lg text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">后台导航 · {NAV_GROUPS.flatMap(group => group.items).find(item => item.href === pathname)?.label || "管理后台"}</summary>
+        <nav aria-label="后台移动导航" className="mt-4 grid grid-cols-2 gap-2">
+          {NAV_GROUPS.flatMap(group => group.items).filter(item => item.href !== "/admin/admin-accounts" || adminRole === "super_admin").map(item => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? "page" : undefined} onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")} className={clsx("rounded-xl px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500", pathname === item.href ? "bg-gray-950 text-white" : "bg-gray-50 text-gray-600")}>{item.label}</Link>)}
+          <button onClick={logout} className="rounded-xl bg-gray-50 px-3 py-2 text-left text-sm text-gray-600">退出登录</button>
+        </nav>
+      </details>
+      <aside className="sticky top-0 hidden h-screen w-[272px] shrink-0 flex-col border-r border-gray-200/80 bg-white/95 backdrop-blur lg:flex">
         <div className="border-b border-gray-100 px-5 py-5">
           <AdminBrand
             titleClassName="font-bold text-gray-950"

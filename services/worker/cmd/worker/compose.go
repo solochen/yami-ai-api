@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,6 +50,47 @@ func ffmpegExecutableName() string {
 	return "ffmpeg"
 }
 
+// readComposeSource resolves a compositor source to bytes. Canvas nodes store
+// media URLs as relative paths (/media/<bucket>/<key>) because the web app
+// proxies them; the worker cannot GET those directly, so local object-store
+// keys are read in-process and only external http(s) URLs go through the
+// downloader. Absolute URLs that still point at our own public host fall back to
+// the object store when the network read fails.
+func readComposeSource(ctx context.Context, mediaURL string, maxBytes int64) ([]byte, string, error) {
+	trimmed := strings.TrimSpace(mediaURL)
+	if trimmed == "" {
+		return nil, "", fmt.Errorf("素材地址为空")
+	}
+	if objectStore != nil {
+		if objectKey := objectStore.ObjectKeyFromURL(trimmed); objectKey != "" {
+			if data, err := objectStore.ReadAll(ctx, objectKey, maxBytes); err == nil && len(data) > 0 {
+				return data, composeDetectedContentType(data, objectKey), nil
+			}
+		}
+	}
+	if strings.HasPrefix(trimmed, "/") {
+		return nil, "", fmt.Errorf("无法读取本地素材，请确认对象存储可用")
+	}
+	data, contentType, err := downloadAuthenticatedMedia(ctx, connectionConfig{}, trimmed, maxBytes)
+	if err != nil {
+		return nil, "", err
+	}
+	return data, contentType, nil
+}
+
+func composeDetectedContentType(data []byte, objectKey string) string {
+	if len(data) == 0 {
+		return ""
+	}
+	if detected := http.DetectContentType(data); strings.HasPrefix(detected, "video/") || strings.HasPrefix(detected, "image/") || strings.HasPrefix(detected, "audio/") {
+		return detected
+	}
+	if guessed := mime.TypeByExtension(strings.ToLower(filepath.Ext(objectKey))); strings.HasPrefix(guessed, "video/") || strings.HasPrefix(guessed, "image/") || strings.HasPrefix(guessed, "audio/") {
+		return guessed
+	}
+	return ""
+}
+
 func processComposeTask(ctx context.Context, pool *pgxpool.Pool, p ComposeTaskPayload) error {
 	pool.Exec(ctx, `UPDATE tasks SET status='running', started_at=now(), updated_at=now() WHERE task_no=$1`, p.TaskNo)
 	fail := func(code, message string) error {
@@ -78,7 +121,7 @@ func processComposeTask(ctx context.Context, pool *pgxpool.Pool, p ComposeTaskPa
 		if mediaURL == "" || (kind != "image" && kind != "video" && kind != "audio") {
 			continue
 		}
-		data, contentType, downloadErr := downloadAuthenticatedMedia(ctx, connectionConfig{}, mediaURL, 600<<20)
+		data, contentType, downloadErr := readComposeSource(ctx, mediaURL, 600<<20)
 		if downloadErr != nil {
 			return fail("DOWNLOAD_FAILED", fmt.Sprintf("下载第 %d 个合成素材失败：%s", index+1, downloadErr.Error()))
 		}

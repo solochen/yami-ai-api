@@ -47,6 +47,7 @@ interface ConfigItem {
   min?: number;
   step?: number;
   options?: { value: string; label: string }[];
+  disabled?: boolean;
   onChange?: (value: string) => void;
 }
 
@@ -357,6 +358,9 @@ export default function SystemConfigPage() {
         vidu_voice_price_per_minute: 2.8125,
         vidu_video_price_per_minute: 2.8125,
         vidu_text_credit_rate: 0.03125,
+        vidu_realtime_credit_per_second: 1.5,
+        vidu_cost_auto_from_credits: true,
+        vidu_sale_price_per_minute: 2.49,
         price_drift_threshold_percent: 10,
         price_drift_alert_email: "",
         web_search_provider: "tavily",
@@ -746,6 +750,10 @@ export default function SystemConfigPage() {
     }));
   };
 
+  // 未配置时后端按开启处理，这里保持同一默认值，避免界面显示成关闭。
+  const autoCostFromCredits = configs.vidu_cost_auto_from_credits !== false && configs.vidu_cost_auto_from_credits !== "false";
+  const realtimeCreditPerSecond = Number(configs.vidu_realtime_credit_per_second ?? 1.5) || 1.5;
+
   const renderItem = (item: ConfigItem, className = "") => (
     <div key={item.key} className={className}>
       <label className="text-xs text-gray-500">{item.label}</label>
@@ -774,9 +782,10 @@ export default function SystemConfigPage() {
           type={item.type}
           min={item.min}
           step={item.step}
+          disabled={item.disabled}
           value={String(configs[item.key] ?? "")}
           onChange={(e) => setField(item.key, item.type === "number" ? Number(e.target.value) || 0 : e.target.value)}
-          className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
         />
       )}
       {item.hint && <p className="mt-1 text-[11px] leading-relaxed text-gray-400">{item.hint}</p>}
@@ -1457,14 +1466,17 @@ export default function SystemConfigPage() {
 
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm shadow-gray-950/5">
           <div className="mb-1 text-sm font-semibold text-gray-900">实时数字人</div>
-          <p className="mb-5 text-xs leading-relaxed text-gray-400">密钥只保存在服务端。公网地址必须能被 Vidu 访问，角色知识库才会在通话中被引用。下面的价格填 <span className="font-medium text-gray-500">Vidu 官方成本价</span>，对用户的售价由「平台销售佣金率」自动推导：售价 = 成本 ÷ (1 − 佣金率)，按 Vidu 实际计费秒数结算。</p>
+          <p className="mb-5 text-xs leading-relaxed text-gray-400">密钥只保存在服务端。公网地址必须能被 Vidu 访问，角色知识库才会在通话中被引用。用户侧售价留空或填 0 时用默认 2.49 算力/分钟。开启「按积分单价自动反算」后，成本价由 <span className="font-medium text-gray-500">每秒积分 × 60 × 积分单价</span> 自动算出，买套餐只需改积分单价一个数。</p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {renderItem({ key: "vidu_api_key", label: "Vidu API Key", type: "password", hint: "格式 Token 后面的密钥。保存后只显示脱敏值。" })}
             {renderItem({ key: "vidu_api_host", label: "Vidu 接口域名", type: "text", hint: "国内站 api.vidu.cn。密钥需来自 platform.vidu.cn，不要带 https://。" })}
             {renderItem({ key: "vidu_public_base_url", label: "本站公网地址", type: "text", hint: "例如 https://api.example.com。Vidu 用它回调知识库检索。" })}
-            {renderItem({ key: "vidu_voice_price_per_minute", label: "语音成本价（元/分钟）", type: "number", min: 0, hint: "Vidu 官方价：实时版 1.5 积分/秒 × 0.03125 元 = 2.8125 元/分钟。纯语音会话在 Vidu 侧同为 audio 会话。" })}
-            {renderItem({ key: "vidu_video_price_per_minute", label: "视频成本价（元/分钟）", type: "number", min: 0, hint: "同上，默认 2.8125 元/分钟。用户实际扣费已含平台佣金率。" })}
-            {renderItem({ key: "vidu_text_credit_rate", label: "积分折算率（元/积分）", type: "number", min: 0, hint: "Vidu 返回的 credits_cost × 此系数 = 上游成本，默认 0.03125 元/积分。" })}
+            {renderItem({ key: "vidu_sale_price_per_minute", label: "用户侧售价（算力/分钟）", type: "number", min: 0, hint: "默认 2.49 算力/分钟。留空或填 0 都按 2.49 计费，填其他值则按该值每分钟扣费。" })}
+            {renderItem({ key: "vidu_cost_auto_from_credits", label: "按积分单价自动反算成本", type: "checkbox", hint: "开启后下面两个成本价只用于展示推算结果；买套餐只需改「积分单价」，成本自动跟着变。" })}
+            {renderItem({ key: "vidu_text_credit_rate", label: "积分单价（元/积分）", type: "number", min: 0, step: 0.000001, hint: "标准价 0.03125；7 折套餐 0.021875。自动反算模式下这是唯一的成本输入。" })}
+            {renderItem({ key: "vidu_realtime_credit_per_second", label: "实时版每秒消耗积分", type: "number", min: 0, step: 0.1, hint: "官方价目表 1.5 积分/秒；若账单实测是 1，就改成 1，成本随之从 1.97 降到 1.31。" })}
+            {renderItem({ key: "vidu_voice_price_per_minute", label: "语音成本价（元/分钟）", type: "number", min: 0, disabled: autoCostFromCredits, hint: autoCostFromCredits ? `自动反算中：${realtimeCreditPerSecond} × 60 × 积分单价。` : "手工填写，按 Vidu 官方成本价。" })}
+            {renderItem({ key: "vidu_video_price_per_minute", label: "视频成本价（元/分钟）", type: "number", min: 0, disabled: autoCostFromCredits, hint: autoCostFromCredits ? `自动反算中：${realtimeCreditPerSecond} × 60 × 积分单价。` : "手工填写，按 Vidu 官方成本价。" })}
           </div>
         </section>
 

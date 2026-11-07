@@ -3954,6 +3954,14 @@ export default function ModelsPage() {
               取消
             </button>
           </div>
+          {form.category === "audio" && <div className="col-span-2 rounded-2xl border bg-white p-4">
+            <div className="text-sm font-semibold text-gray-800">音频生成能力</div>
+            <p className="mt-1 text-xs leading-5 text-gray-500">用于智能体模型槽位校验。按上游实际能力设置；语音合成与音乐生成分别匹配配音、配乐槽位。</p>
+            <div className="mt-3 flex flex-wrap gap-4">{([['speech_synthesis', '语音合成 TTS'], ['music_generation', '音乐生成']] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={(safeParseJson(form.runtime_rule, {}) as Record<string, any>)?.capabilities?.[key] === true} onChange={event => {
+              const checked = event.target.checked;
+              setForm(prev => { const rule = safeParseJson(prev.runtime_rule, {}) as Record<string, any>; return { ...prev, runtime_rule: JSON.stringify({ ...rule, capabilities: { ...(rule.capabilities || {}), [key]: checked } }, null, 2) }; });
+            }} />{label}</label>)}</div>
+          </div>}
           {form.category !== "multi_collab" && (
           <div className="col-span-2 bg-blue-50/60 border border-blue-100 rounded-2xl p-4">
             <div className="flex items-start justify-between gap-4 mb-3">

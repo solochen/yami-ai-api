@@ -28,7 +28,6 @@ const maxImportedVideoBytes int64 = 500 << 20
 const maxImportedPageBytes int64 = 10 << 20
 
 const importBrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-const defaultDouyinResolverURL = "https://douyin.wtf/api/douyin/web/fetch_one_video"
 
 type importAssetURLInput struct {
 	URL  string `json:"url"`
@@ -87,6 +86,7 @@ func (h *Handler) ImportAssetURL(c *gin.Context) {
 	contentType := strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0])
 	detectedType := http.DetectContentType(head[:headSize])
 	if !strings.HasPrefix(strings.ToLower(contentType), "video/") && !strings.HasPrefix(strings.ToLower(detectedType), "video/") {
+		log.Printf("asset URL import rejected: host=%s content_type=%q detected=%q bytes=%d", remoteURL.Host, contentType, detectedType, size)
 		util.BadRequest(c, "URL 返回的不是可识别的视频文件")
 		return
 	}
@@ -406,52 +406,43 @@ func openDouyinVideo(ctx context.Context, client *http.Client, sourceURL, finalU
 	if awemeID == "" {
 		return nil, fmt.Errorf("未能识别抖音作品 ID，请确认分享链接完整且公开")
 	}
-	resolver := strings.TrimSpace(os.Getenv("DOUYIN_RESOLVER_URL"))
-	if resolver == "" {
-		resolver = defaultDouyinResolverURL
+	shareURL := sourceURL.String()
+	if shareURL == "" && finalURL != nil {
+		shareURL = finalURL.String()
 	}
-	resolverURL, err := validateImportURL(resolver)
-	if err != nil {
-		return nil, fmt.Errorf("抖音解析服务地址无效")
-	}
-	query := resolverURL.Query()
-	query.Set("aweme_id", awemeID)
-	resolverURL.RawQuery = query.Encode()
-	metadataResp, err := getImportURL(ctx, client, resolverURL.String(), finalURL.String())
-	if err != nil {
-		return nil, fmt.Errorf("抖音视频解析服务不可用")
-	}
-	defer metadataResp.Body.Close()
-	if metadataResp.StatusCode < 200 || metadataResp.StatusCode >= 300 {
-		return nil, fmt.Errorf("抖音视频解析返回 HTTP %d", metadataResp.StatusCode)
-	}
-	payload, err := io.ReadAll(io.LimitReader(metadataResp.Body, maxImportedPageBytes+1))
-	if err != nil || int64(len(payload)) > maxImportedPageBytes {
-		return nil, fmt.Errorf("抖音视频解析结果无效")
-	}
-	var value interface{}
-	if json.Unmarshal(payload, &value) != nil {
-		return nil, fmt.Errorf("抖音视频解析结果无效")
-	}
-	videoURL := ""
-	for _, key := range []string{"play_addr", "playAddr", "play_addr_h264"} {
-		if videoURL = findTikTokURLByKey(value, key); videoURL != "" {
-			break
+	const referer = "https://www.douyin.com/"
+	var failures []string
+	openResolved := func(link string, resolveErr error) (*http.Response, bool) {
+		if resolveErr != nil {
+			failures = append(failures, resolveErr.Error())
+			return nil, false
 		}
+		videoResp, fetchErr := openResolvedVideo(ctx, client, link, referer)
+		if fetchErr == nil {
+			mediaHost := ""
+			if parsed, parseErr := url.Parse(link); parseErr == nil {
+				mediaHost = parsed.Host
+			}
+			log.Printf("douyin import resolved: host=%s status=%d content_type=%q", mediaHost, videoResp.StatusCode, videoResp.Header.Get("Content-Type"))
+		}
+		if fetchErr != nil {
+			log.Printf("douyin media download failed: %v", fetchErr)
+			failures = append(failures, "抖音视频文件下载失败")
+			return nil, false
+		}
+		return videoResp, true
 	}
-	parsedVideoURL, err := validateImportURL(videoURL)
-	if err != nil {
-		return nil, fmt.Errorf("未能解析抖音视频，请确认作品公开且可播放")
+	if videoResp, ok := openResolved(resolveDouyinVideoURL(ctx, client, shareURL)); ok {
+		return videoResp, nil
 	}
-	videoResp, err := getImportURL(ctx, client, parsedVideoURL.String(), finalURL.String())
-	if err != nil {
-		return nil, fmt.Errorf("抖音视频下载失败")
+	if videoResp, ok := openResolved(resolveDouyinSharePageVideo(ctx, client, awemeID)); ok {
+		return videoResp, nil
 	}
-	if videoResp.StatusCode < 200 || videoResp.StatusCode >= 300 {
-		videoResp.Body.Close()
-		return nil, fmt.Errorf("抖音视频返回 HTTP %d", videoResp.StatusCode)
+	message := "未能解析抖音视频，请确认作品公开且可播放"
+	if len(failures) > 0 {
+		message = fmt.Sprintf("%s（%s）", message, strings.Join(failures, "；"))
 	}
-	return videoResp, nil
+	return nil, fmt.Errorf("%s", message)
 }
 
 func douyinAwemeID(sourceURL *url.URL) string {

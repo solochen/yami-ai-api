@@ -57,6 +57,79 @@ func TestDigitalHumanCost(t *testing.T) {
 	}
 }
 
+func TestDigitalHumanSalePrice(t *testing.T) {
+	// 配了售价就用售价（文字 / 语音 / 视频同价）。
+	configured := digitalHumanSettings{SalePerMinute: 2.49}
+	if got := digitalHumanSalePerMinute(configured); math.Abs(got-2.49) > 0.0001 {
+		t.Fatalf("configured sale price = %v", got)
+	}
+	// 没配、或配成 0，一律用默认售价，绝不回落到上游成本价。
+	for _, sale := range []float64{0, -1} {
+		settings := digitalHumanSettings{SalePerMinute: sale, VoicePerMinute: 2.8125, VideoPerMinute: 2.8125}
+		if got := digitalHumanSalePerMinute(settings); math.Abs(got-digitalHumanSaleDefault) > 0.0001 {
+			t.Fatalf("sale=%v should fall back to default, got %v", sale, got)
+		}
+	}
+	if digitalHumanSaleDefault != 2.49 {
+		t.Fatalf("default sale price = %v", digitalHumanSaleDefault)
+	}
+}
+
+func TestDigitalHumanSessionCostUsesSalePrice(t *testing.T) {
+	settings := digitalHumanSettings{SalePerMinute: 2.49, VoicePerMinute: 1.96875, VideoPerMinute: 1.96875, TextCreditRate: 0.021875}
+	// 90 秒视频按 2.49 元/分钟 = 3.735
+	if got := math.Round(90.0/60*digitalHumanSalePerMinute(settings)*1e6) / 1e6; math.Abs(got-3.735) > 0.0001 {
+		t.Fatalf("90s charge = %v", got)
+	}
+	// 售价留空也按默认 2.49 计费，不会被算成成本价 2.8125。
+	blank := digitalHumanSettings{VideoPerMinute: 2.8125, TextCreditRate: 0.03125}
+	if got := digitalHumanSalePerMinute(blank); got != 2.49 {
+		t.Fatalf("blank sale price = %v", got)
+	}
+}
+
+func TestApplyDigitalHumanAutoCost(t *testing.T) {
+	// 标准价：1.5 积分/秒 × 60 × 0.03125 = 2.8125 元/分钟
+	std := applyDigitalHumanAutoCost(digitalHumanSettings{
+		CostAutoFromCredits:     true,
+		RealtimeCreditPerSecond: 1.5,
+		TextCreditRate:          0.03125,
+		VoicePerMinute:          99,
+		VideoPerMinute:          99,
+	})
+	if math.Abs(std.VideoPerMinute-2.8125) > 0.0001 || std.VoicePerMinute != std.VideoPerMinute {
+		t.Fatalf("standard auto cost = %v / %v", std.VoicePerMinute, std.VideoPerMinute)
+	}
+	// 7 折套餐：1.5 × 60 × 0.021875 = 1.96875
+	promo := applyDigitalHumanAutoCost(digitalHumanSettings{
+		CostAutoFromCredits:     true,
+		RealtimeCreditPerSecond: 1.5,
+		TextCreditRate:          0.021875,
+	})
+	if math.Abs(promo.VideoPerMinute-1.96875) > 0.0001 {
+		t.Fatalf("promo auto cost = %v", promo.VideoPerMinute)
+	}
+	// 如果账单证明实时版其实是 1 积分/秒，改这一个数就够：1 × 60 × 0.021875 = 1.3125
+	one := applyDigitalHumanAutoCost(digitalHumanSettings{
+		CostAutoFromCredits:     true,
+		RealtimeCreditPerSecond: 1,
+		TextCreditRate:          0.021875,
+	})
+	if math.Abs(one.VideoPerMinute-1.3125) > 0.0001 {
+		t.Fatalf("1 credit/s auto cost = %v", one.VideoPerMinute)
+	}
+	// 关掉开关就保留手工填写的成本。
+	manual := applyDigitalHumanAutoCost(digitalHumanSettings{
+		CostAutoFromCredits:     false,
+		RealtimeCreditPerSecond: 1.5,
+		TextCreditRate:          0.021875,
+		VideoPerMinute:          3.5,
+	})
+	if manual.VideoPerMinute != 3.5 {
+		t.Fatalf("manual cost should be kept, got %v", manual.VideoPerMinute)
+	}
+}
+
 func TestRankDigitalHumanKnowledge(t *testing.T) {
 	docs := []knowledgeDoc{{ID: 1, Title: "家庭", Content: "父亲住在杭州，周末一起喝茶。"}, {ID: 2, Title: "工作", Content: "公司在上海做设计。"}}
 	hits := rankDigitalHumanKnowledge(docs, "父亲住在哪里", 5)

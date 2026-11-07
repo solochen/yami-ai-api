@@ -147,6 +147,9 @@ func (s *PromptAgentService) LoadConfig(ctx context.Context, code string) (*Prom
 	if cfg.SystemPrompt == "" {
 		return nil, errors.New("智能体提示词为空")
 	}
+	if err := (&AgentService{db: s.db}).validateModelOverrides(ctx, WorkflowDTO{Code: code, RuntimeConfig: raw}, map[string]interface{}{"chat_model_code": cfg.ChatModelCode}); err != nil {
+		return nil, err
+	}
 	cfg.SystemPrompt = composePromptAgentSystemPrompt(cfg.SystemPrompt)
 	return cfg, nil
 }
@@ -587,7 +590,8 @@ func friendlyPromptAgentError(err error) error {
 	return errors.New("模型服务暂时不可用，请稍后重试")
 }
 
-func validatePromptAgentInput(message string, maxChars int) error {	if strings.TrimSpace(message) == "" {
+func validatePromptAgentInput(message string, maxChars int) error {
+	if strings.TrimSpace(message) == "" {
 		return errors.New("消息不能为空")
 	}
 	if maxChars > 0 && len([]rune(message)) > maxChars {

@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/starai/modelcontract"
 	xdraw "golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 )
@@ -87,9 +89,9 @@ func processWorkflowTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token
 	}
 
 	var nodesRaw, runtimeRaw []byte
-	var category string
-	if err := pool.QueryRow(ctx, `SELECT nodes, category, runtime_config FROM workflow_definitions WHERE id=$1`, workflowID).
-		Scan(&nodesRaw, &category, &runtimeRaw); err != nil {
+	var category, workflowCode string
+	if err := pool.QueryRow(ctx, `SELECT nodes, category, runtime_config, code FROM workflow_definitions WHERE id=$1`, workflowID).
+		Scan(&nodesRaw, &category, &runtimeRaw, &workflowCode); err != nil {
 		return failWorkflow(ctx, pool, p, publicID, estimated, "工作流定义缺失")
 	}
 
@@ -101,6 +103,22 @@ func processWorkflowTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token
 
 	runtimeCfg := map[string]interface{}{}
 	_ = json.Unmarshal(runtimeRaw, &runtimeCfg)
+	definition := modelcontract.Definition{Code: workflowCode, Category: category, Runtime: runtimeCfg}
+	if err := json.Unmarshal(nodesRaw, &definition.Nodes); err != nil {
+		return failWorkflow(ctx, pool, p, publicID, estimated, "工作流节点配置无效")
+	}
+	models, contractErr := modelcontract.LoadModels(ctx, pool)
+	if contractErr == nil {
+		if modelcontract.Mode(definition) == "comic_drama" {
+			outputs := loadWorkflowOutputs(ctx, pool, p.ProjectID)
+			contractErr = modelcontract.ValidateComicWork(definition, inputs, modelcontract.RemainingComicWork(inputs, outputs, runtimeCfg), models)
+		} else {
+			contractErr = modelcontract.ValidateDefinition(modelcontract.Effective(definition, inputs), models)
+		}
+	}
+	if contractErr != nil {
+		return failWorkflow(ctx, pool, p, publicID, estimated, "模型能力校验失败："+contractErr.Error())
+	}
 	if stringAny(runtimeCfg["agent_mode"]) == "product_refine" {
 		return processProductWorkflow(ctx, pool, baseURL, token, p, publicID, estimated, inputs, runtimeCfg)
 	}
@@ -187,67 +205,7 @@ func processVideoRedrawWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL
 }
 
 func processSubtitleRemovalWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL, token string, p WorkflowTaskPayload, publicID string, estimated float64, inputs, runtimeCfg map[string]interface{}) error {
-	outputs := loadWorkflowOutputs(ctx, pool, p.ProjectID)
-	if _, done := outputs["media_tasks"]; done && stringAny(outputs["current_step"]) == "result" {
-		return completeSimpleAgentWorkflow(ctx, pool, p, publicID, estimated, outputs)
-	}
-	sourceVideo := firstNonEmpty(firstWorkerURL(inputs["video_url"]), firstWorkerURL(inputs["source_video_url"]), firstWorkerURL(inputs["reference_videos"]))
-	if sourceVideo == "" {
-		return failWorkflow(ctx, pool, p, publicID, estimated, "请先上传或从资产库选择源视频")
-	}
-	removeMode := firstNonEmpty(stringAny(inputs["subtitle_mode"]), stringAny(runtimeCfg["default_subtitle_mode"]), "auto")
-	nodeRunID := insertWorkflowNodeRun(ctx, pool, p.ProjectID, "remove_subtitle", "一键去字幕", "video", map[string]interface{}{
-		"source_video_url": sourceVideo,
-		"subtitle_mode":    removeMode,
-	}, 0)
-	start := time.Now()
-
-	if removeMode == "auto" || removeMode == "soft_track" {
-		localTask, hadTrack, localErr := removeEmbeddedSubtitleTracks(ctx, pool, p.ProjectID, p.UserID, publicID, sourceVideo)
-		if localErr == nil && hadTrack {
-			return finishVideoTransformWorkflow(ctx, pool, p, publicID, estimated, outputs, nodeRunID, start, []map[string]interface{}{localTask}, "", map[string]interface{}{
-				"source_video_url":   sourceVideo,
-				"subtitle_mode":      "soft_track",
-				"had_subtitle_track": hadTrack,
-			}, "")
-		}
-		if removeMode == "soft_track" {
-			message := "未检测到可移除的独立字幕轨"
-			if localErr != nil {
-				message = localErr.Error()
-			}
-			return finishVideoTransformWorkflow(ctx, pool, p, publicID, estimated, outputs, nodeRunID, start, nil, message, map[string]interface{}{"source_video_url": sourceVideo}, "字幕轨移除失败：")
-		}
-	}
-
-	if stringAny(runtimeCfg["generation_model_code"]) == "" {
-		return finishVideoTransformWorkflow(ctx, pool, p, publicID, estimated, outputs, nodeRunID, start, nil, "未检测到可移除的独立字幕轨，且后台未配置硬字幕 AI 修复模型", map[string]interface{}{"source_video_url": sourceVideo}, "")
-	}
-	taskInputs := copyMap(inputs)
-	taskInputs["count"] = 1
-	taskInputs["n"] = 1
-	taskInputs["video_url"] = sourceVideo
-	taskInputs["source_video_url"] = sourceVideo
-	taskInputs["reference_videos"] = []string{sourceVideo}
-	taskInputs["operation"] = firstNonEmpty(stringAny(runtimeCfg["subtitle_remove_operation"]), "subtitle_remove")
-	taskInputs["subtitle_region"] = firstNonEmpty(stringAny(inputs["subtitle_region"]), stringAny(runtimeCfg["default_subtitle_region"]), "bottom_25")
-	taskInputs["protect_watermark"] = boolDefault(inputs["protect_watermark"], boolDefault(runtimeCfg["protect_watermark"], true))
-	taskInputs["preserve_audio"] = true
-	prompt := joinWorkflowInstruction(
-		firstNonEmpty(
-			stringAny(runtimeCfg["subtitle_remove_prompt"]),
-			"Remove only the burned-in subtitles from the specified area of the source video. Reconstruct the background naturally across every frame, preserve people, objects, logos, watermarks outside the subtitle area, motion, timing and original audio, and avoid blur, flicker or ghosting.",
-		),
-		stringAny(inputs["prompt"]),
-	)
-	videoRuntime := copyMap(runtimeCfg)
-	videoRuntime["generation_type"] = "video"
-	mediaTasks, errMsg := runAgentMediaTasks(ctx, pool, baseURL, token, p.ProjectID, p.UserID, publicID, videoRuntime, taskInputs, prompt)
-	return finishVideoTransformWorkflow(ctx, pool, p, publicID, estimated, outputs, nodeRunID, start, mediaTasks, errMsg, map[string]interface{}{
-		"source_video_url": sourceVideo,
-		"subtitle_mode":    "hardcoded_ai",
-		"subtitle_region":  taskInputs["subtitle_region"],
-	}, "硬字幕 AI 修复失败：")
+	return runSubtitleRemovalWorkflow(ctx, pool, baseURL, token, p, publicID, estimated, inputs, runtimeCfg)
 }
 
 func finishVideoTransformWorkflow(ctx context.Context, pool *pgxpool.Pool, p WorkflowTaskPayload, publicID string, estimated float64, outputs map[string]interface{}, nodeRunID int64, started time.Time, mediaTasks []map[string]interface{}, errMsg string, metadata map[string]interface{}, errPrefix string) error {
@@ -433,93 +391,6 @@ func boolDefault(value interface{}, fallback bool) bool {
 	return fallback
 }
 
-func removeEmbeddedSubtitleTracks(ctx context.Context, pool *pgxpool.Pool, projectID, userID int64, publicID, sourceURL string) (map[string]interface{}, bool, error) {
-	if objectStore == nil {
-		return nil, false, errors.New("对象存储未配置，无法保存去字幕结果")
-	}
-	if _, err := ffmpegBinaryPath(); err != nil {
-		return nil, false, err
-	}
-	data, _, err := downloadAuthenticatedMedia(ctx, connectionConfig{}, sourceURL, 1024<<20)
-	if err != nil {
-		return nil, false, fmt.Errorf("下载源视频失败：%w", err)
-	}
-	tmpDir, err := os.MkdirTemp("", "starai-subtitle-remove-*")
-	if err != nil {
-		return nil, false, err
-	}
-	defer os.RemoveAll(tmpDir)
-	inputPath := filepath.Join(tmpDir, "source.mp4")
-	if err := os.WriteFile(inputPath, data, 0600); err != nil {
-		return nil, false, err
-	}
-	hadTrack, probeErr := mediaHasSubtitle(ctx, inputPath)
-	if probeErr != nil {
-		return nil, false, fmt.Errorf("检测字幕轨失败：%w", probeErr)
-	}
-	if !hadTrack {
-		return nil, false, nil
-	}
-	taskNo := newWorkflowTaskNo(0)
-	taskInput := map[string]interface{}{"video_url": sourceURL, "operation": "remove_subtitle_track", "_skip_billing": true, "_local_free": true, "_workflow_project": publicID}
-	inputJSON, _ := json.Marshal(taskInput)
-	if _, err := pool.Exec(ctx, `INSERT INTO tasks (task_no,user_id,model_id,type,status,input,estimated_cost,started_at,workflow_project_id) VALUES ($1,$2,NULL,'video','running',$3,0,now(),$4)`, taskNo, userID, inputJSON, projectID); err != nil {
-		return nil, hadTrack, err
-	}
-	appendWorkflowMediaTask(ctx, pool, projectID, map[string]interface{}{"task_no": taskNo, "type": "video", "status": "running", "progress": 20, "output": map[string]interface{}{}})
-	outputPath := filepath.Join(tmpDir, "result.mp4")
-	if err := runFFmpeg(ctx, "-y", "-i", inputPath, "-map", "0:v?", "-map", "0:a?", "-map", "0:d?", "-c", "copy", "-sn", "-movflags", "+faststart", outputPath); err != nil {
-		pool.Exec(ctx, `UPDATE tasks SET status='failed',error_code='SUBTITLE_REMOVE_FAILED',error_message=$1,finished_at=now(),updated_at=now() WHERE task_no=$2`, err.Error(), taskNo)
-		return nil, hadTrack, err
-	}
-	outputData, err := os.ReadFile(outputPath)
-	if err != nil || len(outputData) == 0 {
-		pool.Exec(ctx, `UPDATE tasks SET status='failed',error_code='SUBTITLE_REMOVE_FAILED',error_message='读取去字幕结果失败',finished_at=now(),updated_at=now() WHERE task_no=$1`, taskNo)
-		return nil, hadTrack, errors.New("读取去字幕结果失败")
-	}
-	objectName := fmt.Sprintf("works/subtitle-remove/%s/result_%d.mp4", publicID, time.Now().UnixNano())
-	publicURL, err := objectStore.Upload(ctx, objectName, "video/mp4", bytes.NewReader(outputData), int64(len(outputData)))
-	if err != nil {
-		pool.Exec(ctx, `UPDATE tasks SET status='failed',error_code='SUBTITLE_REMOVE_FAILED',error_message=$1,finished_at=now(),updated_at=now() WHERE task_no=$2`, err.Error(), taskNo)
-		return nil, hadTrack, fmt.Errorf("上传去字幕结果失败：%w", err)
-	}
-	output := map[string]interface{}{
-		"video_url":          publicURL,
-		"url":                publicURL,
-		"subtitle_mode":      "soft_track",
-		"had_subtitle_track": hadTrack,
-	}
-	outputJSON, _ := json.Marshal(output)
-	var taskID int64
-	if err := pool.QueryRow(ctx, `UPDATE tasks SET status='succeeded',output=$1,actual_cost=0,error_code=NULL,error_message=NULL,finished_at=now(),updated_at=now() WHERE task_no=$2 RETURNING id`, outputJSON, taskNo).Scan(&taskID); err != nil {
-		return nil, hadTrack, err
-	}
-	workID := fmt.Sprintf("work_%d", time.Now().UnixNano())
-	expires := configuredWorkExpiration(ctx, pool, 7)
-	pool.Exec(ctx, `INSERT INTO works (public_id,user_id,task_id,model_id,type,prompt,thumbnail_url,metadata,expires_at) VALUES ($1,$2,$3,NULL,'video',$4,$5,$6,$7)`,
-		workID, userID, taskID, "移除视频独立字幕轨", publicURL, outputJSON, expires)
-	pool.Exec(ctx, `INSERT INTO task_events (task_id,event_type,payload) VALUES ($1,'completed',$2)`, taskID, outputJSON)
-	item := map[string]interface{}{"task_no": taskNo, "type": "video", "status": "succeeded", "progress": 100, "output": output, "estimated_cost": 0, "actual_cost": 0, "provider_cost": 0}
-	appendWorkflowMediaTask(ctx, pool, projectID, item)
-	return item, hadTrack, nil
-}
-
-func mediaHasSubtitle(ctx context.Context, path string) (bool, error) {
-	ffprobePath := "ffprobe"
-	if ffmpegPath, err := ffmpegBinaryPath(); err == nil {
-		candidate := filepath.Join(filepath.Dir(ffmpegPath), ffprobeExecutableName())
-		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
-			ffprobePath = candidate
-		}
-	}
-	cmd := exec.CommandContext(ctx, ffprobePath, "-v", "error", "-select_streams", "s", "-show_entries", "stream=index", "-of", "csv=p=0", path)
-	output, err := cmd.Output()
-	if err != nil {
-		return false, err
-	}
-	return strings.TrimSpace(string(output)) != "", nil
-}
-
 func insertWorkflowMediaTask(
 	ctx context.Context,
 	pool *pgxpool.Pool,
@@ -564,15 +435,20 @@ func processCustomWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL, tok
 			}
 			continue
 		}
+		if node.Type == "image" || node.Type == "video" {
+			// 用户在确认框里改过的文案、海报和镜头，要在生图/生视频前提换进去。
+			applyCommerceDeliveryConfirmation(vars, outputs)
+		}
+		nodeInputs := prepareCustomMediaInputs(node, inputs, outputs)
 		prompt := renderTemplate(node.PromptTemplate, vars)
 		if strings.TrimSpace(prompt) == "" {
 			if node.Type == "image" || node.Type == "video" {
-				prompt = mediaPromptFallback(lastText, vars, inputs)
+				prompt = mediaPromptFallback(lastText, vars, nodeInputs)
 			}
 		}
 		nodeRunID := insertWorkflowNodeRun(ctx, pool, p.ProjectID, node.ID, node.Name, node.Type, map[string]interface{}{"prompt": prompt, "model_code": node.ModelCode}, seq)
 		start := time.Now()
-		out, errMsg := runNode(ctx, pool, baseURL, token, p.UserID, publicID, category, node, prompt, inputs)
+		out, errMsg := runNode(ctx, pool, baseURL, token, p.UserID, publicID, category, node, prompt, nodeInputs)
 		if errMsg == "" {
 			if err := validateWorkflowTextOutput(node, out); err != nil {
 				errMsg = err.Error()
@@ -590,7 +466,11 @@ func processCustomWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL, tok
 			outputs[node.ID+"_"+k] = v
 		}
 		if node.Type == "image" || node.Type == "video" {
+			out["_task_type"] = node.Type
 			outputs["media_tasks"] = appendMediaTaskOutput(outputs["media_tasks"], out)
+		}
+		if vars["copy_image_prompt"] != "" && vars["copy_video_prompt"] != "" {
+			outputs["analysis"] = commerceDeliveryAnalysis(vars)
 		}
 		updateNodeRunSuccess(ctx, pool, nodeRunID, out, node.Cost, duration)
 		totalCost += node.Cost
@@ -664,8 +544,10 @@ func appendMediaTaskOutput(raw interface{}, out map[string]interface{}) []map[st
 	if taskNo == "" {
 		taskNo = newWorkflowTaskNo(len(items))
 	}
+	taskType := firstNonEmpty(stringAny(out["_task_type"]), "image")
 	items = append(items, map[string]interface{}{
 		"task_no":  taskNo,
+		"type":     taskType,
 		"status":   "succeeded",
 		"progress": 100,
 		"output":   out,
@@ -905,8 +787,10 @@ func processComicDramaWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL,
 			return failWorkflow(ctx, pool, p, publicID, estimated, err.Error())
 		}
 		if needed {
+			// 口型同步是可选增强：未配置时降级为“配音直接混入视频”，
+			// 不能因为第三方服务未开通就让整部漫剧无法生成。
 			if _, err := comicSyncModel(ctx, pool); err != nil {
-				return failWorkflow(ctx, pool, p, publicID, estimated, err.Error())
+				outputs["lip_sync_status"] = "unconfigured"
 			}
 		}
 	}
@@ -1078,6 +962,7 @@ func processComicDramaWorkflow(ctx context.Context, pool *pgxpool.Pool, baseURL,
 	updateNodeRunSuccess(ctx, pool, nodeRunID, final, 0, duration)
 	outputs["final_video_url"] = final["final_video_url"]
 	outputs["thumbnail"] = final["thumbnail"]
+	outputs["lip_sync_status"] = final["lip_sync_status"]
 	outputs["current_step"] = "result"
 	outputs["media_tasks"] = append(outputsInterfaceSlice(outputs["media_tasks"]), map[string]interface{}{"task_no": "compose_" + publicID, "status": "succeeded", "progress": 100, "output": final})
 	if comic, ok := mapAny(outputs["comic_drama"]); ok {
@@ -1226,6 +1111,7 @@ func normalizeComicDramaPlan(plan, inputs, runtimeCfg map[string]interface{}) ma
 	storyboards := comicStoryboards(plan, runtimeCfg)
 	segmentDuration := comicSegmentDurationSeconds(inputs, runtimeCfg)
 	requestText := strings.Join(strings.Fields(firstUserPrompt(inputs)), "")
+	perspective := comicNarrationPerspective(inputs, runtimeCfg)
 	seenSpeech := map[string]bool{}
 	for _, storyboard := range storyboards {
 		storyboard["duration_sec"] = segmentDuration
@@ -1240,6 +1126,19 @@ func normalizeComicDramaPlan(plan, inputs, runtimeCfg map[string]interface{}) ma
 			}
 			if normalizedSpeech != "" {
 				seenSpeech[normalizedSpeech] = true
+			}
+		}
+		// 同一镜不能同时承载对白和旁白，否则会在口型校验阶段中断整条付费任务。
+		// 按叙事模式保留真正会被朗读的那一条，并留下可审计标记。
+		dialogue := strings.TrimSpace(stringAny(storyboard["dialogue"]))
+		narration := strings.TrimSpace(stringAny(storyboard["narration"]))
+		if dialogue != "" && narration != "" {
+			if perspective == "first_person" || perspective == "third_person" {
+				storyboard["dialogue"] = ""
+				storyboard["speech_normalized"] = "narration_preferred"
+			} else {
+				storyboard["narration"] = ""
+				storyboard["speech_normalized"] = "dialogue_preferred"
 			}
 		}
 	}
@@ -1298,7 +1197,7 @@ func runComicKeyframeBatch(ctx context.Context, pool *pgxpool.Pool, baseURL, tok
 		prompt := firstNonEmpty(stringAny(sb["keyframe_prompt"]), stringAny(sb["scene"]), firstUserPrompt(inputs))
 		prompt = comicStylePrompt(inputs, prompt)
 		prompt = comicIdentityPrompt(inputs, prompt)
-		taskInputs := copyMap(inputs)
+		taskInputs := comicImageTaskInputs(inputs, runtimeCfg)
 		taskInputs["count"] = 1
 		taskInputs["n"] = 1
 		references := referenceImageURLs(inputs)
@@ -1330,7 +1229,7 @@ func runComicKeyframeBatch(ctx context.Context, pool *pgxpool.Pool, baseURL, tok
 			if len(results) > 0 {
 				output, _ = results[0]["output"].(map[string]interface{})
 			}
-			imageURL = firstMediaURL(output, "image_url", "url", "result_url")
+			imageURL = comicMediaURL(output, "image_url", "url", "result_url")
 			if errMsg == "" && imageURL != "" {
 				var reviewCost float64
 				scores, reviewCost, errMsg = reviewComicImage(ctx, pool, baseURL, token, runtimeCfg, taskInputs, imageURL, prompt)
@@ -1539,7 +1438,7 @@ func runComicVideoBatch(ctx context.Context, pool *pgxpool.Pool, baseURL, token 
 			if len(results) > 0 {
 				output, _ = results[0]["output"].(map[string]interface{})
 			}
-			videoURL = firstMediaURL(output, "video_url", "url", "result_url")
+			videoURL = comicMediaURL(output, "video_url", "url", "result_url")
 			if errMsg == "" && videoURL != "" {
 				if stringAny(runtimeCfg["quality_model_code"]) == "" {
 					break
@@ -1660,6 +1559,11 @@ func runComicNarrations(ctx context.Context, pool *pgxpool.Pool, baseURL, token 
 			"speech_type": speechType,
 			"_mode":       "auto",
 		}
+		// 语音合成按字符计费；worker 直接建任务时不会经过 API 的音频字符注入，
+		// 必须自己带上精确字符数，否则上游不回报 usage 时会判定“成本缺失”。
+		if runes := len([]rune(strings.TrimSpace(speechText))); runes > 0 {
+			taskInputs["_estimated_input_tokens"] = runes
+		}
 		for _, key := range []string{"voice", "voice_id", "emotion", "speed", "format", "instruction"} {
 			if value, ok := inputs[key]; ok {
 				taskInputs[key] = value
@@ -1686,7 +1590,7 @@ func runComicNarrations(ctx context.Context, pool *pgxpool.Pool, baseURL, token 
 		if len(results) > 0 {
 			output, _ = results[0]["output"].(map[string]interface{})
 		}
-		audioURL := firstMediaURL(output, "audio_url", "url", "result_url", "download_url")
+		audioURL := comicMediaURL(output, "audio_url", "url", "result_url", "download_url")
 		if errMsg != "" || audioURL == "" {
 			errMsg = firstNonEmpty(errMsg, "配音模型未返回音频")
 			items = append(items, map[string]interface{}{"id": itemID, "title": stringAny(storyboard["title"]), "dialogue": speechText, "speech_type": speechType, "status": "failed", "error_message": errMsg})
@@ -1979,6 +1883,14 @@ func composeComicDramaVideo(ctx context.Context, pool *pgxpool.Pool, publicID st
 		return nil, err.Error()
 	}
 	independentSpeech := len(narrations) > 0 || comicAudioStrategy(inputs, runtimeCfg) != "video_native"
+	// 口型同步服务未配置时，独立配音直接混入视频，仍然交付完整成片。
+	// 分镜数据问题（同一镜混入对白+旁白、缺少 speaker_code）仍按原逻辑报错。
+	syncAvailable := true
+	if _, syncErr := comicSyncModel(ctx, pool); syncErr != nil {
+		syncAvailable = false
+	}
+	lipSyncStatus := "not_needed"
+	syncSkipped := 0
 	syncCount, narrationCount := 0, 0
 	var list bytes.Buffer
 	downloaded := 0
@@ -2002,7 +1914,7 @@ func composeComicDramaVideo(ctx context.Context, pool *pgxpool.Pool, publicID st
 		if videoURL == "" {
 			continue
 		}
-		data, _, err := downloadAuthenticatedMedia(ctx, conn, videoURL, 500<<20)
+		data, _, err := downloadMediaSource(ctx, conn, videoURL, 500<<20)
 		if err != nil {
 			return nil, fmt.Sprintf("下载分段视频 %d 失败：%s", idx+1, err.Error())
 		}
@@ -2054,7 +1966,7 @@ func composeComicDramaVideo(ctx context.Context, pool *pgxpool.Pool, publicID st
 			if source != "" {
 				narrationCount++
 			}
-			if needsSync {
+			if needsSync && syncAvailable {
 				model, err := comicSyncModel(ctx, pool)
 				if err != nil {
 					return nil, err.Error()
@@ -2065,7 +1977,12 @@ func composeComicDramaVideo(ctx context.Context, pool *pgxpool.Pool, publicID st
 				}
 				normalizedPath = path
 				syncCount++
+				lipSyncStatus = "applied"
 			} else {
+				if needsSync {
+					lipSyncStatus = "skipped_unconfigured"
+					syncSkipped++
+				}
 				path, err := muxLockedComicSpeech(ctx, normalizedPath, audioPath, filepath.Join(shotDir, "voiced.mp4"))
 				if err != nil {
 					return nil, err.Error()
@@ -2150,7 +2067,7 @@ func composeComicDramaVideo(ctx context.Context, pool *pgxpool.Pool, publicID st
 		a, _ := raw.(map[string]interface{})
 		alignment = append(alignment, map[string]interface{}{"id": a["id"], "duration_sec": a["duration_sec"], "audio_duration_sec": a["actual_duration_sec"], "tempo": a["tempo"]})
 	}
-	return map[string]interface{}{"final_video_url": publicURL, "video_url": publicURL, "thumbnail": thumbnailURL, "segments": downloaded, "narrations": narrationCount, "lip_sync_count": syncCount, "audio_alignment": alignment, "target_duration_sec": targetDuration, "audio_strategy": comicAudioStrategy(inputs, runtimeCfg), "narration_perspective": comicNarrationPerspective(inputs, runtimeCfg), "orientation": stringAny(inputs["orientation"]), "aspect_ratio": comicRequestedAspectRatio(inputs, runtimeCfg), "width": width, "height": height, "quality": stringAny(inputs["quality"])}, ""
+	return map[string]interface{}{"final_video_url": publicURL, "video_url": publicURL, "thumbnail": thumbnailURL, "segments": downloaded, "narrations": narrationCount, "lip_sync_count": syncCount, "lip_sync_status": lipSyncStatus, "lip_sync_skipped": syncSkipped, "audio_alignment": alignment, "target_duration_sec": targetDuration, "audio_strategy": comicAudioStrategy(inputs, runtimeCfg), "narration_perspective": comicNarrationPerspective(inputs, runtimeCfg), "orientation": stringAny(inputs["orientation"]), "aspect_ratio": comicRequestedAspectRatio(inputs, runtimeCfg), "width": width, "height": height, "quality": stringAny(inputs["quality"])}, ""
 }
 
 func prepareComicNarrationTrack(ctx context.Context, tmpDir string, narrations []interface{}) (string, int, error) {
@@ -2246,7 +2163,7 @@ func insertComicDramaWork(ctx context.Context, pool *pgxpool.Pool, userID int64,
 
 func runAgentAnalysis(ctx context.Context, pool *pgxpool.Pool, baseURL, token, modelCode, category string, runtimeCfg, inputs map[string]interface{}) (map[string]interface{}, string) {
 	if modelCode == "" {
-		modelCode = "chat_demo_v1"
+		return nil, "未配置分析模型"
 	}
 	model, errMsg := loadAgentAnalysisModel(ctx, pool, modelCode)
 	if errMsg != "" {
@@ -5154,18 +5071,33 @@ func runMediaNode(ctx context.Context, pool *pgxpool.Pool, baseURL, token string
 	}
 	var modelID int64
 	var requestMode string
-	if err := pool.QueryRow(ctx, `SELECT id, request_mode FROM models WHERE code=$1`, modelCode).Scan(&modelID, &requestMode); err != nil {
+	var enabled bool
+	var routeCount int
+	if err := pool.QueryRow(ctx, `SELECT m.id, m.request_mode, m.is_enabled, (SELECT count(*) FROM model_routes r WHERE r.model_id=m.id AND r.is_enabled) FROM models m WHERE m.code=$1`, modelCode).Scan(&modelID, &requestMode, &enabled, &routeCount); err != nil {
 		return nil, "生成模型不存在：" + modelCode
 	}
+	if !enabled {
+		return nil, "生成模型已停用：" + modelCode
+	}
+	if routeCount == 0 {
+		return nil, "生成模型没有可用线路：" + modelCode
+	}
 	taskType := fallbackType
-	if requestMode == "video" || requestMode == "audio" || requestMode == "image" {
-		taskType = requestMode
+	if requestMode == "video" || requestMode == "audio" || requestMode == "image" || requestMode == "images" {
+		if requestMode == "images" {
+			taskType = "image"
+		} else {
+			taskType = requestMode
+		}
 	}
 	taskInput := agentMediaTaskInput(inputs, prompt, publicID)
 	taskNo := newWorkflowTaskNo(0)
 	taskEstimated := estimateModelCostByIDWorker(ctx, pool, modelID, taskInput, 0, 0, 0, 0)
 	if err := insertWorkflowMediaTask(ctx, pool, projectID, userID, modelID, taskNo, taskType, taskInput, taskEstimated); err != nil {
 		return nil, err.Error()
+	}
+	if projectID > 0 {
+		appendWorkflowMediaTask(ctx, pool, projectID, map[string]interface{}{"task_no": taskNo, "type": taskType, "status": "pending", "progress": 8, "output": map[string]interface{}{}})
 	}
 	_ = processImageTask(ctx, pool, baseURL, token, ImageTaskPayload{
 		TaskNo: taskNo, UserID: userID, ModelID: modelID, ModelCode: modelCode,
@@ -5189,6 +5121,13 @@ func runMediaNode(ctx context.Context, pool *pgxpool.Pool, baseURL, token string
 func agentMediaTaskInput(inputs map[string]interface{}, prompt, publicID string) map[string]interface{} {
 	taskInput := map[string]interface{}{}
 	for k, v := range inputs {
+		// 计费依据不是内部流转字段：工作流媒体任务在 worker 内完成成本核算，
+		// 过滤掉 _estimated_input_tokens 会让语音合成被判定为“成本缺失”。
+		switch k {
+		case "_estimated_input_tokens", "_estimated_output_tokens", "_estimated_image_output_tokens", "_billing_item_count":
+			taskInput[k] = v
+			continue
+		}
 		if strings.HasPrefix(k, "_") || k == "prompt" || k == "product" || k == "input" || k == "description" || k == "requirement" {
 			continue
 		}
@@ -5242,11 +5181,179 @@ func postJSON(ctx context.Context, url, token string, body []byte, out interface
 }
 
 func renderTemplate(tpl string, vars map[string]string) string {
+	keys := make([]string, 0, len(vars))
+	for key := range vars {
+		keys = append(keys, key)
+	}
+	// {{copy}} 是 {{copy_image_prompt}} 的前缀。map 遍历顺序随机，短键先替换会把长占位符截断。
+	sort.Slice(keys, func(i, j int) bool {
+		if len(keys[i]) != len(keys[j]) {
+			return len(keys[i]) > len(keys[j])
+		}
+		return keys[i] < keys[j]
+	})
 	out := tpl
-	for k, v := range vars {
-		out = strings.ReplaceAll(out, "{{"+k+"}}", v)
+	for _, key := range keys {
+		out = strings.ReplaceAll(out, "{{"+key+"}}", vars[key])
 	}
 	return out
+}
+
+func formatCommerceDeliveryPlan(copyText, imagePrompt, videoPrompt string) string {
+	return strings.TrimSpace(fmt.Sprintf("发布文案：\n%s\n\n海报画面：\n%s\n\n视频镜头：\n%s", strings.TrimSpace(copyText), strings.TrimSpace(imagePrompt), strings.TrimSpace(videoPrompt)))
+}
+
+func commercePlanSection(text, start, end string) string {
+	index := strings.Index(text, start)
+	if index < 0 {
+		return ""
+	}
+	rest := text[index+len(start):]
+	if end != "" {
+		if stop := strings.Index(rest, end); stop >= 0 {
+			rest = rest[:stop]
+		}
+	}
+	return strings.TrimSpace(rest)
+}
+
+func parseCommerceDeliveryPlan(text string) (copyText, imagePrompt, videoPrompt string, ok bool) {
+	text = strings.TrimSpace(text)
+	if !strings.Contains(text, "海报画面：") || !strings.Contains(text, "视频镜头：") {
+		return "", "", "", false
+	}
+	copyText = commercePlanSection(text, "发布文案：", "海报画面：")
+	imagePrompt = commercePlanSection(text, "海报画面：", "视频镜头：")
+	videoPrompt = commercePlanSection(text, "视频镜头：", "")
+	return copyText, imagePrompt, videoPrompt, imagePrompt != "" && videoPrompt != ""
+}
+
+func commerceDeliveryAnalysis(vars map[string]string) map[string]interface{} {
+	copyText := strings.TrimSpace(vars["copy_copy"])
+	imagePrompt := strings.TrimSpace(vars["copy_image_prompt"])
+	videoPrompt := strings.TrimSpace(vars["copy_video_prompt"])
+	plan := formatCommerceDeliveryPlan(copyText, imagePrompt, videoPrompt)
+	return map[string]interface{}{
+		"summary":           copyText,
+		"copy":              copyText,
+		"image_prompt":      imagePrompt,
+		"video_prompt":      videoPrompt,
+		"generation_prompt": plan,
+		"recommendation":    "A",
+		"candidates": []map[string]interface{}{{
+			"id":     "A",
+			"title":  "带货方案",
+			"reason": "同一商品的发布文案、海报画面和视频镜头",
+			"prompt": plan,
+		}},
+	}
+}
+
+func applyCommerceDeliveryConfirmation(vars map[string]string, outputs map[string]interface{}) {
+	confirmed := mapAnyOr(outputs["confirmation_payload"], nil)
+	text := strings.TrimSpace(stringAny(confirmed["prompt"]))
+	if text == "" || vars["copy_image_prompt"] == "" || vars["copy_video_prompt"] == "" {
+		return
+	}
+	copyText, imagePrompt, videoPrompt, ok := parseCommerceDeliveryPlan(text)
+	if !ok {
+		vars["copy_video_prompt"] = text
+		return
+	}
+	if copyText != "" {
+		vars["copy_copy"] = copyText
+	}
+	vars["copy_image_prompt"] = imagePrompt
+	vars["copy_video_prompt"] = videoPrompt
+}
+
+func generatedImageURL(out map[string]interface{}) string {
+	if out == nil {
+		return ""
+	}
+	if url := strings.TrimSpace(stringAny(out["image_url"])); isSupportedMediaReference(url) {
+		return url
+	}
+	switch images := out["images"].(type) {
+	case []interface{}:
+		for _, item := range images {
+			if mapped, ok := item.(map[string]interface{}); ok {
+				if url := strings.TrimSpace(stringAny(mapped["url"])); isSupportedMediaReference(url) {
+					return url
+				}
+			}
+			if url := strings.TrimSpace(stringAny(item)); isSupportedMediaReference(url) {
+				return url
+			}
+		}
+	}
+	return ""
+}
+
+func prepareCustomMediaInputs(node workflowNode, inputs, outputs map[string]interface{}) map[string]interface{} {
+	if node.Type != "image" && node.Type != "video" {
+		return inputs
+	}
+	next := copyMap(inputs)
+	if node.Type == "image" {
+		next["count"] = 1
+		next["n"] = 1
+		for _, key := range []string{"duration", "duration_sec", "seconds", "resolution", "generate_audio", "generation_mode", "first_frame", "last_frame", "reference_videos", "reference_audios", "reference_video_duration_seconds"} {
+			delete(next, key)
+		}
+		return next
+	}
+	attachCommercePosterFrame(next, outputs)
+	alignCustomVideoMode(next)
+	return next
+}
+
+func attachCommercePosterFrame(inputs, outputs map[string]interface{}) {
+	poster, ok := mapAny(outputs["poster"])
+	if !ok {
+		return
+	}
+	posterURL := generatedImageURL(poster)
+	if posterURL == "" {
+		return
+	}
+	mode := strings.ToLower(strings.TrimSpace(stringAny(inputs["generation_mode"])))
+	hasFirst := isSupportedMediaReference(stringAny(inputs["first_frame"]))
+	if !hasFirst && (mode == "" || mode == "text" || mode == "first_frame" || mode == "first_last") {
+		inputs["first_frame"] = posterURL
+		if mode == "" || mode == "text" {
+			inputs["generation_mode"] = "first_frame"
+		}
+		return
+	}
+	if mode == "reference" || mode == "image" || strings.Contains(mode, "image") {
+		urls := []string{posterURL}
+		for _, item := range referenceImageURLs(inputs) {
+			if item != posterURL {
+				urls = append(urls, item)
+			}
+		}
+		inputs["reference_images"] = urls
+	}
+}
+
+func alignCustomVideoMode(inputs map[string]interface{}) {
+	mode := strings.ToLower(strings.TrimSpace(stringAny(inputs["generation_mode"])))
+	if mode != "" && mode != "text" {
+		return
+	}
+	hasFirst := isSupportedMediaReference(stringAny(inputs["first_frame"]))
+	hasLast := isSupportedMediaReference(stringAny(inputs["last_frame"]))
+	switch {
+	case hasFirst && hasLast:
+		inputs["generation_mode"] = "first_last"
+	case hasLast && !hasFirst:
+		inputs["generation_mode"] = "last_frame"
+	case hasFirst:
+		inputs["generation_mode"] = "first_frame"
+	case len(referenceImageURLs(inputs)) > 0 || workerURLFieldCount(inputs["reference_videos"]) > 0:
+		inputs["generation_mode"] = "reference"
+	}
 }
 
 func insertWorkflowNodeRun(ctx context.Context, pool *pgxpool.Pool, projectID int64, nodeID, name, typ string, input map[string]interface{}, seq int) int64 {
@@ -5740,9 +5847,6 @@ func comicDialogueModelCandidates(inputs, runtimeCfg map[string]interface{}) []s
 	appendCodes(inputs["dialogue_model_codes"])
 	appendCodes(runtimeCfg["dialogue_model_codes"])
 	appendCodes(runtimeCfg["analysis_model_code"])
-	if len(result) == 0 {
-		result = append(result, "chat_demo_v1")
-	}
 	return result
 }
 

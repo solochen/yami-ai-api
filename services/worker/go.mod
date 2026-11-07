@@ -3,6 +3,7 @@ module github.com/starai/worker
 go 1.25.0
 
 require (
+	github.com/starai/modelcontract v0.0.0
 	github.com/hibiken/asynq v0.24.1
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/joho/godotenv v1.5.1
@@ -10,6 +11,8 @@ require (
 	github.com/redis/go-redis/v9 v9.0.3
 	golang.org/x/image v0.44.0
 )
+
+replace github.com/starai/modelcontract => ../modelcontract
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

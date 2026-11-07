@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -357,8 +358,14 @@ func (s *AgentService) CreateProject(ctx context.Context, userID int64, code str
 	if !def.IsEnabled {
 		return nil, errors.New("智能体已下线")
 	}
+	if err := s.validateModelOverrides(ctx, *def, inputs); err != nil {
+		return nil, err
+	}
 	if stringValue(def.RuntimeConfig["agent_mode"]) == "comic_drama" {
 		inputs = mergeComicDramaRuntimeDefaults(def.RuntimeConfig, inputs)
+		// 线路调整会停用旧模型；先把失效的默认代号换成当前可用模型，
+		// 再按用户最终选择做严格校验。
+		s.healComicDramaModels(ctx, inputs)
 		if err := s.validateComicDramaGenerationModels(ctx, inputs); err != nil {
 			return nil, err
 		}
@@ -413,6 +420,9 @@ func (s *AgentService) CreateProject(ctx context.Context, userID int64, code str
 		if err := normalizeViralVideoBreakdownInputs(inputs); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.validateModelBindings(ctx, *def, inputs); err != nil {
+		return nil, err
 	}
 	productEstimate := 0.0
 	billingReservation := 0.0
@@ -503,7 +513,48 @@ func (s *AgentService) EstimateWorkflowCost(ctx context.Context, def *WorkflowDT
 		nodeEstimate += node.Cost
 	}
 	runtimeEstimate := s.estimateAgentRuntimeCost(ctx, def.RuntimeConfig, inputs)
+	if modeled := s.estimateCustomNodeModelCost(ctx, def, inputs); modeled > 0 {
+		// 自定义节点实际调用的是各节点模型。运行时里的生成模型只给页面选参数，不能再加一次。
+		nodeEstimate = modeled
+		runtimeEstimate = 0
+	}
 	return estimateAgentProjectCost(def.PriceRule, inputs, nodeEstimate, runtimeEstimate), nil
+}
+
+func (s *AgentService) estimateCustomNodeModelCost(ctx context.Context, def *WorkflowDTO, inputs map[string]interface{}) float64 {
+	if def == nil {
+		return 0
+	}
+	mode := stringValue(def.RuntimeConfig["agent_mode"])
+	if mode != "" && mode != "custom_nodes" {
+		return 0
+	}
+	total := 0.0
+	for _, node := range def.Nodes {
+		code := strings.TrimSpace(node.ModelCode)
+		if code == "" {
+			continue
+		}
+		params := copyAgentMap(inputs)
+		switch node.Type {
+		case "llm":
+			total += s.estimateModelCostByCode(ctx, code, params, 800, 700)
+		case "image":
+			params["count"] = 1
+			params["n"] = 1
+			total += s.estimateModelCostByCode(ctx, code, params, 0, 0)
+		case "video":
+			if intFromAgentAny(params["duration"]) <= 0 && intFromAgentAny(params["duration_sec"]) <= 0 && intFromAgentAny(params["seconds"]) <= 0 {
+				params["duration"] = 5
+			}
+			if intFromAgentAny(params["count"]) <= 0 {
+				params["count"] = 1
+				params["n"] = 1
+			}
+			total += s.estimateModelCostByCode(ctx, code, params, 0, 0)
+		}
+	}
+	return total
 }
 
 func validateAgentCostLimit(inputs map[string]interface{}, estimated float64) error {
@@ -667,18 +718,139 @@ func (s *AgentService) validateVideoRedrawRequest(ctx context.Context, userID in
 }
 
 func (s *AgentService) validateSubtitleRemovalRequest(ctx context.Context, userID int64, runtimeCfg, inputs map[string]interface{}) error {
+	if err := prepareSubtitleRemovalInputs(runtimeCfg, inputs); err != nil {
+		return err
+	}
 	if err := normalizeAgentVideoSource(inputs); err != nil {
 		return err
 	}
 	if err := s.validateVideoSourceAsset(ctx, userID, runtimeCfg, inputs); err != nil {
 		return err
 	}
-	mode := stringValue(inputs["subtitle_mode"])
-	if mode != "auto" && mode != "soft_track" && mode != "hardcoded_ai" {
+	if err := s.validateSubtitleAssetDuration(ctx, userID, runtimeCfg, inputs); err != nil {
+		return err
+	}
+	if stringValue(inputs["subtitle_mode"]) == "hardcoded_ai" {
+		return s.validateEnabledVideoModel(ctx, stringValue(runtimeCfg["generation_model_code"]), "硬字幕修复")
+	}
+	return nil
+}
+
+func prepareSubtitleRemovalInputs(runtimeCfg, inputs map[string]interface{}) error {
+	if inputs == nil {
+		return errors.New("请先上传或从资产库选择源视频")
+	}
+	if runtimeCfg == nil {
+		runtimeCfg = map[string]interface{}{}
+	}
+	mode, ok := canonicalAgentSubtitleMode(firstAgentString(stringValue(inputs["subtitle_mode"]), stringValue(runtimeCfg["default_subtitle_mode"]), "auto"))
+	if !ok {
 		return errors.New("去字幕模式无效")
 	}
-	if mode == "hardcoded_ai" {
-		return s.validateEnabledVideoModel(ctx, stringValue(runtimeCfg["generation_model_code"]), "硬字幕修复")
+	region, ok := canonicalAgentSubtitleRegion(firstAgentString(stringValue(inputs["subtitle_region"]), stringValue(runtimeCfg["default_subtitle_region"]), "bottom_25"))
+	if !ok {
+		return errors.New("字幕区域无效")
+	}
+	inputs["subtitle_mode"] = mode
+	inputs["subtitle_region"] = region
+	if _, exists := inputs["protect_watermark"]; !exists {
+		if value, isBool := runtimeCfg["protect_watermark"].(bool); isBool {
+			inputs["protect_watermark"] = value
+		} else {
+			inputs["protect_watermark"] = true
+		}
+	}
+	if _, exists := inputs["preserve_audio"]; !exists {
+		if value, isBool := runtimeCfg["preserve_audio"].(bool); isBool {
+			inputs["preserve_audio"] = value
+		} else {
+			inputs["preserve_audio"] = true
+		}
+	}
+	maxDuration := intFromAgentAny(runtimeCfg["max_input_duration_sec"])
+	if maxDuration <= 0 {
+		maxDuration = 300
+	}
+	if duration := subtitleInputDuration(inputs); duration > float64(maxDuration)+0.05 {
+		return fmt.Errorf("视频时长不能超过 %d 秒", maxDuration)
+	}
+	inputs["count"], inputs["n"], inputs["_mode"] = 1, 1, "auto"
+	return nil
+}
+
+func canonicalAgentSubtitleMode(value string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "auto":
+		return "auto", true
+	case "soft_track":
+		return "soft_track", true
+	case "hardcoded_ai":
+		return "hardcoded_ai", true
+	default:
+		return "", false
+	}
+}
+
+func canonicalAgentSubtitleRegion(value string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "bottom_25":
+		return "bottom_25", true
+	case "bottom_15":
+		return "bottom_15", true
+	case "bottom_35":
+		return "bottom_35", true
+	case "full", "full_frame":
+		return "full", true
+	default:
+		return "", false
+	}
+}
+
+func subtitleRemovalReservesModelCost(mode string) bool {
+	canonical, ok := canonicalAgentSubtitleMode(mode)
+	return ok && canonical == "hardcoded_ai"
+}
+
+func subtitleInputDuration(inputs map[string]interface{}) float64 {
+	for _, key := range []string{"duration_sec", "duration_seconds", "duration"} {
+		if value := positiveFloatAny(inputs[key]); value > 0 {
+			return value
+		}
+	}
+	return 0
+}
+
+func metadataDurationSeconds(raw []byte) float64 {
+	meta := map[string]interface{}{}
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return 0
+	}
+	for _, key := range []string{"duration_seconds", "duration_sec", "duration"} {
+		if value := positiveFloatAny(meta[key]); value > 0 {
+			return value
+		}
+	}
+	return 0
+}
+
+func (s *AgentService) validateSubtitleAssetDuration(ctx context.Context, userID int64, runtimeCfg, inputs map[string]interface{}) error {
+	assetID := strings.TrimSpace(stringValue(inputs["source_asset_id"]))
+	if assetID == "" {
+		return nil
+	}
+	var raw []byte
+	if err := s.db.QueryRow(ctx, `SELECT COALESCE(metadata,'{}'::jsonb) FROM assets WHERE public_id=$1 AND user_id=$2`, assetID, userID).Scan(&raw); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errors.New("所选源视频资产不存在或无权访问")
+		}
+		return err
+	}
+	maxDuration := intFromAgentAny(runtimeCfg["max_input_duration_sec"])
+	if maxDuration <= 0 {
+		maxDuration = 300
+	}
+	if duration := metadataDurationSeconds(raw); duration > float64(maxDuration)+0.05 {
+		return fmt.Errorf("视频时长不能超过 %d 秒", maxDuration)
 	}
 	return nil
 }
@@ -1780,7 +1952,7 @@ func (s *AgentService) estimateAgentRuntimeCost(ctx context.Context, runtimeCfg 
 	}
 	if stringValue(runtimeCfg["agent_mode"]) == "subtitle_remove" {
 		mode := firstAgentString(stringValue(inputs["subtitle_mode"]), stringValue(runtimeCfg["default_subtitle_mode"]), "auto")
-		if mode != "soft_track" {
+		if subtitleRemovalReservesModelCost(mode) {
 			if code := stringValue(runtimeCfg["generation_model_code"]); code != "" {
 				params := copyAgentMap(inputs)
 				params["count"], params["n"] = 1, 1
@@ -1968,6 +2140,9 @@ func (s *AgentService) retryProject(ctx context.Context, userID int64, publicID 
 	if err := s.preventProductLegacyRetry(ctx, userID, publicID); err != nil {
 		return err
 	}
+	if err := s.ValidateProjectModels(ctx, userID, publicID, modelOverrides); err != nil {
+		return err
+	}
 	var projectID int64
 	var status string
 	var estimated float64
@@ -1991,6 +2166,9 @@ func (s *AgentService) retryProject(ctx context.Context, userID int64, publicID 
 	refreshComicRetryModels(inputs, outputs, runtimeCfg, modelOverrides)
 	if stringValue(runtimeCfg["agent_mode"]) == "comic_drama" {
 		fillComicResumeModelDefaults(inputs, runtimeCfg)
+		// 失败项目里可能保存着已经停用的模型代号；续跑前同样先自愈，
+		// 只替换不可用槽位，成功素材和用户显式选择保持不变。
+		s.healComicDramaModels(ctx, inputs)
 		work := remainingComicWork(inputs, outputs, runtimeCfg)
 		if _, ok := outputs["comic_drama"].(map[string]interface{}); ok && work.Plan {
 			return errors.New("已保存的分镜为空，请重试规划节点；未提交新的素材任务")
@@ -2148,6 +2326,9 @@ func (s *AgentService) RetryDetailSection(ctx context.Context, userID int64, pub
 
 func (s *AgentService) RetryProjectNode(ctx context.Context, userID int64, publicID, nodeID string, modelOverrides map[string]string) error {
 	if err := s.preventProductLegacyRetry(ctx, userID, publicID); err != nil {
+		return err
+	}
+	if err := s.ValidateProjectModels(ctx, userID, publicID, modelOverrides); err != nil {
 		return err
 	}
 	nodeID = strings.TrimSpace(nodeID)
@@ -2561,6 +2742,10 @@ func (s *AgentService) Upsert(ctx context.Context, in AgentUpsertInput) error {
 	if in.Code == "" || in.Name == "" {
 		return errors.New("编码和名称必填")
 	}
+	// Validate supplied references before normalizers can overwrite node mirrors.
+	if err := s.validateSuppliedAgentModels(ctx, in); err != nil {
+		return err
+	}
 	if in.Code == "extract_product_images" {
 		if in.RuntimeConfig == nil {
 			in.RuntimeConfig = map[string]interface{}{}
@@ -2644,6 +2829,9 @@ func (s *AgentService) Upsert(ctx context.Context, in AgentUpsertInput) error {
 		}
 	}
 	if err := validateWorkflowPriceRule(in.PriceRule); err != nil {
+		return err
+	}
+	if err := s.validateModelBindings(ctx, WorkflowDTO{Code: in.Code, Category: in.Category, RuntimeConfig: in.RuntimeConfig, Nodes: in.Nodes}, nil); err != nil {
 		return err
 	}
 	nodes, _ := json.Marshal(in.Nodes)
@@ -2787,7 +2975,7 @@ func normalizeSubtitleRemovalAgentInput(in AgentUpsertInput) AgentUpsertInput {
 		"properties": map[string]interface{}{
 			"video_url":         map[string]interface{}{"type": "string", "title": "源视频"},
 			"subtitle_mode":     map[string]interface{}{"type": "string", "title": "去字幕模式", "enum": []string{"auto", "soft_track", "hardcoded_ai"}, "default": in.RuntimeConfig["default_subtitle_mode"]},
-			"subtitle_region":   map[string]interface{}{"type": "string", "title": "字幕区域", "enum": []string{"bottom_15", "bottom_25", "bottom_35", "full_frame"}, "default": in.RuntimeConfig["default_subtitle_region"]},
+			"subtitle_region":   map[string]interface{}{"type": "string", "title": "字幕区域", "enum": []string{"bottom_15", "bottom_25", "bottom_35", "full"}, "default": in.RuntimeConfig["default_subtitle_region"]},
 			"protect_watermark": map[string]interface{}{"type": "boolean", "title": "保护水印与标识", "default": in.RuntimeConfig["protect_watermark"]},
 		},
 	}
@@ -3078,15 +3266,18 @@ func normalizeComicDramaAgentInput(in AgentUpsertInput) AgentUpsertInput {
 	if stringValue(in.RuntimeConfig["video_model_code"]) == "" {
 		in.RuntimeConfig["video_model_code"] = firstAgentString(stringValue(in.RuntimeConfig["generation_model_code"]), in.GenerationModelCode)
 	}
-	if stringValue(in.RuntimeConfig["image_model_code"]) == "" {
-		in.RuntimeConfig["image_model_code"] = "image_fast_v1"
-	}
+	// 不在这里写死演示模型：它们会被停用/下线，保存后会让智能体长期不可用。
+	// 未选择时保持为空，由 Upsert 的显式校验提示管理员补齐。
 	in.RuntimeConfig["audio_strategy"] = normalizeComicAudioStrategy(
 		stringValue(in.RuntimeConfig["audio_strategy"]),
 		stringValue(in.RuntimeConfig["narration_model_code"]),
 	)
 	if _, ok := in.RuntimeConfig["dialogue_model_codes"]; !ok {
-		in.RuntimeConfig["dialogue_model_codes"] = []string{firstAgentString(stringValue(in.RuntimeConfig["analysis_model_code"]), in.AnalysisModelCode, "chat_demo_v1")}
+		codes := []string{}
+		if code := firstAgentString(stringValue(in.RuntimeConfig["analysis_model_code"]), in.AnalysisModelCode); code != "" {
+			codes = append(codes, code)
+		}
+		in.RuntimeConfig["dialogue_model_codes"] = codes
 	}
 	if _, ok := in.RuntimeConfig["style_reference_mode"]; !ok {
 		in.RuntimeConfig["style_reference_mode"] = "image_reference"
@@ -3324,6 +3515,19 @@ func stringValue(v interface{}) string {
 		return s
 	}
 	return ""
+}
+
+func positiveFloatAny(v interface{}) float64 {
+	if value := floatValue(v); value > 0 {
+		return value
+	}
+	if text, ok := v.(string); ok {
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+		if err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return 0
 }
 
 func floatValue(v interface{}) float64 {

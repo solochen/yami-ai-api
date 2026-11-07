@@ -46,4 +46,11 @@ func TestUpstreamCreditsExhaustedDetection(t *testing.T) {
 	if got := classifyUpstreamCapacity(402, video); got != upstreamCapacityCredits {
 		t.Fatalf("视频额度不足未识别: %v", got)
 	}
+	plain := []byte(`{"error":{"message":"Insufficient credits. Add more using https://openrouter.ai/settings/credits","code":402}}`)
+	if got := classifyUpstreamCapacity(402, plain); got != upstreamCapacityCredits {
+		t.Fatalf("账户余额不足未识别: %v", got)
+	}
+	if !workerStatusCanFailover(402) {
+		t.Fatal("402 应切换到下一条供应商线路")
+	}
 }

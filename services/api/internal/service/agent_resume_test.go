@@ -85,10 +85,18 @@ func TestComicResumeDatabaseBillingAndModels(t *testing.T) {
 	 CREATE TABLE workflow_node_runs(project_id bigint,cost numeric);
 	 CREATE TABLE models(code text PRIMARY KEY, category text, is_enabled boolean, price_rule jsonb);
 	 CREATE TABLE wallets(user_id bigint PRIMARY KEY,compute_balance numeric DEFAULT 0,frozen_compute numeric DEFAULT 0,updated_at timestamptz);
+	 CREATE TABLE system_configs(key text PRIMARY KEY,value jsonb);
+	 INSERT INTO system_configs VALUES ('platform_gross_margin_percent','0');
+	 CREATE TABLE model_route_attempts(id bigint,request_id text,workflow_project_id bigint,status text,provider_cost numeric,provider_cost_source text,provider_cost_complete boolean);
+	 ALTER TABLE tasks ADD workflow_project_id bigint, ADD status text, ADD provider_cost numeric, ADD provider_cost_source text, ADD provider_cost_complete boolean;
+	 INSERT INTO model_route_attempts VALUES (1,'saved-usage',1,'success',5,'route_cost',true);
 	 CREATE TABLE balance_freezes(id bigserial,user_id bigint,amount numeric,ref_type text,ref_id text,status text,released_at timestamptz);
 	 INSERT INTO workflow_definitions VALUES (1,'{"agent_mode":"comic_drama"}','{"billing_type":"per_request","unit_price":5}');
 	 INSERT INTO models VALUES ('old_image','image',false,'{}'),('old_video','video',false,'{}'),('old_audio','audio',false,'{}'),('new_video','video',true,'{"billing_type":"per_second","unit_price":2}');
-	 INSERT INTO wallets(user_id) VALUES (1);`)
+	 INSERT INTO wallets(user_id) VALUES (1);
+     ALTER TABLE models ADD id bigserial, ADD public_alias text, ADD request_mode text, ADD runtime_rule jsonb DEFAULT '{}', ADD input_schema jsonb DEFAULT '{}';
+     CREATE TABLE model_routes(id bigserial,model_id bigint,is_enabled bool);
+     UPDATE models SET request_mode='video',runtime_rule='{"video":{"upload_profile":"first_last"}}' WHERE category='video';`)
 	if err != nil {
 		t.Fatal(err)
 	}

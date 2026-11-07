@@ -72,6 +72,8 @@ pnpm dev
 
 `pnpm dev` 使用已有的 Docker 后端镜像和数据卷，停止 Docker 中的生产前台、后台，并通过 `docker-compose.dev.yml` 收起多余端口（需要 Docker Compose 2.24.4+）。API `8080` 和对象存储 `9000` 仅监听本机回环地址，供开发代理内部使用；数据库、Redis、Mock 网关和已运行的 SearXNG 通过 Docker 网络连接。前台、后台开发进程使用本地 socket，不额外占用 TCP 端口。首次使用需要先按下方原有启动流程准备后端镜像和数据库。
 
+如果只需启动前端页面且 Docker 后端已另行运行或暂不可用，可用 `DEV_SKIP_DOCKER=1 pnpm dev` 跳过 Docker 准备。API 和媒体请求仍代理到本机 `8080` 和 `9000`，后端未运行时相关功能不可用。
+
 按 `Ctrl+C` 或运行 `pnpm dev:stop` 停止前端开发服务，Docker 后端继续运行。日志在启动终端输出。可用 `DEV_PORT` 改入口端口，`DEV_HOST` 改监听地址，`DEV_API_TARGET` / `DEV_MEDIA_TARGET` 改内部服务地址。开发输出保存在 `.next-dev`，与生产 `.next` 构建分开。
 
 切回 Docker 生产预览时运行：

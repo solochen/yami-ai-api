@@ -32,7 +32,12 @@ const (
 	digitalHumanVideoDefault = 2.8125
 	// Vidu 积分折算率：1 积分 = 0.03125 元。
 	digitalHumanTextCreditDefault = 0.03125
-	digitalHumanPersonaLimit      = 50000
+	// 用户侧默认售价（算力/分钟）。上游对 text / audio / video 同价，
+	// 所以统一一个售价；后台留空或填 0 时用这个值。
+	digitalHumanSaleDefault = 2.49
+	// Vidu 实时版每秒消耗的积分（官方价目表：1.5 积分/秒）。
+	digitalHumanRealtimeCreditDefault = 1.5
+	digitalHumanPersonaLimit = 50000
 )
 
 type digitalHumanSettings struct {
@@ -42,6 +47,14 @@ type digitalHumanSettings struct {
 	VoicePerMinute float64
 	VideoPerMinute float64
 	TextCreditRate float64
+	// SalePerMinute 是用户侧每分钟售价（算力/分钟）。上游对 text / audio / video
+	// 三种会话同价，所以这里只存一个统一售价；为 0 时用默认售价。
+	SalePerMinute float64
+	// RealtimeCreditPerSecond 是实时版每秒消耗的积分（官方 1.5，实测按账单为准）。
+	RealtimeCreditPerSecond float64
+	// CostAutoFromCredits 为真时，每分钟成本由「每秒积分 × 60 × 积分单价」反算，
+	// 买套餐后只改积分单价就能让成本跟着走，不用手工对三个数字。
+	CostAutoFromCredits bool
 }
 
 type DigitalHumanRole struct {
@@ -159,7 +172,15 @@ func (h *digitalHumanHub) endLock(id string) func() {
 }
 
 func (s *ChatService) digitalHumanSettings(ctx context.Context) digitalHumanSettings {
-	settings := digitalHumanSettings{Host: "api.vidu.cn", VoicePerMinute: digitalHumanVoiceDefault, VideoPerMinute: digitalHumanVideoDefault, TextCreditRate: digitalHumanTextCreditDefault}
+	settings := digitalHumanSettings{
+		Host:                    "api.vidu.cn",
+		VoicePerMinute:          digitalHumanVoiceDefault,
+		VideoPerMinute:          digitalHumanVideoDefault,
+		TextCreditRate:          digitalHumanTextCreditDefault,
+		SalePerMinute:           digitalHumanSaleDefault,
+		RealtimeCreditPerSecond: digitalHumanRealtimeCreditDefault,
+		CostAutoFromCredits:     true,
+	}
 	rows, err := s.db.Query(ctx, `SELECT key, value #>> '{}' FROM system_configs WHERE key LIKE 'vidu_%'`)
 	if err != nil {
 		return settings
@@ -188,6 +209,27 @@ func (s *ChatService) digitalHumanSettings(ctx context.Context) digitalHumanSett
 	if n := parseConfigFloat(values["vidu_text_credit_rate"], -1); n >= 0 {
 		settings.TextCreditRate = n
 	}
+	if n := parseConfigFloat(values["vidu_sale_price_per_minute"], -1); n >= 0 {
+		settings.SalePerMinute = n
+	}
+	if n := parseConfigFloat(values["vidu_realtime_credit_per_second"], -1); n >= 0 {
+		settings.RealtimeCreditPerSecond = n
+	}
+	if raw, ok := values["vidu_cost_auto_from_credits"]; ok && raw != "" {
+		settings.CostAutoFromCredits = parseConfigBool(raw, true)
+	}
+	return applyDigitalHumanAutoCost(settings)
+}
+
+// applyDigitalHumanAutoCost 在开启「按积分单价自动反算成本」时，
+// 用 每秒积分 × 60 × 积分单价 覆盖手工填的分钟成本。
+func applyDigitalHumanAutoCost(settings digitalHumanSettings) digitalHumanSettings {
+	if !settings.CostAutoFromCredits || settings.RealtimeCreditPerSecond <= 0 || settings.TextCreditRate <= 0 {
+		return settings
+	}
+	perMinute := math.Round(settings.RealtimeCreditPerSecond*60*settings.TextCreditRate*1e6) / 1e6
+	settings.VoicePerMinute = perMinute
+	settings.VideoPerMinute = perMinute
 	return settings
 }
 
@@ -209,23 +251,6 @@ func (s *ChatService) digitalHumanMargin(ctx context.Context) float64 {
 		return billing.DefaultGrossMarginPercent
 	}
 	return cfg.GrossMarginPercent
-}
-
-// digitalHumanMinuteProviderCost 返回该模式下每分钟的上游成本（元）。
-// 文字会话在 Vidu 侧同样是 audio 会话，按语音分钟成本预留。
-func digitalHumanMinuteProviderCost(mode string, settings digitalHumanSettings) float64 {
-	switch mode {
-	case "video":
-		if settings.VideoPerMinute > 0 {
-			return settings.VideoPerMinute
-		}
-		return digitalHumanVideoDefault
-	default:
-		if settings.VoicePerMinute > 0 {
-			return settings.VoicePerMinute
-		}
-		return digitalHumanVoiceDefault
-	}
 }
 
 // digitalHumanProviderCost 按 Vidu 实际用量折算上游成本（元）。
@@ -264,12 +289,34 @@ func digitalHumanUserCharge(providerCost, marginPercent float64) float64 {
 	return charge.UserCharge
 }
 
+// digitalHumanSalePerMinute 返回用户侧每分钟售价。
+// 后台没配（<= 0）时一律用默认售价，不再回落到「成本 ÷ (1 − 佣金率)」——
+// 否则一条被存成 0 的配置就会让前端显示成上游成本价。
+func digitalHumanSalePerMinute(settings digitalHumanSettings) float64 {
+	price := settings.SalePerMinute
+	if price <= 0 {
+		price = digitalHumanSaleDefault
+	}
+	return math.Round(price*1e6) / 1e6
+}
+
+// digitalHumanSessionCost 计算一次会话的用户侧扣费（算力），按实际计费秒折算售价。
+func (s *ChatService) digitalHumanSessionCost(ctx context.Context, mode string, billedSeconds int, credits float64, settings digitalHumanSettings) float64 {
+	if billedSeconds > 0 {
+		return math.Round(float64(billedSeconds)/60*digitalHumanSalePerMinute(settings)*1e6) / 1e6
+	}
+	// 上游还没结算出计费秒时，退回按积分折算，避免整通电话收 0。
+	return digitalHumanUserCharge(
+		digitalHumanProviderCost(mode, billedSeconds, credits, settings.VoicePerMinute, settings.VideoPerMinute, settings.TextCreditRate),
+		s.digitalHumanMargin(ctx),
+	)
+}
+
 // DigitalHumanPrices 返回用户侧每分钟售价（已含平台佣金），供前端展示预计费用。
 func (s *ChatService) DigitalHumanPrices(ctx context.Context) (voice, video float64) {
 	settings := s.digitalHumanSettings(ctx)
-	margin := s.digitalHumanMargin(ctx)
-	return digitalHumanUserCharge(digitalHumanMinuteProviderCost("audio", settings), margin),
-		digitalHumanUserCharge(digitalHumanMinuteProviderCost("video", settings), margin)
+	price := digitalHumanSalePerMinute(settings)
+	return price, price
 }
 
 func (s *ChatService) ListDigitalHumanRoles(ctx context.Context, userID int64) ([]DigitalHumanRole, error) {
@@ -459,8 +506,8 @@ func (s *ChatService) StartDigitalHumanSession(ctx context.Context, userID int64
 	if mode == "video" {
 		viduMode = "video"
 	}
-	// 冻结一价：按该模式每分钟的上游成本加平台佣金后的售价预留。
-	freeze := digitalHumanUserCharge(digitalHumanMinuteProviderCost(mode, settings), s.digitalHumanMargin(ctx))
+	// 冻结一价：按该模式的用户侧每分钟售价预留。
+	freeze := digitalHumanSalePerMinute(settings)
 	if freeze < 0 {
 		freeze = 0
 	}
@@ -601,10 +648,7 @@ func (s *ChatService) EndDigitalHumanSession(ctx context.Context, userID int64, 
 	s.closeDigitalHumanLink(sessionID, link, true)
 	settings := s.digitalHumanSettings(ctx)
 	billed, credits := s.pollViduUsage(settings, session.LiveID, 5, time.Second)
-	cost := digitalHumanUserCharge(
-		digitalHumanProviderCost(session.CallMode, billed, credits, settings.VoicePerMinute, settings.VideoPerMinute, settings.TextCreditRate),
-		s.digitalHumanMargin(ctx),
-	)
+	cost := s.digitalHumanSessionCost(ctx, session.CallMode, billed, credits, settings)
 	if cost <= 0 && session.LiveID != "" && (session.CallMode == "audio" || session.CallMode == "video") {
 		go s.settleDigitalHumanBill(userID, session.DBID, session.PublicID, session.CallMode, session.LiveID, settings)
 		_, _ = s.db.Exec(ctx, `UPDATE digital_human_sessions SET status='ended', ended_at=now() WHERE id=$1 AND status<>'ended'`, session.DBID)
@@ -632,12 +676,9 @@ func (s *ChatService) settleDigitalHumanBill(userID, sessionDBID int64, publicID
 	billed, credits := s.pollViduUsage(settings, liveID, 8, 3*time.Second)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	cost := digitalHumanUserCharge(
-		digitalHumanProviderCost(mode, billed, credits, settings.VoicePerMinute, settings.VideoPerMinute, settings.TextCreditRate),
-		s.digitalHumanMargin(ctx),
-	)
+	cost := s.digitalHumanSessionCost(ctx, mode, billed, credits, settings)
 	if cost <= 0 {
-		freeze := digitalHumanUserCharge(digitalHumanMinuteProviderCost(mode, settings), s.digitalHumanMargin(ctx))
+		freeze := digitalHumanSalePerMinute(settings)
 		if err := s.billing.Unfreeze(ctx, userID, freeze, "digital_human", publicID); err != nil {
 			log.Printf("digital human unfreeze %s: %v", publicID, err)
 		}
@@ -648,7 +689,7 @@ func (s *ChatService) settleDigitalHumanBill(userID, sessionDBID int64, publicID
 }
 
 func (s *ChatService) chargeDigitalHumanSession(ctx context.Context, userID, sessionDBID int64, publicID, mode string, cost float64, settings digitalHumanSettings) {
-	freeze := digitalHumanUserCharge(digitalHumanMinuteProviderCost(mode, settings), s.digitalHumanMargin(ctx))
+	freeze := digitalHumanSalePerMinute(settings)
 	remark := "数字人文字"
 	txType := "audio_usage"
 	switch mode {

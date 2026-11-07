@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
@@ -23,6 +24,13 @@ func main() {
 	if port == "" {
 		port = "3002"
 	}
+	// 视频结果必须指向 mock 自己托管的素材：外网直链在离线/受限网络下会 403，
+	// 让「生成成功但转存失败」掩盖真实链路问题。
+	mockVideoURL := strings.TrimRight(os.Getenv("MOCK_PUBLIC_BASE_URL"), "/")
+	if mockVideoURL == "" {
+		mockVideoURL = "http://mock-new-api:" + port
+	}
+	mockVideoURL += "/mock-assets/clip.mp4"
 	failureRate := 0.0
 	if v := os.Getenv("MOCK_FAILURE_RATE"); v != "" {
 		fmt.Sscanf(v, "%f", &failureRate)
@@ -189,6 +197,16 @@ func main() {
 		c.Data(http.StatusOK, "image/png", data.Bytes())
 	})
 
+	r.GET("/mock-assets/clip.mp4", func(c *gin.Context) {
+		data, err := base64.StdEncoding.DecodeString(qaClipMP4Base64)
+		if err != nil {
+			c.JSON(500, gin.H{"error": gin.H{"message": "mock clip unavailable"}})
+			return
+		}
+		c.Header("Accept-Ranges", "bytes")
+		c.Data(http.StatusOK, "video/mp4", data)
+	})
+
 	videoJobs := map[string]int64{}
 	handleVideoCreate := func(c *gin.Context) {
 		if rand.Float64() < failureRate {
@@ -217,24 +235,23 @@ func main() {
 		id := c.Param("id")
 		created, ok := videoJobs[id]
 		if !ok {
-			c.JSON(404, gin.H{"error": gin.H{"message": "task not found"}})
+			c.JSON(404, gin.H{"error": gin.H{"message": "task not found", "type": "invalid_request_error"}})
 			return
 		}
 		if time.Now().Unix()-created < 2 {
 			c.JSON(200, gin.H{"id": id, "object": "video", "status": "processing", "progress": 50})
 			return
 		}
-		seed := rand.Intn(10000)
 		c.JSON(200, gin.H{
 			"id":           id,
 			"object":       "video",
 			"status":       "completed",
 			"progress":     100,
-			"video_url":    "https://www.w3schools.com/html/mov_bbb.mp4",
+			"video_url":    mockVideoURL,
 			"completed_at": time.Now().Unix(),
 			"data": []gin.H{{
-				"url":       "https://www.w3schools.com/html/mov_bbb.mp4",
-				"thumbnail": fmt.Sprintf("https://picsum.photos/seed/%d/640/360", seed),
+				"url":       mockVideoURL,
+				"thumbnail": mockVideoURL,
 			}},
 		})
 	}

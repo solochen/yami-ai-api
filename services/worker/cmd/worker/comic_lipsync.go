@@ -29,6 +29,9 @@ func comicNeedsLipSync(shot, inputs, runtime map[string]interface{}) (bool, erro
 }
 
 func comicSyncModel(ctx context.Context, pool *pgxpool.Pool) (string, error) {
+	if pool == nil {
+		return "", fmt.Errorf("口型同步服务未配置，已跳过口型同步")
+	}
 	var code string
 	err := pool.QueryRow(ctx, `SELECT code FROM models WHERE code='video_sync_lipsync' AND is_enabled=true AND (runtime_rule->'lip_sync'->>'provider'='sync' OR runtime_rule->'lip_sync'->>'protocol' IN ('sync_v2','video_audio'))`).Scan(&code)
 	if err != nil {
@@ -89,11 +92,11 @@ func syncComicShot(ctx context.Context, pool *pgxpool.Pool, baseURL, token strin
 		result = results[0]
 	}
 	output := mapAnyOr(result["output"], nil)
-	address := firstMediaURL(output, "video_url", "url", "result_url")
+	address := comicMediaURL(output, "video_url", "url", "result_url")
 	if address == "" {
 		return "", fmt.Errorf("口型同步未返回视频，未跳过处理")
 	}
-	data, _, err := downloadAuthenticatedMedia(ctx, connectionConfig{}, address, 600<<20)
+	data, _, err := downloadMediaSource(ctx, connectionConfig{}, address, 600<<20)
 	if err != nil {
 		return "", err
 	}

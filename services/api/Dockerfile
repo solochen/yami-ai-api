@@ -1,10 +1,11 @@
 FROM golang:1.25-alpine AS builder
-WORKDIR /app
+WORKDIR /app/services/api
 ENV GOPROXY=https://goproxy.cn,direct
 ENV GOMAXPROCS=2
-COPY go.mod go.sum ./
+COPY services/modelcontract /app/services/modelcontract
+COPY services/api/go.mod services/api/go.sum ./
 RUN go mod download
-COPY . .
+COPY services/api .
 RUN CGO_ENABLED=0 go build -p=2 -o /api ./cmd/api
 RUN CGO_ENABLED=0 go build -p=2 -o /migrate ./cmd/migrate
 RUN CGO_ENABLED=0 go build -p=2 -o /pricedrift ./cmd/pricedrift
