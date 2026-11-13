@@ -1632,3 +1632,120 @@ html.mcdl-product-ui .mcdl-api-docs button.bg-gray-900 {
     border-radius: 1.25rem;
   }
 }
+
+/* ==========================================================================
+   角色替换台（角色替换智能体）
+   舞台、对比滑杆、启动扫描与镜头卡片。只使用 mcdl 语义令牌。
+   ========================================================================== */
+.character-studio-workspace {
+  background: var(--mcdl-color-surface);
+}
+
+.character-studio-stage {
+  background:
+    radial-gradient(120% 120% at 50% 18%, #2a211b 0%, #161210 52%, #0b0908 100%);
+  border: 1px solid var(--mcdl-border-ghost);
+  box-shadow: var(--mcdl-shadow-soft);
+}
+
+.character-studio-stage::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  background-size: 2.5rem 2.5rem;
+  content: "";
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.character-studio-scanning::after {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  background: linear-gradient(to bottom, transparent 0%, rgb(255 135 17 / 0.14) 48%, transparent 100%);
+  content: "";
+  pointer-events: none;
+  transform: translateY(-100%);
+  animation: character-studio-scan 2.2s var(--mcdl-hover-ease) infinite;
+}
+
+@keyframes character-studio-scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.character-studio-live-dot {
+  animation: character-studio-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes character-studio-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.72); }
+}
+
+.character-studio-countdown {
+  animation: character-studio-pop 0.42s var(--mcdl-hover-ease);
+}
+
+@keyframes character-studio-pop {
+  0% { opacity: 0; transform: scale(0.72); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.character-studio-card {
+  transition: transform var(--mcdl-hover-duration) var(--mcdl-hover-ease), box-shadow var(--mcdl-hover-duration) var(--mcdl-hover-ease);
+}
+
+.character-studio-card:hover {
+  transform: translateY(var(--mcdl-hover-lift-quiet));
+}
+
+.character-studio-compare {
+  appearance: none;
+  height: 0.125rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.55);
+  outline: none;
+}
+
+.character-studio-compare::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 0.125rem solid var(--mcdl-color-accent);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0.35rem 1rem rgb(0 0 0 / 0.45);
+  cursor: ew-resize;
+}
+
+.character-studio-compare::-moz-range-thumb {
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 0.125rem solid var(--mcdl-color-accent);
+  border-radius: 999px;
+  background: #fff;
+  cursor: ew-resize;
+}
+
+.character-studio-compare:focus-visible {
+  box-shadow: 0 0 0 0.25rem rgb(255 135 17 / 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .character-studio-scanning::after,
+  .character-studio-live-dot,
+  .character-studio-countdown,
+  .character-studio-card {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.character-studio-stage-title {
+  color: #fbf6f2;
+  text-shadow: 0 0.125rem 1.25rem rgb(0 0 0 / 0.55);
+}

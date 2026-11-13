@@ -144,6 +144,9 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		api.GET("/role-templates", h.ListRoleTemplates)
 		api.POST("/digital-human/knowledge/search", middleware.RateLimit(h.cache, "digital-human-knowledge", 120, time.Minute, middleware.ClientIPIdentity), h.SearchDigitalHumanKnowledge)
 
+		// 浏览器实时运行时通过本站中性路径加载，页面源码里不出现第三方 CDN 域名。
+		api.GET("/realtime/engine.js", h.RealtimeEngine)
+
 		auth := api.Group("")
 		auth.Use(middleware.UserAuth(h.cfg.JWTSecret, h.cache))
 		auth.Use(middleware.RateLimit(h.cache, "user-api", 300, time.Minute, middleware.UserIdentity))
@@ -160,6 +163,18 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			auth.POST("/digital-human/roles/:id/sessions", h.StartDigitalHumanSession)
 			auth.POST("/digital-human/sessions/:id/messages", h.SendDigitalHumanText)
 			auth.POST("/digital-human/sessions/:id/end", h.EndDigitalHumanSession)
+			auth.GET("/character-studio/config", h.CharacterStudioConfig)
+			auth.GET("/character-studio/characters", h.ListCharacterStudioCharacters)
+			auth.POST("/character-studio/characters", h.SaveCharacterStudioCharacter)
+			auth.PUT("/character-studio/characters/:id", h.SaveCharacterStudioCharacter)
+			auth.DELETE("/character-studio/characters/:id", h.DeleteCharacterStudioCharacter)
+			auth.GET("/character-studio/sessions/active", h.ActiveCharacterStudioSession)
+			auth.POST("/character-studio/sessions", middleware.RateLimit(h.cache, "character-studio-start", 6, time.Minute, middleware.UserIdentity), h.StartCharacterStudioSession)
+			auth.GET("/character-studio/sessions/:id", h.GetCharacterStudioSession)
+			auth.POST("/character-studio/sessions/:id/switch", h.SwitchCharacterStudioCharacter)
+			auth.POST("/character-studio/sessions/:id/heartbeat", h.HeartbeatCharacterStudioSession)
+			auth.POST("/character-studio/sessions/:id/end", h.EndCharacterStudioSession)
+			auth.POST("/character-studio/sessions/:id/takes", h.AddCharacterStudioTake)
 			auth.GET("/workbench/session", h.GetWorkbenchSession)
 			auth.POST("/upload", h.Upload)
 			auth.POST("/assets/upload", h.UploadAsset)

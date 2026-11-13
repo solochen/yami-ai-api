@@ -352,6 +352,14 @@ func (s *WorksService) CreateFromTask(ctx context.Context, userID, taskID, model
 }
 
 func (s *WorksService) CreateFromAsset(ctx context.Context, userID int64, assetPublicID, title, mediaType, mediaURL string, retentionDays int) (*WorkDTO, error) {
+	return s.CreateFromAssetWithSource(ctx, userID, assetPublicID, title, mediaType, mediaURL, "url_import", retentionDays)
+}
+
+// CreateFromAssetWithSource 从已上传的资产创建作品记录；source 标记来源，便于后台区分作品类型。
+func (s *WorksService) CreateFromAssetWithSource(ctx context.Context, userID int64, assetPublicID, title, mediaType, mediaURL, source string, retentionDays int) (*WorkDTO, error) {
+	if strings.TrimSpace(source) == "" {
+		source = "asset"
+	}
 	publicID := util.NewPublicID("work")
 	var expires *time.Time
 	if retentionDays > 0 {
@@ -360,7 +368,7 @@ func (s *WorksService) CreateFromAsset(ctx context.Context, userID int64, assetP
 	}
 	meta, _ := json.Marshal(map[string]interface{}{
 		mediaType + "_url": mediaURL,
-		"source":           "url_import",
+		"source":           source,
 		"asset_public_id":  assetPublicID,
 	})
 	var created time.Time
@@ -380,7 +388,7 @@ func (s *WorksService) CreateFromAsset(ctx context.Context, userID int64, assetP
 	}
 	return &WorkDTO{
 		PublicID: publicID, Type: mediaType, Title: &title, Prompt: &title, ThumbnailURL: &mediaURL,
-		Metadata:  map[string]interface{}{mediaType + "_url": mediaURL, "source": "url_import", "asset_public_id": assetPublicID},
+		Metadata:  map[string]interface{}{mediaType + "_url": mediaURL, "source": source, "asset_public_id": assetPublicID},
 		ExpiresAt: expiresAt, CreatedAt: createdAt,
 	}, nil
 }

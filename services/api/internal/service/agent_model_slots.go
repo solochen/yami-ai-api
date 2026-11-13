@@ -246,6 +246,9 @@ func buildAgentModelBindings(w WorkflowDTO, models []modelcontract.Model) AgentM
 	if modelcontract.Mode(d) == "realtime_avatar" {
 		item.Note = "实时数字人使用 Vidu 实时服务；配置来源为系统设置中的 vidu_* 参数，未使用模型库槽位"
 	}
+	if modelcontract.Mode(d) == "character_studio" {
+		item.Note = "角色替换使用实时渲染服务；配置来源为系统设置中的 character_studio_* 参数，未使用模型库槽位"
+	}
 	if modelcontract.Mode(d) == "product_image_extract" {
 		item.Note = "使用视频帧提取与图片处理完成商品图片提取，无模型调用"
 	}

@@ -361,6 +361,13 @@ export default function SystemConfigPage() {
         vidu_realtime_credit_per_second: 1.5,
         vidu_cost_auto_from_credits: true,
         vidu_sale_price_per_minute: 2.49,
+        character_studio_sale_price_per_minute: 2.49,
+        character_studio_credit_per_second: 1,
+        character_studio_max_minutes: 10,
+        character_studio_default_resolution: "720p",
+        character_studio_engine_url: "https://g.alicdn.com/apsara-media-box/imp-web-rtc/7.1.9/aliyun-rtc-sdk.js",
+        character_studio_source_url: "https://github.com/starai-platform/starai",
+        character_studio_default_role_base_url: "",
         price_drift_threshold_percent: 10,
         price_drift_alert_email: "",
         web_search_provider: "tavily",
@@ -1477,6 +1484,26 @@ export default function SystemConfigPage() {
             {renderItem({ key: "vidu_realtime_credit_per_second", label: "实时版每秒消耗积分", type: "number", min: 0, step: 0.1, hint: "官方价目表 1.5 积分/秒；若账单实测是 1，就改成 1，成本随之从 1.97 降到 1.31。" })}
             {renderItem({ key: "vidu_voice_price_per_minute", label: "语音成本价（元/分钟）", type: "number", min: 0, disabled: autoCostFromCredits, hint: autoCostFromCredits ? `自动反算中：${realtimeCreditPerSecond} × 60 × 积分单价。` : "手工填写，按 Vidu 官方成本价。" })}
             {renderItem({ key: "vidu_video_price_per_minute", label: "视频成本价（元/分钟）", type: "number", min: 0, disabled: autoCostFromCredits, hint: autoCostFromCredits ? `自动反算中：${realtimeCreditPerSecond} × 60 × 积分单价。` : "手工填写，按 Vidu 官方成本价。" })}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm shadow-gray-950/5">
+          <div className="mb-1 text-sm font-semibold text-gray-900">角色替换（实时渲染）</div>
+          <p className="mb-5 text-xs leading-relaxed text-gray-400">
+            复用「实时数字人」里的 API Key 与接口域名。浏览器运行时由本站中性路径代理，页面源码不出现上游域名。售价按算力/分钟展示，开播时冻结 1 分钟额度，结束后按实际秒数结算。角色参考图必须能由上游公网访问；相对地址会按「实时数字人」里的本站公网地址补全，补全后仍不可达会在开播时被拒绝。
+          </p>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {renderItem({ key: "character_studio_sale_price_per_minute", label: "用户侧售价（算力/分钟）", type: "number", min: 0, step: 0.01, hint: "默认 2.49。留空或 0 时前端仍按默认值展示，建议显式填写。" })}
+            {renderItem({ key: "character_studio_credit_per_second", label: "上游每秒积分（成本核算）", type: "number", min: 0, step: 0.1, hint: "官方价目表 1 积分/秒；只用于后台成本核算，不下发前端。" })}
+            {renderItem({ key: "character_studio_max_minutes", label: "单场最长时长（分钟）", type: "number", min: 1, hint: "默认 10。达到上限会自动挂断并结算。" })}
+            {renderItem({ key: "character_studio_default_resolution", label: "默认输出清晰度", type: "select", options: [
+              { value: "540p", label: "540p 流畅" },
+              { value: "720p", label: "720p 高清" },
+              { value: "1080p", label: "1080p 超清" },
+            ], hint: "用户仍可在开播前切换；切换画幅不会改变这里。" })}
+            {renderItem({ key: "character_studio_engine_url", label: "实时运行时地址", type: "text", hint: "服务端代理源地址，仅后台可见；浏览器实际请求本站 /api/realtime/engine.js。" })}
+            {renderItem({ key: "character_studio_source_url", label: "项目源码地址（预留）", type: "text", hint: "预留给后续技术说明入口；当前角色替换页不展示。" })}
+            {renderItem({ key: "character_studio_default_role_base_url", label: "默认角色公网目录", type: "text", hint: "例如 https://img.yourdomain.com/character-studio/defaults。10 张图保持文件名不变；留空使用内置静态图。" })}
           </div>
         </section>
 

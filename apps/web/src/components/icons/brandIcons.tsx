@@ -208,6 +208,14 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M8.6 14.4c.8-1.4 2-2 3.4-2s2.6.6 3.4 2" {...S} strokeWidth={1.6} />
     </>
   ),
+  character_studio: (
+    <>
+      <path d="M4.4 7.6c0-1.7 1.4-3.1 3.1-3.1h9c1.7 0 3.1 1.4 3.1 3.1v4.6c0 4-3.2 7.2-7.2 7.6H12c-4-.4-7.2-3.6-7.2-7.6z" {...S} />
+      <path d="M7.9 9.6c1-.6 2.2-.6 3.2 0M12.9 9.6c1-.6 2.2-.6 3.2 0" {...S} strokeWidth={1.6} />
+      <path d="M9.4 13.5c.7.8 1.6 1.2 2.6 1.2s1.9-.4 2.6-1.2" {...S} strokeWidth={1.6} />
+      <circle cx="16.1" cy="6.1" r="1.7" fill={ACCENT} stroke="none" />
+    </>
+  ),
   viral_video_breakdown: (
     <>
       <circle cx="10.6" cy="10.6" r="6.4" {...S} />

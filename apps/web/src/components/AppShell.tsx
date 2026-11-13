@@ -27,6 +27,7 @@ const loadModelWorkspace = () => import("./workbench/ModelWorkspace");
 const loadAgentWorkspace = () => import("./workbench/AgentWorkspace");
 const loadInfiniteCanvasWorkspace = () => import("./workbench/InfiniteCanvasWorkspace");
 const loadCreativeAgentWorkspace = () => import("./workbench/CreativeAgentWorkspace");
+const loadCharacterStudioWorkspace = () => import("./workbench/CharacterStudioWorkspace");
 
 const ModelWorkspace = dynamic(() => loadModelWorkspace().then(module => module.ModelWorkspace), { loading: WorkspaceLoading });
 const AgentWorkspace = dynamic(() => loadAgentWorkspace().then(module => module.AgentWorkspace), { loading: WorkspaceLoading });
@@ -34,6 +35,7 @@ const GalleryPanel = dynamic(() => import("./workbench/GalleryPanel").then(modul
 const InfiniteCanvasWorkspace = dynamic(() => loadInfiniteCanvasWorkspace().then(module => module.InfiniteCanvasWorkspace), { loading: WorkspaceLoading });
 const CreativeAgentWorkspace = dynamic(() => loadCreativeAgentWorkspace().then(module => module.CreativeAgentWorkspace), { loading: WorkspaceLoading });
 const DigitalHumanWorkspace = dynamic(() => import("./workbench/DigitalHumanWorkspace").then(module => module.DigitalHumanWorkspace), { loading: WorkspaceLoading });
+const CharacterStudioWorkspace = dynamic(() => loadCharacterStudioWorkspace().then(module => module.CharacterStudioWorkspace), { loading: WorkspaceLoading });
 
 const PRIMARY_NAV = [
   { id: "models", label: "大模型", icon: "nav.models" },
@@ -63,6 +65,7 @@ const VIDEO_CREATION_CODE = "video_creation";
 const VIDEO_CREATION_V2_CODE = "video_creation_v2";
 const GENERAL_CREATIVE_AGENT_CODE = "general_creative_agent";
 const REALTIME_AVATAR_CODE = "realtime_avatar";
+const CHARACTER_STUDIO_CODE = "character_studio";
 const CANVAS_WORKFLOW_CODES = new Set([
   INFINITE_CANVAS_CODE,
   VIRAL_REMAKE_CODE,
@@ -228,6 +231,10 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
       void apiForLocaleCached("/api/models", locale).catch(() => {});
     } else if (code === GENERAL_CREATIVE_AGENT_CODE) {
       void loadCreativeAgentWorkspace();
+    } else if (code === REALTIME_AVATAR_CODE) {
+      void import("./workbench/DigitalHumanWorkspace");
+    } else if (code === CHARACTER_STUDIO_CODE) {
+      void loadCharacterStudioWorkspace();
     } else {
       void loadAgentWorkspace();
     }
@@ -1175,6 +1182,8 @@ export function AppShell({ children, selectedModelCode, selectedAgentCode, initi
                   <CreativeAgentWorkspace key={activeAgentCode} />
                 ) : activeAgentCode === REALTIME_AVATAR_CODE ? (
                   <DigitalHumanWorkspace key={activeAgentCode} />
+                ) : activeAgentCode === CHARACTER_STUDIO_CODE ? (
+                  <CharacterStudioWorkspace key={activeAgentCode} />
                 ) : (
                   <AgentWorkspace key={activeAgentCode} code={activeAgentCode} />
                 )

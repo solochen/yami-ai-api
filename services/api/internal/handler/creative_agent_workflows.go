@@ -190,7 +190,7 @@ func creativeAgentCanCallWorkflow(item *service.WorkflowDTO) bool {
 		return false
 	}
 	switch strings.TrimSpace(stringAny(item.RuntimeConfig["agent_mode"])) {
-	case "prompt_chat", "renovation_budget", "realtime_avatar":
+	case "prompt_chat", "renovation_budget", "realtime_avatar", "character_studio":
 		return false
 	default:
 		return true

@@ -8,6 +8,7 @@ import agentWorkspace from "./supplements/en-US/agentWorkspace.ts";
 import commerceVideo from "./supplements/en-US/commerceVideo.ts";
 import promptAgentWorkspace from "./supplements/en-US/promptAgentWorkspace.ts";
 import recentWorkbench from "./supplements/en-US/recentWorkbench.ts";
+import characterStudio from "./supplements/en-US/characterStudio.ts";
 
 const sourceTranslations: Record<string, string> = {
   "API 文档中心": "API Documentation",
@@ -552,5 +553,6 @@ Object.assign(sourceTranslations, agentWorkspace);
 Object.assign(sourceTranslations, commerceVideo);
 Object.assign(sourceTranslations, promptAgentWorkspace);
 Object.assign(sourceTranslations, recentWorkbench);
+Object.assign(sourceTranslations, characterStudio);
 
 export default sourceTranslations;
