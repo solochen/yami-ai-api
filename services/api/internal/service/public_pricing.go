@@ -29,6 +29,10 @@ func (s *ModelService) publicPriceRule(
 	if err != nil {
 		return nil, err
 	}
+	// 倍率定价：对外展示「官方价 × 倍率」。
+	if price := modelOfficialPublicPrice(model, cfg); price != nil {
+		return price, nil
+	}
 	routes, err := s.RuntimeRoutes(ctx, model)
 	if err != nil {
 		return nil, err

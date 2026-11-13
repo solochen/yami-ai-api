@@ -856,7 +856,8 @@ export function DigitalHumanWorkspace() {
 
   return (
     <div className="mcdl-workspace mcdl-workspace--digital-human flex h-full min-h-0 flex-col text-gray-900 dark:text-gray-100">
-      <header className="flex h-[73px] shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-4 dark:border-white/10 dark:bg-gray-900">
+      {/* 视口右上角浮动着通知/语言/快捷菜单（AppShell），桌面端为其预留右侧空间，避免“角色设置”被覆盖。 */}
+      <header className="flex h-[73px] shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-4 dark:border-white/10 dark:bg-gray-900 lg:pr-48">
         <div className="flex min-w-0 items-center gap-2">
           <h1 className="text-base font-semibold">{ts("实时数字人对话")}</h1>
           <span className={`text-xs ${status === "已结束" ? "text-red-500" : "text-gray-500"}`}>{ts(status)}</span>

@@ -23,10 +23,45 @@ interface AdminModel {
   input_schema: Record<string, unknown>;
   default_params: Record<string, unknown>;
   price_rule: Record<string, unknown>;
+  official_price_rule?: Record<string, unknown>;
+  price_multiplier?: number;
   new_api_extra_params?: Record<string, any>;
   is_enabled: boolean;
   sort_order: number;
+  upstreams?: AdminUpstreamInfo[];
 }
+
+interface AdminUpstreamInfo {
+  provider: string;
+  route_name: string;
+  priority: number;
+  is_enabled: boolean;
+  health_status?: string;
+  account_id?: number | null;
+  login_account?: string;
+}
+
+// 上游展示名（与 model_routes.provider 对应）
+const UPSTREAM_LABELS: Record<string, string> = {
+  packycode: "PackyCode",
+  codexauv: "CodexAuv",
+  qiniu: "七牛云",
+  openrouter: "OpenRouter",
+  new_api: "新加坡中转",
+  tokenhub: "腾讯云",
+  bailian: "百炼",
+  aiboli: "aiboli",
+  volcano: "火山方舟",
+  bigmodel: "智谱",
+  tencent_aigc: "腾讯混元",
+  mock: "Mock",
+};
+
+const upstreamLabel = (provider: string) => UPSTREAM_LABELS[provider] ?? provider;
+const enabledUpstreamCount = (m: AdminModel) => (m.upstreams ?? []).filter((u) => u.is_enabled).length;
+// 启用线路背后涉及的「上游登录账号」数量（用于判断是否分散在多账号，降低封号风险）
+const enabledLoginAccountCount = (m: AdminModel) =>
+  new Set((m.upstreams ?? []).filter((u) => u.is_enabled && u.login_account).map((u) => u.login_account)).size;
 
 interface ChannelPreset {
   id: number;
@@ -264,6 +299,43 @@ function ModelLogo({ model }: { model: Pick<AdminModel, "display_name" | "icon_u
     return <img src={model.icon_url} alt={model.display_name} onError={() => setFailed(true)} className="h-9 w-9 rounded-xl object-cover ring-1 ring-gray-100" />;
   }
   return <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-950 text-xs font-semibold text-white">{initial}</div>;
+}
+
+/** 上游数量单元格：启用中的上游数 + 每家上游的名称/优先级（停用置灰）。 */
+function UpstreamCountCell({ upstreams }: { upstreams: AdminUpstreamInfo[] }) {
+  if (upstreams.length === 0) {
+    return <span className="text-xs text-gray-300">—</span>;
+  }
+  const enabled = upstreams.filter((u) => u.is_enabled);
+  const count = enabled.length;
+  const loginAccountCount = new Set(enabled.filter((u) => u.login_account).map((u) => u.login_account)).size;
+  const tone =
+    count === 0
+      ? "bg-gray-100 text-gray-400"
+      : count >= 3
+        ? "bg-emerald-50 text-emerald-600"
+        : count === 2
+          ? "bg-sky-50 text-sky-600"
+          : "bg-amber-50 text-amber-600";
+  return (
+    <div className="min-w-[150px] max-w-[210px]">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium ${tone}`}>
+          {count} 家
+        </span>
+        {upstreams.length > count && <span className="text-[10px] text-gray-400">共 {upstreams.length} 条线路</span>}
+        {loginAccountCount > 0 && <span className="text-[10px] text-sky-600">{loginAccountCount} 个登录账号</span>}
+      </div>
+      <div className="mt-0.5 flex flex-wrap gap-x-1 gap-y-0.5 text-[10px] leading-4 text-gray-400">
+        {upstreams.map((u, i) => (
+          <span key={`${u.provider}-${u.route_name}-${i}`} className={u.is_enabled ? "whitespace-nowrap" : "whitespace-nowrap text-gray-300"}>
+            {upstreamLabel(u.provider)}
+            <span className="text-gray-300">({u.priority})</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ConnectionTestIcon({ loading = false }: { loading?: boolean }) {
@@ -559,6 +631,8 @@ interface FormState {
   input_schema: string;
   default_params: string;
   price_rule: string;
+  official_price_rule: string;
+  price_multiplier: number;
   new_api_extra_params: string;
   runtime_rule: string;
 }
@@ -609,6 +683,8 @@ const emptyForm: FormState = {
   ),
   price_rule:
     '{"billing_type":"per_token","currency":"CREDITS","input_price_per_m":2000,"output_price_per_m":8000,"cache_read_price_per_m":200}',
+  official_price_rule: '{"currency":"CNY","billing_type":"per_token"}',
+  price_multiplier: 0,
   runtime_rule: '{"capabilities":{"web_search":false,"deep_think":false}}',
 };
 
@@ -639,9 +715,11 @@ export default function ModelsPage() {
   const [upstreamModelsError, setUpstreamModelsError] = useState("");
 
   const [filterCategory, setFilterCategory] = useState("");
+  const [vendorFilter, setVendorFilter] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [upstreamSort, setUpstreamSort] = useState<"none" | "asc" | "desc">("none");
 
   const load = () => adminApi<AdminModel[]>("/models").then(setModels);
   const loadChannelPresets = () => adminApi<{ items: ChannelPreset[] }>("/channel-presets").then((r) => setChannelPresets(r.items || []));
@@ -664,6 +742,117 @@ export default function ModelsPage() {
     const cfg = await adminApi<Record<string, unknown>>("/system-configs");
     setLanguageRows(normalizeLanguageRows(cfg.generation_languages));
   };
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditRows, setAuditRows] = useState<any[]>([]);
+  const [auditCounts, setAuditCounts] = useState<Record<string, number>>({});
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditSort, setAuditSort] = useState<"none" | "asc" | "desc">("asc");
+  const [auditKeyword, setAuditKeyword] = useState("");
+  const [bulkMultiplier, setBulkMultiplier] = useState(0.6);
+
+  const saveMultiplier = async (id: number, value: string) => {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num < 0 || num > 10) {
+      alert("倍率需在 0–10 之间（0 表示不启用）");
+      return;
+    }
+    try {
+      await adminApi(`/models/${id}/multiplier`, { method: "PATCH", body: JSON.stringify({ multiplier: num }) });
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "保存倍率失败");
+    }
+  };
+
+  const [officialOpen, setOfficialOpen] = useState(false);
+  const [officialRows, setOfficialRows] = useState<any[]>([]);
+  const [officialLoading, setOfficialLoading] = useState(false);
+  const [officialBusy, setOfficialBusy] = useState(false);
+  const [officialSelected, setOfficialSelected] = useState<Set<number>>(new Set());
+
+  const openOfficialPrices = async () => {
+    setOfficialOpen(true);
+    setOfficialLoading(true);
+    try {
+      const res = await adminApi<{ items: any[] }>("/models/official-price/preview");
+      const rows = res.items ?? [];
+      setOfficialRows(rows);
+      setOfficialSelected(new Set(rows.filter((r) => r.suggested_usd_input > 0).map((r) => r.model_id)));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "拉取官方价失败");
+      setOfficialRows([]);
+    } finally {
+      setOfficialLoading(false);
+    }
+  };
+
+  const applyOfficialPrices = async () => {
+    const items = officialRows
+      .filter((r) => officialSelected.has(r.model_id) && r.suggested_usd_input > 0)
+      .map((r) => ({
+        model_id: r.model_id,
+        input_per_m: r.suggested_usd_input,
+        output_per_m: r.suggested_usd_output,
+        currency: "USD",
+        source: r.suggested_source,
+      }));
+    if (items.length === 0) {
+      alert("没有选中的模型");
+      return;
+    }
+    if (!confirm(`将写入 ${items.length} 个模型的官方价（美元），随后自动重算线路成本，确认继续？`)) return;
+    try {
+      setOfficialBusy(true);
+      const res = await adminApi<{ updated: number }>("/models/official-price/apply", { method: "POST", body: JSON.stringify({ items }) });
+      await adminApi("/model-routes/recalibrate-costs", { method: "POST", body: JSON.stringify({ provider: "", dry_run: false }) });
+      alert(`已更新 ${res.updated} 个模型的官方价，并重算线路成本`);
+      setOfficialOpen(false);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "应用失败");
+    } finally {
+      setOfficialBusy(false);
+    }
+  };
+
+  const toggleOfficial = (id: number) => {
+    setOfficialSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const openPricingAudit = async () => {
+    setAuditOpen(true);
+    setAuditLoading(true);
+    try {
+      const res = await adminApi<{ items: any[]; counts: Record<string, number> }>("/models/pricing-audit");
+      setAuditRows(res.items ?? []);
+      setAuditCounts(res.counts ?? {});
+    } catch {
+      setAuditRows([]);
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  const bulkEnableMultiplier = async () => {
+    const value = Number(bulkMultiplier);
+    if (!Number.isFinite(value) || value < 0 || value > 10) {
+      alert("倍率需在 0–10 之间");
+      return;
+    }
+    if (!confirm(`将为所有已配置官方价的模型设置 ${value}x 售价倍率（用户售价 = 官方价 × ${value}），确认继续？`)) return;
+    try {
+      const res = await adminApi<{ affected: number }>("/models/bulk-multiplier", { method: "POST", body: JSON.stringify({ multiplier: value }) });
+      alert(`已更新 ${res.affected} 个模型的倍率为 ${value}x`);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "操作失败");
+    }
+  };
+
   const openLanguageManager = async () => {
     setLanguageOpen(true);
     try {
@@ -759,6 +948,8 @@ export default function ModelsPage() {
       default_params: JSON.stringify(m.default_params ?? {}, null, 2),
       new_api_extra_params: JSON.stringify(m.new_api_extra_params ?? {}, null, 2),
       price_rule: JSON.stringify(m.price_rule ?? {}, null, 2),
+      official_price_rule: JSON.stringify(m.official_price_rule ?? {}, null, 2),
+      price_multiplier: m.price_multiplier ?? 0,
       runtime_rule: JSON.stringify(m.runtime_rule ?? {}, null, 2),
     });
     if (m.new_api_endpoint === "/minimax/v1/t2a_v2") {
@@ -3452,6 +3643,8 @@ export default function ModelsPage() {
           : defaultParams,
       new_api_extra_params: isMultiCollabForm ? {} : extraParams,
       price_rule: priceRule,
+      official_price_rule: safeParseJson(form.official_price_rule, {}),
+      price_multiplier: form.price_multiplier,
       runtime_rule:
         form.category === "image"
           ? {
@@ -3647,21 +3840,89 @@ export default function ModelsPage() {
     }
   };
 
+  // 模型厂商分类：结合模型编码与上游模型 ID（如 openai/gpt-audio、google/lyria-3）
+  const modelVendor = (code: string, upstreamModel?: string): string => {
+    const text = `${code || ""} ${upstreamModel || ""}`.toLowerCase();
+    const rules: Array<[RegExp, string]> = [
+      [/(^|[\s/_-])(gpt|o1|o3|o4|sora|dall|whisper|tts-|chatgpt)/, "OpenAI"],
+      [/(^|[\s/_-])(claude|anthropic)/, "Anthropic"],
+      [/(^|[\s/_-])(gemini|gemma|imagen|veo|lyria|nano-banana|google)/, "Google"],
+      [/(^|[\s/_-])(grok|xai)/, "xAI"],
+      [/(^|[\s/_-])deepseek/, "DeepSeek"],
+      [/(^|[\s/_-])(qwen|tongyi|kinfra|aliyun|wan|happyhorse|text-embedding-v)/, "阿里通义"],
+      [/(^|[\s/_-])vidu/, "Vidu"],
+      [/(^|[\s/_-])kling/, "快手可灵"],
+      [/(^|[\s/_-])gen-[34]/, "Runway"],
+      [/(^|[\s/_-])(lipsync|video_sync)/, "平台自建"],
+      [/(^|[\s/_-])(glm|zhipu|zai)/, "智谱"],
+      [/(^|[\s/_-])(kimi|moonshot)/, "Moonshot"],
+      [/(^|[\s/_-])minimax/, "MiniMax"],
+      [/(^|[\s/_-])hunyuan/, "腾讯混元"],
+      [/(^|[\s/_-])(doubao|volc|seedance|seedream|multi_collab)/, "字节跳动"],
+      [/(^|[\s/_-])(ernie|wenxin)/, "百度"],
+      [/(^|[\s/_-])(eleven|suno|fish-audio)/, "其他语音"],
+    ];
+    for (const [pattern, label] of rules) {
+      if (pattern.test(text)) return label;
+    }
+    return "其他厂商";
+  };
+  const vendorOptions = useMemo(() => {
+    const set = new Set(models.map((m) => modelVendor(m.code, m.new_api_model)));
+    return Array.from(set).sort();
+  }, [models]);
+
+  // 倍率下拉选项：0（关闭）+ 0.1~1.5（步长 0.05）
+  const MULTIPLIER_OPTIONS = useMemo(() => [0, ...Array.from({ length: 29 }, (_, i) => Number((0.1 + i * 0.05).toFixed(2)))], []);
+
+  // 列表多选
+  const [selectedModels, setSelectedModels] = useState<Set<number>>(new Set());
+  const [listBulkMultiplier, setListBulkMultiplier] = useState(0.6);
+  const toggleModel = (id: number) => {
+    setSelectedModels((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const applyListBulk = async () => {
+    if (selectedModels.size === 0) return;
+    if (!confirm(`将 ${selectedModels.size} 个模型的售价倍率设为 ${listBulkMultiplier}x，确认？`)) return;
+    try {
+      await adminApi("/models/bulk-multiplier", { method: "POST", body: JSON.stringify({ model_ids: Array.from(selectedModels), multiplier: listBulkMultiplier }) });
+      setSelectedModels(new Set());
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "批量设置失败");
+    }
+  };
+
   const filtered = useMemo(() => {
     const kw = search.trim().toLowerCase();
     return models.filter((m) => {
       if (filterCategory && m.category !== filterCategory) return false;
       if (filterStatus === "enabled" && !m.is_enabled) return false;
       if (filterStatus === "disabled" && m.is_enabled) return false;
+      if (vendorFilter && modelVendor(m.code, m.new_api_model) !== vendorFilter) return false;
       if (kw && !m.code.toLowerCase().includes(kw) && !m.display_name.toLowerCase().includes(kw)) return false;
       return true;
     });
-  }, [models, filterCategory, filterStatus, search]);
-  const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
+  }, [models, filterCategory, filterStatus, search, vendorFilter]);
+  // 按启用中的上游数量排序（none = 默认按 sort_order）
+  const sorted = useMemo(() => {
+    if (upstreamSort === "none") return filtered;
+    const list = [...filtered];
+    list.sort((a, b) => {
+      const diff = enabledUpstreamCount(a) - enabledUpstreamCount(b);
+      return upstreamSort === "asc" ? diff : -diff;
+    });
+    return list;
+  }, [filtered, upstreamSort]);
+  const paginated = useMemo(() => sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [sorted, page]);
 
   useEffect(() => {
     setPage(1);
-  }, [filterCategory, filterStatus, search]);
+  }, [filterCategory, filterStatus, search, upstreamSort, vendorFilter]);
 
   const filteredLogos = useMemo(() => {
     const kw = logoSearch.trim().toLowerCase();
@@ -3827,11 +4088,62 @@ export default function ModelsPage() {
     }));
   };
 
+  const auditFilteredRows = auditRows.filter((row) => {
+    if (!auditKeyword.trim()) return true;
+    const keyword = auditKeyword.trim().toLowerCase();
+    return String(row.model_code || "").toLowerCase().includes(keyword) ||
+      String(row.display_name || "").toLowerCase().includes(keyword);
+  });
+
+  const sortedAuditRows = (() => {
+    if (auditSort === "none") return auditFilteredRows;
+    const rank = (row: any) => {
+      const disabled = row.status === "disabled" || row.status === "missing";
+      const value = typeof row.margin_pct === "number" && Number.isFinite(row.margin_pct) ? row.margin_pct : 0;
+      return { disabled, value };
+    };
+    const rows = [...auditFilteredRows];
+    rows.sort((a, b) => {
+      const ra = rank(a);
+      const rb = rank(b);
+      // 未启用/缺数据的模型始终排在最后
+      if (ra.disabled !== rb.disabled) return ra.disabled ? 1 : -1;
+      return auditSort === "asc" ? ra.value - rb.value : rb.value - ra.value;
+    });
+    return rows;
+  })();
+
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">模型管理</h1>
         <div className="flex items-center gap-2">
+          <button onClick={openPricingAudit} className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 font-semibold text-sm hover:bg-gray-50">
+            定价审计
+          </button>
+          <button onClick={openOfficialPrices} className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 font-semibold text-sm hover:bg-gray-50">
+            官方价校准
+          </button>
+          <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-1.5">
+            <span className="text-xs text-gray-500">批量倍率</span>
+            <select
+              value={bulkMultiplier}
+              onChange={(e) => setBulkMultiplier(Number(e.target.value))}
+              className="rounded-lg border border-gray-200 px-2 py-1 text-sm"
+            >
+              {Array.from({ length: 29 }, (_, i) => Number((0.1 + i * 0.05).toFixed(2))).map((v) => (
+                <option key={v} value={v}>{v.toFixed(2).replace(/0$/, "")}x</option>
+              ))}
+              <option value={0}>0（关闭倍率）</option>
+            </select>
+            <button
+              type="button"
+              onClick={bulkEnableMultiplier}
+              className="rounded-lg bg-gray-900 px-3 py-1 text-xs font-semibold text-white hover:bg-gray-800"
+            >
+              应用
+            </button>
+          </div>
           <button onClick={openLanguageManager} className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 font-semibold text-sm hover:bg-gray-50">
             语言管理
           </button>
@@ -3840,6 +4152,236 @@ export default function ModelsPage() {
           </button>
         </div>
       </div>
+
+      {officialOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOfficialOpen(false)}>
+          <div
+            className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-6 border-b border-gray-100 px-6 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">官方价校准</h2>
+                <p className="mt-1 max-w-3xl text-xs leading-5 text-gray-500">
+                  官方价从 LiteLLM / OpenRouter 目录拉取（美元/百万 tokens），并与上游价格反推值交叉核对；勾选后写入，随后自动按「官方价 × 结算汇率 × 分组倍率」重算线路成本。
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  disabled={officialBusy}
+                  onClick={applyOfficialPrices}
+                  className="whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  应用选中（{officialSelected.size}）
+                </button>
+                <button type="button" onClick={() => setOfficialOpen(false)} className="whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm">
+                  关闭
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto px-6 pb-6">
+              {officialLoading ? (
+                <div className="p-10 text-center text-sm text-gray-400">正在拉取 LiteLLM / OpenRouter 目录…</div>
+              ) : (
+                <table className="w-full min-w-[900px] table-fixed text-sm">
+                  <colgroup>
+                    <col className="w-[6%]" />
+                    <col className="w-[26%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[16%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[12%]" />
+                  </colgroup>
+                  <thead className="sticky top-0 z-10 bg-white text-xs text-gray-500">
+                    <tr className="border-b border-gray-100">
+                      <th className="px-2 py-2.5"></th>
+                      <th className="px-3 py-2.5 text-left font-medium">模型</th>
+                      <th className="px-3 py-2.5 text-right font-medium">当前官方价</th>
+                      <th className="px-3 py-2.5 text-right font-medium">建议（美元/百万）</th>
+                      <th className="px-3 py-2.5 text-left font-medium">来源</th>
+                      <th className="px-3 py-2.5 text-right font-medium">反推值（美元）</th>
+                      <th className="px-3 py-2.5 text-left font-medium">状态</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {officialRows.map((row) => {
+                      const hasSuggestion = row.suggested_usd_input > 0;
+                      return (
+                        <tr key={row.model_id} className={hasSuggestion ? "hover:bg-gray-50/60" : "text-gray-400"}>
+                          <td className="px-2 py-2.5 text-center">
+                            <input type="checkbox" disabled={!hasSuggestion} checked={officialSelected.has(row.model_id)} onChange={() => toggleOfficial(row.model_id)} />
+                          </td>
+                          <td className="truncate px-3 py-2.5">
+                            <div className="truncate font-mono text-xs text-gray-800">{row.model_code}</div>
+                            <div className="truncate text-[10px] text-gray-400">{row.display_name}</div>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-right text-xs tabular-nums">
+                            {row.current_input > 0 ? `${row.current_input}/${row.current_output} ${row.currency}` : "—"}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-right text-xs tabular-nums text-gray-800">
+                            {hasSuggestion ? `$${row.suggested_usd_input}/${row.suggested_usd_output}` : "—"}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-left text-xs">{row.suggested_source || "—"}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-right text-xs tabular-nums text-gray-500">
+                            {row.derived_usd_input > 0 ? `${row.derived_usd_input.toFixed(2)}/${row.derived_usd_output.toFixed(2)}` : "—"}
+                          </td>
+                          <td className="px-3 py-2.5 text-xs">
+                            {hasSuggestion ? (
+                              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">可应用</span>
+                            ) : (
+                              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-500">需手工</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {auditOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setAuditOpen(false)}>
+          <div
+            className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-6 border-b border-gray-100 px-6 py-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-semibold text-gray-900">定价审计</h2>
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">共 {auditRows.length} 个模型</span>
+                </div>
+                <p className="mt-1 max-w-3xl text-xs leading-5 text-gray-500">
+                  售价 = 官方价 × 倍率；成本取启用线路里的最低值；佣金率 =（售价 − 成本）÷ 售价。
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <input
+                    value={auditKeyword}
+                    onChange={(e) => setAuditKeyword(e.target.value)}
+                    placeholder="搜索模型编码 / 名称"
+                    className="w-56 rounded-lg border border-gray-200 px-2 py-1 text-xs"
+                  />
+                  <button type="button" onClick={openPricingAudit} className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50">
+                    刷新
+                  </button>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                  <span className="rounded bg-gray-100 px-2 py-0.5 text-gray-600">未启用 {auditCounts.disabled ?? 0}</span>
+                  <span className="rounded bg-emerald-50 px-2 py-0.5 text-emerald-700">正常 {auditCounts.ok ?? 0}</span>
+                  <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">偏低 {auditCounts.low ?? 0}</span>
+                  <span className="rounded bg-red-50 px-2 py-0.5 text-red-600">亏损 {auditCounts.loss ?? 0}</span>
+                  <span className="rounded bg-gray-100 px-2 py-0.5 text-gray-500">缺数据 {auditCounts.missing ?? 0}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAuditOpen(false)}
+                className="shrink-0 whitespace-nowrap rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+              >
+                关闭
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto px-6 pb-6">
+              {auditLoading ? (
+                <div className="p-10 text-center text-sm text-gray-400">加载中…</div>
+              ) : (
+                <table className="w-full min-w-[880px] table-fixed text-sm">
+                  <colgroup>
+                    <col className="w-[26%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[16%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[10%]" />
+                  </colgroup>
+                  <thead className="sticky top-0 z-10 bg-white text-xs text-gray-500">
+                    <tr className="border-b border-gray-100">
+                      <th className="px-3 py-2.5 text-left font-medium">模型</th>
+                      <th className="px-3 py-2.5 text-right font-medium">官方价（入/出）</th>
+                      <th className="px-3 py-2.5 text-center font-medium">倍率</th>
+                      <th className="px-3 py-2.5 text-right font-medium">售价（入/出）</th>
+                      <th className="px-3 py-2.5 text-right font-medium">最低成本（入/出）</th>
+                      <th className="px-3 py-2.5 text-right font-medium">
+                        <button
+                          type="button"
+                          onClick={() => setAuditSort((prev) => (prev === "none" ? "desc" : prev === "desc" ? "asc" : "none"))}
+                          className="inline-flex items-center gap-1 whitespace-nowrap hover:text-gray-800"
+                          title="点击排序：高 → 低 → 取消"
+                        >
+                          佣金率
+                          <span className="text-[10px] text-gray-400">
+                            {auditSort === "desc" ? "▼" : auditSort === "asc" ? "▲" : "↕"}
+                          </span>
+                        </button>
+                      </th>
+                      <th className="px-3 py-2.5 text-left font-medium">状态</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {sortedAuditRows.map((row) => (
+                      <tr key={row.model_id} className={row.status === "loss" ? "bg-red-50/40" : "hover:bg-gray-50/60"}>
+                        <td className="truncate px-3 py-2.5">
+                          <div className="truncate font-mono text-xs text-gray-800">{row.model_code}</div>
+                          <div className="truncate text-[10px] text-gray-400">{row.display_name}</div>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right text-xs tabular-nums text-gray-600">
+                          {row.official_input}/{row.official_output}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-center text-xs tabular-nums">
+                          {row.price_multiplier > 0 ? (
+                            <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">{row.price_multiplier}x</span>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right text-xs tabular-nums text-gray-800">
+                          {row.sale_input > 0 ? `${row.sale_input}/${row.sale_output}` : "—"}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right text-xs tabular-nums text-gray-600">
+                          {row.cost_input > 0 ? `${row.cost_input}/${row.cost_output}` : "—"}
+                        </td>
+                        <td
+                          className={`whitespace-nowrap px-3 py-2.5 text-right text-xs tabular-nums font-medium ${
+                            row.status === "disabled" || row.status === "missing"
+                              ? "text-gray-300"
+                              : row.margin_pct < 0
+                                ? "text-red-600"
+                                : row.margin_pct < 20
+                                  ? "text-amber-600"
+                                  : "text-emerald-600"
+                          }`}
+                        >
+                          {row.status === "disabled" || row.status === "missing" ? "—" : `${row.margin_pct}%`}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-xs">
+                          {row.status === "ok" ? (
+                            <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">正常</span>
+                          ) : row.status === "low" ? (
+                            <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700">偏低</span>
+                          ) : row.status === "loss" ? (
+                            <span className="rounded bg-red-50 px-1.5 py-0.5 text-red-600">亏损</span>
+                          ) : row.status === "disabled" ? (
+                            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-500">未启用</span>
+                          ) : (
+                            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-400">缺数据</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {languageOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setLanguageOpen(false)}>
@@ -3939,6 +4481,12 @@ export default function ModelsPage() {
             </option>
           ))}
         </select>
+        <select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)} className="px-3 py-2 rounded-lg border text-sm">
+          <option value="">全部厂商</option>
+          {vendorOptions.map((v) => (
+            <option key={v} value={v}>{v}</option>
+          ))}
+        </select>
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2 rounded-lg border text-sm">
           <option value="">全部状态</option>
           <option value="enabled">启用</option>
@@ -3947,10 +4495,55 @@ export default function ModelsPage() {
         <span className="text-xs text-gray-400">共 {filtered.length} 个</span>
       </div>
 
+      {selectedModels.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+          <span className="text-sm text-blue-800">已选 {selectedModels.size} 个模型</span>
+          <span className="text-xs text-gray-600">批量售价倍率</span>
+          <select
+            value={listBulkMultiplier}
+            onChange={(e) => setListBulkMultiplier(Number(e.target.value))}
+            className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+          >
+            {MULTIPLIER_OPTIONS.map((v) => (
+              <option key={v} value={v}>{v === 0 ? "0（关闭倍率）" : `${v}x`}</option>
+            ))}
+          </select>
+          <button type="button" onClick={applyListBulk} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white">
+            应用
+          </button>
+          <button type="button" onClick={() => setSelectedModels(new Set())} className="text-sm text-gray-500 hover:underline">
+            取消选择
+          </button>
+        </div>
+      )}
+
       {showForm && formMount && createPortal(
         <form onSubmit={submit} className="bg-white rounded-2xl p-6 grid grid-cols-2 gap-4">
-          <div className="col-span-2 flex items-center justify-between">
+          <div className="col-span-2 flex items-center justify-between gap-4">
             <h2 className="font-semibold">{form.id ? "编辑模型" : "新增模型"}</h2>
+            <div className="flex flex-1 items-center gap-3">
+              <span className="text-xs font-semibold text-gray-600">售价倍率</span>
+              <input
+                type="number"
+                step="0.05"
+                min="0"
+                max="10"
+                className="w-24 rounded-lg border px-2 py-1.5 text-sm"
+                value={form.price_multiplier}
+                onChange={(e) => setForm({ ...form, price_multiplier: Number(e.target.value) || 0 })}
+              />
+              <div className="flex gap-1">
+                {[0.5, 0.6, 0.7, 0.8, 1].map((v) => (
+                  <button key={v} type="button" onClick={() => setForm({ ...form, price_multiplier: v })}
+                    className={`rounded border px-2 py-1 text-[11px] ${form.price_multiplier === v ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                    {v}x
+                  </button>
+                ))}
+              </div>
+              <span className="text-[11px] text-gray-400">
+                0 = 不启用；售价 = 官方价 × 倍率（官方价在下方 official_price_rule 填写）
+              </span>
+            </div>
             <button type="button" onClick={() => setShowForm(false)} className="text-sm text-gray-400 hover:text-gray-600">
               取消
             </button>
@@ -5768,6 +6361,38 @@ export default function ModelsPage() {
             </>
           )}
           {field(
+            "官方价 official_price_rule (JSON)",
+            <>
+              <textarea
+                className="w-full mt-1 px-3 py-2 rounded-lg border text-xs font-mono h-24"
+                value={form.official_price_rule}
+                onChange={(e) => setForm({ ...form, official_price_rule: e.target.value })}
+              />
+              <div className="mt-1 text-[11px] text-gray-400 leading-relaxed">
+                官方价按币种填：国内模型用 <code>{`"currency":"CNY"`}</code>（元/百万 tokens，如 DeepSeek 9/27、缓存 0.3）；
+                国外模型用 <code>{`"currency":"USD"`}</code>（美元/百万 tokens，如 GPT-6 Sol 2/10），系统按汇率自动折算人民币。
+                字段：input_price_per_m / output_price_per_m / cache_read_price_per_m。
+              </div>
+            </>
+          )}
+          {field(
+            "售价倍率 price_multiplier",
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="10"
+                className="w-32 mt-1 px-3 py-2 rounded-lg border text-sm"
+                value={form.price_multiplier}
+                onChange={(e) => setForm({ ...form, price_multiplier: Number(e.target.value) || 0 })}
+              />
+              <span className="mt-1 text-[11px] text-gray-500">
+                0 = 不启用（按成本加成）；0.6 表示用户售价 = 官方价 × 0.6。启用后成本仍按线路真实成本记账，毛利 = 售价 − 成本。
+              </span>
+            </div>
+          )}
+          {field(
             "new_api_extra_params (JSON)",
             <textarea
               className="w-full mt-1 px-3 py-2 rounded-lg border text-xs font-mono h-24"
@@ -5854,31 +6479,79 @@ export default function ModelsPage() {
         formMount
       )}
 
-      <div className="bg-white rounded-2xl border overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-2xl border bg-white">
+        <table className="w-full min-w-[1320px] text-sm">
           <thead className="bg-gray-50 text-gray-500">
             <tr>
+              <th className="w-10 px-3 py-3 text-left">
+                <input
+                  type="checkbox"
+                  checked={paginated.length > 0 && paginated.every((m) => selectedModels.has(m.id))}
+                  onChange={(e) => {
+                    setSelectedModels((prev) => {
+                      const next = new Set(prev);
+                      paginated.forEach((m) => { if (e.target.checked) next.add(m.id); else next.delete(m.id); });
+                      return next;
+                    });
+                  }}
+                  title="全选当前页"
+                />
+              </th>
               <th className="text-left px-4 py-3">图标</th>
               <th className="text-left px-4 py-3">编码</th>
               <th className="text-left px-4 py-3">名称</th>
               <th className="text-left px-4 py-3">分类</th>
               <th className="text-left px-4 py-3">请求模式</th>
-              <th className="text-left px-4 py-3">排序</th>
-              <th className="text-left px-4 py-3">状态</th>
+              <th className="text-left px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => setUpstreamSort((s) => (s === "none" ? "desc" : s === "desc" ? "asc" : "none"))}
+                  className="inline-flex items-center gap-1 font-medium hover:text-gray-700"
+                  title="点击切换排序：默认 → 多→少 → 少→多"
+                >
+                  上游数量
+                  <span className="text-[10px] text-gray-400">
+                    {upstreamSort === "desc" ? "▼" : upstreamSort === "asc" ? "▲" : "↕"}
+                  </span>
+                </button>
+              </th>
+              <th className="text-left px-4 py-3">售价倍率</th>
+              <th className="whitespace-nowrap px-4 py-3 text-left">排序</th>
+              <th className="whitespace-nowrap px-4 py-3 text-left">状态</th>
               <th className="text-left px-4 py-3">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {paginated.map((m) => (
               <Fragment key={m.id}>
-              <tr>
+              <tr className={selectedModels.has(m.id) ? "bg-blue-50/40" : ""}>
+                <td className="px-3 py-3">
+                  <input type="checkbox" checked={selectedModels.has(m.id)} onChange={() => toggleModel(m.id)} />
+                </td>
                 <td className="px-4 py-3"><ModelLogo model={m} /></td>
                 <td className="px-4 py-3 font-mono text-xs">{m.code}</td>
                 <td className="px-4 py-3">{m.display_name}</td>
                 <td className="px-4 py-3">{m.category}</td>
                 <td className="px-4 py-3 text-xs text-gray-500">{m.request_mode}</td>
-                <td className="px-4 py-3">{m.sort_order}</td>
                 <td className="px-4 py-3">
+                  <UpstreamCountCell upstreams={m.upstreams ?? []} />
+                </td>
+                <td className="px-4 py-3 text-xs">
+                  <select
+                    value={String(m.price_multiplier ?? 0)}
+                    onChange={(e) => saveMultiplier(m.id, e.target.value)}
+                    className="rounded border border-gray-200 px-1 py-0.5 text-xs"
+                  >
+                    {!MULTIPLIER_OPTIONS.some((v) => v === Number(m.price_multiplier ?? 0)) && (
+                      <option value={String(m.price_multiplier ?? 0)}>{m.price_multiplier}x</option>
+                    )}
+                    {MULTIPLIER_OPTIONS.map((v) => (
+                      <option key={v} value={String(v)}>{v === 0 ? "0（关闭）" : `${v}x`}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="whitespace-nowrap px-4 py-3">{m.sort_order}</td>
+                <td className="whitespace-nowrap px-4 py-3">
                   <span className={m.is_enabled ? "text-green-600" : "text-gray-400"}>
                     {m.is_enabled ? "启用" : "禁用"}
                   </span>

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { clsx } from "clsx";
 import {
   Bell,
+  BellRing,
   Activity,
   BookOpen,
   Boxes,
@@ -19,10 +20,12 @@ import {
   GitBranch,
   Layers3,
   Languages,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   MessageSquareText,
   ReceiptText,
+  RefreshCw,
   WalletCards,
   Settings,
   ShieldCheck,
@@ -47,6 +50,10 @@ const NAV_GROUPS = [
     title: "模型管理",
     items: [
       { href: "/admin/models", label: "模型管理", icon: Boxes },
+      { href: "/admin/upstream-accounts", label: "上游账号管理", icon: KeyRound },
+      { href: "/admin/upstream-sync", label: "上游同步", icon: RefreshCw },
+      { href: "/admin/model-routes", label: "线路批量管理", icon: GitBranch },
+      { href: "/admin/alerts", label: "上游告警", icon: BellRing },
       { href: "/admin/upstream-prices", label: "上游价格监控", icon: TrendingUp },
       { href: "/admin/agents", label: "工作流", icon: GitBranch },
       { href: "/admin/agent-models", label: "智能体模型配置", icon: Boxes },

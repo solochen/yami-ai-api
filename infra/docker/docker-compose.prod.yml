@@ -119,6 +119,7 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_MEDIA_CDN_HOSTS: ${NEXT_PUBLIC_MEDIA_CDN_HOSTS:-}
     restart: unless-stopped
     logging: *default-logging
     environment:

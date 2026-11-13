@@ -1,0 +1,67 @@
+-- 200_align_five_upstreams.down: 回滚（恢复被删线路，移除新增线路）
+
+-- 恢复被删除的线路
+INSERT INTO model_routes SELECT * FROM model_routes_backup_200
+ON CONFLICT (id) DO NOTHING;
+DROP TABLE model_routes_backup_200;
+
+-- 移除本次新增的线路（按 模型+线路名）
+DELETE FROM model_routes r USING models m
+WHERE r.model_id = m.id AND (m.code, r.route_name) IN (
+  ('gpt-6-luna', 'aiboli（待启用）'),
+  ('gpt-6-luna', 'CodexAuv 低价聚合 · 主线路'),
+  ('gpt-6-luna', 'OpenRouter 主线路'),
+  ('glm-5-3-flash', 'aiboli（待启用）'),
+  ('claude-fable-5-1', 'CodexAuv 低价聚合 · 主线路'),
+  ('gpt-image-2-5-flare', 'aiboli（待启用）'),
+  ('gpt-image-2-5-flare', 'PackyCode 主线路'),
+  ('gpt-5-6-sol', 'aiboli（待启用）'),
+  ('gpt-5-6-sol', 'CodexAuv 低价聚合 · 主线路'),
+  ('gpt-5-6-sol', 'OpenRouter 主线路'),
+  ('qwen3-8-omni-flash', '七牛云 Modelink'),
+  ('wan-3-0', 'aiboli（待启用）'),
+  ('gemini-3-7-flash', 'CodexAuv 低价聚合 · 主线路'),
+  ('gpt-image-2-5-sunburst', 'aiboli（待启用）'),
+  ('gpt-image-2-5-sunburst', 'PackyCode 主线路'),
+  ('deepseek-v4-1-flash-1017', 'aiboli（待启用）'),
+  ('gpt-image-2', 'aiboli（待启用）'),
+  ('gpt-image-2', 'CodexAuv 低价聚合 · 主线路'),
+  ('gpt-image-2', 'PackyCode 主线路'),
+  ('gemini-3-pro-image', 'aiboli（待启用）'),
+  ('gemini-3-pro-image', 'OpenRouter 主线路'),
+  ('audio_openrouter_gpt_audio', 'OpenRouter 主线路'),
+  ('audio_openrouter_gpt_audio_mini', 'OpenRouter 主线路'),
+  ('grok-imagine-image-2-0', 'CodexAuv 低价聚合 · 主线路'),
+  ('gpt-5-6-luna', 'aiboli（待启用）'),
+  ('gpt-5-6-luna', 'CodexAuv 低价聚合 · 主线路'),
+  ('gpt-5-6-luna', 'OpenRouter 主线路'),
+  ('gpt-6-astra', 'aiboli（待启用）'),
+  ('gpt-6-astra', 'CodexAuv 低价聚合 · 主线路'),
+  ('gpt-6-astra', 'OpenRouter 主线路'),
+  ('claude-opus-5-5', 'aiboli（待启用）'),
+  ('claude-opus-5-5', 'CodexAuv 低价聚合 · 主线路'),
+  ('claude-sonnet-5', 'aiboli（待启用）'),
+  ('claude-sonnet-5', 'CodexAuv 低价聚合 · 主线路'),
+  ('claude-fable-5', 'aiboli（待启用）'),
+  ('claude-fable-5', 'CodexAuv 低价聚合 · 主线路'),
+  ('hailuo-3-max', 'PackyCode 主线路'),
+  ('gemini-3-8-flash', 'aiboli（待启用）'),
+  ('gemini-3-8-flash', 'CodexAuv 低价聚合 · 主线路'),
+  ('claude-opus-4-8', 'aiboli（待启用）'),
+  ('claude-opus-4-8', 'CodexAuv 低价聚合 · 主线路'),
+  ('gpt-6-sol', 'aiboli（待启用）'),
+  ('gpt-6-sol', 'CodexAuv 低价聚合 · 主线路'),
+  ('gpt-6-sol', 'OpenRouter 主线路'),
+  ('seedance-2-0', 'aiboli（待启用）'),
+  ('hailuo-3', 'PackyCode 主线路'),
+  ('qwen3-6-plus', 'OpenRouter 主线路'),
+  ('qwen3-6-plus', 'PackyCode 主线路'),
+  ('glm-5', 'OpenRouter 主线路'),
+  ('glm-5', 'PackyCode 主线路'),
+  ('kimi-k2-6', 'CodexAuv 低价聚合 · 主线路'),
+  ('kimi-k2-6', 'OpenRouter 主线路'),
+  ('kimi-k2-6', 'PackyCode 主线路'),
+  ('glm-5-3-flashx', 'aiboli（待启用）'),
+  ('glm-5-3-flashx', 'PackyCode 主线路'),
+  ('seedance-2-5', 'aiboli（待启用）')
+);

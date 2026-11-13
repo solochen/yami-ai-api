@@ -42,8 +42,10 @@ type ModelDTO struct {
 	RuntimeRule   map[string]interface{} `json:"runtime_rule,omitempty"`
 	InputSchema   map[string]interface{} `json:"input_schema"`
 	DefaultParams map[string]interface{} `json:"default_params"`
-	PriceRule     map[string]interface{} `json:"price_rule"`
-	IsEnabled     bool                   `json:"is_enabled"`
+	PriceRule         map[string]interface{} `json:"price_rule"`
+	OfficialPriceRule map[string]interface{} `json:"official_price_rule,omitempty"`
+	PriceMultiplier   float64                `json:"price_multiplier"`
+	IsEnabled         bool                   `json:"is_enabled"`
 	SortOrder     int                    `json:"sort_order"`
 }
 
@@ -166,17 +168,17 @@ type ModelFull struct {
 
 func (s *ModelService) GetFullByCode(ctx context.Context, code string) (*ModelFull, error) {
 	var m ModelFull
-	var tags, schema, defaults, price, extra, runtime []byte
+	var tags, schema, defaults, price, extra, runtime, official []byte
 	err := s.db.QueryRow(ctx, `
 		SELECT id, code, public_alias, display_name, new_api_model, new_api_endpoint, request_mode, category,
 			icon_url, description, tags, input_schema, default_params, new_api_extra_params, price_rule, runtime_rule,
-			retention_days, is_enabled, sort_order
+			retention_days, is_enabled, sort_order, official_price_rule, price_multiplier
 		FROM models WHERE (code=$1 OR (public_alias IS NOT NULL AND public_alias=$1)) AND is_enabled=true
 			AND (NOT EXISTS (SELECT 1 FROM model_routes configured_route WHERE configured_route.model_id=models.id)
 				OR EXISTS (SELECT 1 FROM model_routes enabled_route WHERE enabled_route.model_id=models.id AND enabled_route.is_enabled=true))`, code).Scan(
 		&m.ID, &m.Code, &m.PublicAlias, &m.DisplayName, &m.NewAPIModel, &m.NewAPIEndpoint, &m.RequestMode, &m.Category,
 		&m.IconURL, &m.Description, &tags, &schema, &defaults, &extra, &price, &runtime,
-		&m.RetentionDays, &m.IsEnabled, &m.SortOrder)
+		&m.RetentionDays, &m.IsEnabled, &m.SortOrder, &official, &m.PriceMultiplier)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.New("model not found")
@@ -191,6 +193,7 @@ func (s *ModelService) GetFullByCode(ctx context.Context, code string) (*ModelFu
 	m.RequestMode = normalizeCustomMediaRequestMode(m.RequestMode, m.Category)
 	json.Unmarshal(price, &m.PriceRule)
 	json.Unmarshal(runtime, &m.RuntimeRule)
+	json.Unmarshal(official, &m.OfficialPriceRule)
 	return &m, nil
 }
 
@@ -200,15 +203,15 @@ func (s *ModelService) GetFullByCode(ctx context.Context, code string) (*ModelFu
 // model before enabling it.
 func (s *ModelService) GetFullByIDForAdmin(ctx context.Context, id int64) (*ModelFull, error) {
 	var m ModelFull
-	var tags, schema, defaults, price, extra, runtimeRule []byte
+	var tags, schema, defaults, price, extra, runtimeRule, official []byte
 	err := s.db.QueryRow(ctx, `
 		SELECT id, code, display_name, new_api_model, new_api_endpoint, request_mode, category,
 			icon_url, description, tags, input_schema, default_params, new_api_extra_params, price_rule, runtime_rule,
-			retention_days, is_enabled, sort_order
+			retention_days, is_enabled, sort_order, official_price_rule, price_multiplier
 		FROM models WHERE id=$1`, id).Scan(
 		&m.ID, &m.Code, &m.DisplayName, &m.NewAPIModel, &m.NewAPIEndpoint, &m.RequestMode, &m.Category,
 		&m.IconURL, &m.Description, &tags, &schema, &defaults, &extra, &price, &runtimeRule,
-		&m.RetentionDays, &m.IsEnabled, &m.SortOrder)
+		&m.RetentionDays, &m.IsEnabled, &m.SortOrder, &official, &m.PriceMultiplier)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.New("模型不存在")
@@ -223,6 +226,7 @@ func (s *ModelService) GetFullByIDForAdmin(ctx context.Context, id int64) (*Mode
 	m.RequestMode = normalizeCustomMediaRequestMode(m.RequestMode, m.Category)
 	json.Unmarshal(price, &m.PriceRule)
 	json.Unmarshal(runtimeRule, &m.RuntimeRule)
+	json.Unmarshal(official, &m.OfficialPriceRule)
 	return &m, nil
 }
 
@@ -1002,12 +1006,24 @@ func (s *ModelService) ListCategories(ctx context.Context) ([]map[string]string,
 	return cats, nil
 }
 
+// AdminUpstreamInfo 是模型管理列表里展示的单条上游线路摘要（不包含 Key 等敏感信息）。
+type AdminUpstreamInfo struct {
+	Provider     string `json:"provider"`
+	RouteName    string `json:"route_name"`
+	Priority     int    `json:"priority"`
+	IsEnabled    bool   `json:"is_enabled"`
+	HealthState  string `json:"health_status"`
+	AccountID    *int64 `json:"account_id,omitempty"`
+	LoginAccount string `json:"login_account,omitempty"`
+}
+
 type AdminModelDTO struct {
 	ModelDTO
 	NewAPIModel       string                 `json:"new_api_model"`
 	NewAPIEndpoint    string                 `json:"new_api_endpoint"`
 	RequestMode       string                 `json:"request_mode"`
 	NewAPIExtraParams map[string]interface{} `json:"new_api_extra_params"`
+	Upstreams         []AdminUpstreamInfo    `json:"upstreams"`
 }
 
 type APIDocDTO struct {
@@ -1056,7 +1072,7 @@ type APIDocInput struct {
 
 func (s *ModelService) ListAll(ctx context.Context) ([]AdminModelDTO, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT id, code, display_name, new_api_model, new_api_endpoint, request_mode, category, icon_url, description, tags, runtime_rule, input_schema, default_params, new_api_extra_params, price_rule, is_enabled, sort_order
+		SELECT id, code, display_name, new_api_model, new_api_endpoint, request_mode, category, icon_url, description, tags, runtime_rule, input_schema, default_params, new_api_extra_params, price_rule, is_enabled, sort_order, official_price_rule, price_multiplier
 		FROM models ORDER BY sort_order ASC, id ASC`)
 	if err != nil {
 		return nil, err
@@ -1069,16 +1085,49 @@ func (s *ModelService) ListAll(ctx context.Context) ([]AdminModelDTO, error) {
 	for i := range items {
 		items[i].NewAPIExtraParams = maskModelSecrets(items[i].NewAPIExtraParams)
 	}
+	// 附带每个模型的上游线路摘要（provider / 优先级 / 是否启用），供模型管理列表展示与排序。
+	upstreams, err := s.listAdminUpstreams(ctx)
+	if err == nil {
+		for i := range items {
+			items[i].Upstreams = upstreams[items[i].ID]
+		}
+	}
 	return items, nil
+}
+
+// listAdminUpstreams 按 model_id 聚合所有线路（不含 api_key 等敏感字段）。
+func (s *ModelService) listAdminUpstreams(ctx context.Context) (map[int64][]AdminUpstreamInfo, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT r.model_id, r.provider, r.route_name, r.priority, r.is_enabled, r.health_status,
+		       r.account_id, COALESCE(a.login_account,'')
+		FROM model_routes r
+		LEFT JOIN upstream_accounts a ON a.id = r.account_id
+		ORDER BY r.model_id ASC, r.priority ASC, r.id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[int64][]AdminUpstreamInfo)
+	for rows.Next() {
+		var modelID int64
+		var info AdminUpstreamInfo
+		if err := rows.Scan(&modelID, &info.Provider, &info.RouteName, &info.Priority, &info.IsEnabled, &info.HealthState,
+			&info.AccountID, &info.LoginAccount); err != nil {
+			return nil, err
+		}
+		result[modelID] = append(result[modelID], info)
+	}
+	return result, rows.Err()
 }
 
 func scanAdminModels(rows pgx.Rows) ([]AdminModelDTO, error) {
 	models := make([]AdminModelDTO, 0)
 	for rows.Next() {
 		var m AdminModelDTO
-		var tags, runtime, schema, defaults, extra, price []byte
+		var tags, runtime, schema, defaults, extra, price, official []byte
 		if err := rows.Scan(&m.ID, &m.Code, &m.DisplayName, &m.NewAPIModel, &m.NewAPIEndpoint, &m.RequestMode, &m.Category,
-			&m.IconURL, &m.Description, &tags, &runtime, &schema, &defaults, &extra, &price, &m.IsEnabled, &m.SortOrder); err != nil {
+			&m.IconURL, &m.Description, &tags, &runtime, &schema, &defaults, &extra, &price, &m.IsEnabled, &m.SortOrder,
+			&official, &m.PriceMultiplier); err != nil {
 			return nil, err
 		}
 		json.Unmarshal(tags, &m.Tags)
@@ -1087,6 +1136,7 @@ func scanAdminModels(rows pgx.Rows) ([]AdminModelDTO, error) {
 		json.Unmarshal(defaults, &m.DefaultParams)
 		json.Unmarshal(extra, &m.NewAPIExtraParams)
 		json.Unmarshal(price, &m.PriceRule)
+		json.Unmarshal(official, &m.OfficialPriceRule)
 		models = append(models, m)
 	}
 	return models, nil
@@ -1788,6 +1838,8 @@ type CreateModelInput struct {
 	DefaultParams     map[string]interface{} `json:"default_params"`
 	NewAPIExtraParams map[string]interface{} `json:"new_api_extra_params"`
 	PriceRule         map[string]interface{} `json:"price_rule"`
+	OfficialPriceRule map[string]interface{} `json:"official_price_rule"`
+	PriceMultiplier   float64                `json:"price_multiplier"`
 	RuntimeRule       map[string]interface{} `json:"runtime_rule"`
 	IsEnabled         bool                   `json:"is_enabled"`
 	SortOrder         int                    `json:"sort_order"`
@@ -1812,15 +1864,17 @@ func (s *ModelService) Create(ctx context.Context, input CreateModelInput) (*Mod
 	defaults, _ := json.Marshal(input.DefaultParams)
 	extra, _ := json.Marshal(sealedExtra)
 	price, _ := json.Marshal(input.PriceRule)
+	official, _ := json.Marshal(input.OfficialPriceRule)
 	if input.NewAPIEndpoint == "" {
 		input.NewAPIEndpoint = "/v1/chat/completions"
 	}
 	var id int64
 	err = s.db.QueryRow(ctx, `
-		INSERT INTO models (code, display_name, new_api_model, new_api_endpoint, request_mode, category, icon_url, description, tags, runtime_rule, input_schema, default_params, new_api_extra_params, price_rule, is_enabled, sort_order)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+		INSERT INTO models (code, display_name, new_api_model, new_api_endpoint, request_mode, category, icon_url, description, tags, runtime_rule, input_schema, default_params, new_api_extra_params, price_rule, is_enabled, sort_order, official_price_rule, price_multiplier)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
 		input.Code, input.DisplayName, input.NewAPIModel, input.NewAPIEndpoint, input.RequestMode, input.Category,
 		input.IconURL, input.Description, tags, runtime, schema, defaults, extra, price, input.IsEnabled, input.SortOrder,
+		official, input.PriceMultiplier,
 	).Scan(&id)
 	if err != nil {
 		if friendly := modelCreateError(input.Code, err); friendly != nil {
@@ -1875,12 +1929,15 @@ func (s *ModelService) Update(ctx context.Context, id int64, input CreateModelIn
 	defaults, _ := json.Marshal(input.DefaultParams)
 	extra, _ := json.Marshal(sealedExtra)
 	price, _ := json.Marshal(input.PriceRule)
+	official, _ := json.Marshal(input.OfficialPriceRule)
 	_, err = s.db.Exec(ctx, `
 		UPDATE models SET display_name=$1, new_api_model=$2, new_api_endpoint=$3, request_mode=$4, category=$5,
-			icon_url=$6, description=$7, tags=$8, runtime_rule=$9, input_schema=$10, default_params=$11, new_api_extra_params=$12, price_rule=$13, is_enabled=$14, sort_order=$15, updated_at=now()
+			icon_url=$6, description=$7, tags=$8, runtime_rule=$9, input_schema=$10, default_params=$11, new_api_extra_params=$12, price_rule=$13, is_enabled=$14, sort_order=$15, updated_at=now(),
+			official_price_rule=$17, price_multiplier=$18
 		WHERE id=$16`,
 		input.DisplayName, input.NewAPIModel, input.NewAPIEndpoint, input.RequestMode, input.Category,
-		input.IconURL, input.Description, tags, runtime, schema, defaults, extra, price, input.IsEnabled, input.SortOrder, id)
+		input.IconURL, input.Description, tags, runtime, schema, defaults, extra, price, input.IsEnabled, input.SortOrder, id,
+		official, input.PriceMultiplier)
 	if err != nil {
 		return nil, err
 	}

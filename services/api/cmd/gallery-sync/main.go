@@ -166,13 +166,18 @@ type referenceAssetRow struct {
 func newReferenceStorage(ctx context.Context, pool *pgxpool.Pool) (storage.Store, error) {
 	cfg := config.Load()
 	storageCfg := storage.LoadConfig(ctx, pool, storage.Config{
-		Provider:  "minio",
-		Endpoint:  cfg.MinioEndpoint,
-		AccessKey: cfg.MinioAccessKey,
-		SecretKey: cfg.MinioSecretKey,
-		Bucket:    cfg.MinioBucket,
-		PublicURL: cfg.MinioPublicURL,
-		UseSSL:    cfg.MinioUseSSL,
+		Provider:       "minio",
+		Endpoint:       cfg.MinioEndpoint,
+		AccessKey:      cfg.MinioAccessKey,
+		SecretKey:      cfg.MinioSecretKey,
+		Bucket:         cfg.MinioBucket,
+		PublicURL:      cfg.MinioPublicURL,
+		UseSSL:         cfg.MinioUseSSL,
+		Region:         cfg.MinioRegion,
+		PublicURLStyle: cfg.MinioPublicURLStyle,
+		Private:        cfg.MinioBucketPrivate,
+		SkipBucketInit: cfg.MinioSkipBucketInit,
+		BucketLookup:   cfg.MinioBucketLookup,
 	})
 	if strings.EqualFold(strings.TrimSpace(storageCfg.Provider), "local") {
 		publicURL := strings.TrimRight(strings.TrimSpace(storageCfg.PublicURL), "/")
@@ -184,7 +189,7 @@ func newReferenceStorage(ctx context.Context, pool *pgxpool.Pool) (storage.Store
 		}
 		return storage.NewLocal("", publicURL)
 	}
-	return storage.New(storageCfg.Endpoint, storageCfg.AccessKey, storageCfg.SecretKey, storageCfg.Bucket, storageCfg.PublicURL, storageCfg.UseSSL)
+	return storage.New(storageCfg)
 }
 
 func mirrorReferenceAssets(ctx context.Context, pool *pgxpool.Pool, store storage.Store, manifestURL, sourceKey string) (mirrorStats, error) {

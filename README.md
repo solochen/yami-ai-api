@@ -59,6 +59,8 @@ cp .env.example .env.production
 
 生产环境必须修改 `.env.production` 里的域名、对象存储和模型网关配置。数据库密码和 JWT 密钥可以先使用模板默认值完成快速部署，但正式公开使用前建议改成随机强密码。
 
+对象存储使用腾讯云 COS 私有桶 + 自定义 CDN 域名（图片加速、灵感广场缩略图）时，按 [`docs/cos-cdn-setup.md`](docs/cos-cdn-setup.md) 从 0 到 1 配置；存储是否连通可以用 `docker compose ... exec api /storage-check` 自检。
+
 ## 本地一键启动
 
 macOS / Linux 日常前端开发（也支持 Windows Node.js）：

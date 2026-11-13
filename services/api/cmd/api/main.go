@@ -58,6 +58,8 @@ func main() {
 	taskSvc := service.NewTaskService(pool, modelSvc, billingSvc, qClient, opsSvc)
 	worksSvc := service.NewWorksService(pool)
 	adminSvc := service.NewAdminService(pool, billingSvc, cfg.AdminJWT)
+	adminSvc.RunAlertDispatcher(ctx)
+	modelSvc.RunAccountProbeLoop(ctx)
 	paymentSvc := service.NewPaymentService(pool, billingSvc)
 	gallerySvc := service.NewGalleryService(pool)
 	galleryGenerationSvc := service.NewGalleryGenerationService(pool, modelSvc, qClient)
@@ -72,13 +74,18 @@ func main() {
 	emailOTPSvc := service.NewEmailOTPService(authSvc, captchaSvc, cacheClient, mailerSvc)
 
 	storageCfg := storage.LoadConfig(ctx, pool, storage.Config{
-		Provider:  "minio",
-		Endpoint:  cfg.MinioEndpoint,
-		AccessKey: cfg.MinioAccessKey,
-		SecretKey: cfg.MinioSecretKey,
-		Bucket:    cfg.MinioBucket,
-		PublicURL: cfg.MinioPublicURL,
-		UseSSL:    cfg.MinioUseSSL,
+		Provider:       "minio",
+		Endpoint:       cfg.MinioEndpoint,
+		AccessKey:      cfg.MinioAccessKey,
+		SecretKey:      cfg.MinioSecretKey,
+		Bucket:         cfg.MinioBucket,
+		PublicURL:      cfg.MinioPublicURL,
+		UseSSL:         cfg.MinioUseSSL,
+		Region:         cfg.MinioRegion,
+		PublicURLStyle: cfg.MinioPublicURLStyle,
+		Private:        cfg.MinioBucketPrivate,
+		SkipBucketInit: cfg.MinioSkipBucketInit,
+		BucketLookup:   cfg.MinioBucketLookup,
 	})
 	cfg.MinioEndpoint = storageCfg.Endpoint
 	cfg.MinioAccessKey = storageCfg.AccessKey
@@ -86,6 +93,11 @@ func main() {
 	cfg.MinioBucket = storageCfg.Bucket
 	cfg.MinioPublicURL = storageCfg.PublicURL
 	cfg.MinioUseSSL = storageCfg.UseSSL
+	cfg.MinioRegion = storageCfg.Region
+	cfg.MinioPublicURLStyle = storageCfg.PublicURLStyle
+	cfg.MinioBucketPrivate = storageCfg.Private
+	cfg.MinioSkipBucketInit = storageCfg.SkipBucketInit
+	cfg.MinioBucketLookup = storageCfg.BucketLookup
 
 	var storageClient storage.Store
 	var localRoot string
@@ -100,7 +112,7 @@ func main() {
 			log.Printf("warning: local storage unavailable, uploads disabled: %v", err)
 		}
 	} else {
-		storageClient, err = storage.New(storageCfg.Endpoint, storageCfg.AccessKey, storageCfg.SecretKey, storageCfg.Bucket, storageCfg.PublicURL, storageCfg.UseSSL)
+		storageClient, err = storage.New(storageCfg)
 		if err != nil {
 			log.Printf("warning: object storage unavailable, falling back to local uploads: %v", err)
 			if localPublicErr != nil {

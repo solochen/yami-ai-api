@@ -16,6 +16,11 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+# 图片 CDN 域名（逗号分隔）。配置后灵感广场列表改用 CDN 缩略图；
+# NEXT_PUBLIC_* 变量在构建时内联，必须在构建阶段传入。
+ARG NEXT_PUBLIC_MEDIA_CDN_HOSTS
+ENV NEXT_PUBLIC_MEDIA_CDN_HOSTS=$NEXT_PUBLIC_MEDIA_CDN_HOSTS
+
 RUN pnpm --filter @starai/web build
 
 FROM node:22-alpine AS runner

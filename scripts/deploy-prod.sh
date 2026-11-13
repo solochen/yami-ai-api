@@ -6,6 +6,13 @@ cd "$ROOT_DIR"
 
 ENV_FILE="${ENV_FILE:-.env.production}"
 COMPOSE_FILE="${COMPOSE_FILE:-infra/docker/docker-compose.prod.yml}"
+# 服务器专用 override（接入 APISIX 网关网络、固定容器 IP）存在时自动叠加，
+# 否则重建 api/web 后会脱离 172.28.x 网络，APISIX 直接 502。
+COMPOSE_OVERRIDE_FILE="${COMPOSE_OVERRIDE_FILE:-$(dirname "$COMPOSE_FILE")/docker-compose.prod.override.yml}"
+COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+if [ -f "$COMPOSE_OVERRIDE_FILE" ]; then
+  COMPOSE_ARGS+=(-f "$COMPOSE_OVERRIDE_FILE")
+fi
 BUILD_SERVICES="${BUILD_SERVICES:-api worker web admin}"
 RUN_MIGRATIONS="${RUN_MIGRATIONS:-auto}"
 STOP_SERVICES_BEFORE_BUILD="${STOP_SERVICES_BEFORE_BUILD:-0}"
@@ -140,21 +147,21 @@ if [ "$searxng_enabled" = "1" ] || [ "$searxng_enabled" = "true" ]; then
 fi
 
 echo "==> Checking compose config"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config >/dev/null
+docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" config >/dev/null
 
 echo "==> Starting PostgreSQL and Redis"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d postgres redis
+docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" up -d postgres redis
 
 if [ "$searxng_enabled" = "1" ] || [ "$searxng_enabled" = "true" ]; then
   echo "==> Starting optional private SearXNG"
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" --profile search up -d searxng
+  docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" --profile search up -d searxng
 else
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" --profile search stop searxng >/dev/null 2>&1 || true
+  docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" --profile search stop searxng >/dev/null 2>&1 || true
 fi
 
 echo "==> Saving current application images for rollback"
 for service in $BUILD_SERVICES; do
-  container_id="$(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps -q "$service" || true)"
+  container_id="$(docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" ps -q "$service" || true)"
   if [ -z "$container_id" ]; then
     continue
   fi
@@ -182,14 +189,14 @@ rollback_application_images() {
   while IFS='|' read -r service image_ref rollback_ref; do
     [ -n "$service" ] || continue
     docker tag "$rollback_ref" "$image_ref"
-    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build --force-recreate "$service" || true
+    docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" up -d --no-build --force-recreate "$service" || true
     echo "  restored $service from $rollback_ref" >&2
   done < "$ROLLBACK_STATE"
 }
 
 if [ "$STOP_SERVICES_BEFORE_BUILD" = "1" ] || [ "$STOP_SERVICES_BEFORE_BUILD" = "true" ]; then
   echo "==> Stopping target services before build to free memory: $BUILD_SERVICES"
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" stop $BUILD_SERVICES || true
+  docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" stop $BUILD_SERVICES || true
 fi
 
 echo "==> Building service images sequentially: $BUILD_SERVICES"
@@ -203,9 +210,9 @@ for service in $BUILD_SERVICES; do
     fi
   done
   if [ -n "$no_cache_flag" ]; then
-    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build "$no_cache_flag" "$service"
+    docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" build "$no_cache_flag" "$service"
   else
-    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build "$service"
+    docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" build "$service"
   fi
 done
 
@@ -223,7 +230,7 @@ fi
 
 if [ "$should_run_migrations" = "true" ]; then
   echo "==> Running database migrations"
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" --profile tools run --rm migrate
+  docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" --profile tools run --rm migrate
 else
   echo "==> Skipping database migrations"
 fi
@@ -242,11 +249,11 @@ else
 fi
 
 echo "==> Starting application services"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --force-recreate $BUILD_SERVICES
+docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" up -d --force-recreate $BUILD_SERVICES
 
 echo "==> Waiting for application health checks"
 for service in $BUILD_SERVICES; do
-  container_id="$(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps -q "$service" || true)"
+  container_id="$(docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" ps -q "$service" || true)"
   if [ -z "$container_id" ]; then
     echo "Service $service did not start." >&2
     rollback_application_images
@@ -266,7 +273,7 @@ for service in $BUILD_SERVICES; do
   done
   if [ "$healthy" != "true" ]; then
     echo "Service $service failed its health check. Existing data volumes were not removed." >&2
-    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" logs --tail=80 "$service" >&2 || true
+    docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" logs --tail=80 "$service" >&2 || true
     rollback_application_images
     exit 1
   fi
@@ -274,7 +281,7 @@ done
 
 if [ "$searxng_enabled" = "1" ] || [ "$searxng_enabled" = "true" ]; then
   echo "==> Waiting for SearXNG health check"
-  searxng_id="$(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" --profile search ps -q searxng || true)"
+  searxng_id="$(docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" --profile search ps -q searxng || true)"
   searxng_healthy=false
   for _ in $(seq 1 45); do
     status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$searxng_id" 2>/dev/null || true)"
@@ -288,21 +295,21 @@ if [ "$searxng_enabled" = "1" ] || [ "$searxng_enabled" = "true" ]; then
     sleep 2
   done
   if [ "$searxng_healthy" != "true" ]; then
-    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" --profile search logs --tail=80 searxng >&2 || true
+    docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" --profile search logs --tail=80 searxng >&2 || true
     echo "SearXNG failed its health check; application services were left running." >&2
     exit 1
   fi
 fi
 
 echo "==> Current status"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
+docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" ps
 
 echo "==> Frontend build fingerprints"
 for service in $BUILD_SERVICES; do
   if [ "$service" = "web" ] || [ "$service" = "admin" ]; then
-    container_id="$(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps -q "$service" || true)"
+    container_id="$(docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" ps -q "$service" || true)"
     if [ -n "$container_id" ]; then
-      build_id="$(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T "$service" sh -lc 'cat /app/apps/'"$service"'/.next/BUILD_ID 2>/dev/null || true')"
+      build_id="$(docker compose --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}" exec -T "$service" sh -lc 'cat /app/apps/'"$service"'/.next/BUILD_ID 2>/dev/null || true')"
       image_id="$(docker inspect -f '{{.Image}}' "$container_id" 2>/dev/null || true)"
       echo "  $service container=$container_id image=$image_id build_id=${build_id:-unknown}"
     fi

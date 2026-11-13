@@ -159,6 +159,10 @@ NEW_API_STREAM_TIMEOUT_SECONDS=600
 - `BASE_URL` 用于服务端生成公开链接，生产环境必须是 HTTPS 域名。
 - `LOCAL_STORAGE_PUBLIC_URL` 是本地上传兜底路径。生产环境建议主要使用 R2/S3。
 - `ADMIN_ASSET_PREFIX=/admin-assets` 必须和 Nginx 配置一致，修改后必须重新构建 `admin`。
+- 想用腾讯云 COS 私有桶 + 自定义 CDN 域名（更快的图片访问、灵感广场缩略图），
+  按 [`docs/cos-cdn-setup.md`](cos-cdn-setup.md) 配置，除上面的 `MINIO_*` 外还要设置
+  `MINIO_REGION`、`MINIO_PUBLIC_URL_STYLE=object`、`MINIO_BUCKET_PRIVATE=true`、
+  `MINIO_SKIP_BUCKET_INIT=true` 和前端构建参数 `NEXT_PUBLIC_MEDIA_CDN_HOSTS`。
 - 后台 API 文档里的 `Base URL` 推荐填写 `https://yourdomain.com`，用户最终调用示例是 `https://yourdomain.com/v1/chat/completions`。
 - 首次部署前必须把 `yourdomain.com`、对象存储和模型网关占位值替换成真实值。`change_this_to_a_strong_password` 和 `replace_with_*` 可以先保留用于快速部署，脚本只会提示警告；正式公开使用前建议改成随机强密码和随机 JWT 密钥。
 

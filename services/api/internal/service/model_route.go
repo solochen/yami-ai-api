@@ -43,6 +43,8 @@ type ModelRoute struct {
 	// 配置后成本仍按 CostRule 记账（上游真实成本），而售价按本规则计算，
 	// 用于「上游成本恒定、但按另一套价格向用户收费」的场景。
 	UserPriceRule       map[string]interface{} `json:"user_price_rule"`
+	AccountID           *int64                 `json:"account_id,omitempty"`
+	PriceGroup          string                 `json:"price_group"`
 	Priority            int                    `json:"priority"`
 	Weight              int                    `json:"weight"`
 	TimeoutSeconds      int                    `json:"timeout_seconds"`
@@ -72,6 +74,8 @@ type ModelRouteInput struct {
 	RuntimeRule    map[string]interface{} `json:"runtime_rule"`
 	CostRule       map[string]interface{} `json:"cost_rule"`
 	UserPriceRule  map[string]interface{} `json:"user_price_rule"`
+	AccountID      *int64                 `json:"account_id"`
+	PriceGroup     string                 `json:"price_group"`
 	Priority       int                    `json:"priority"`
 	Weight         int                    `json:"weight"`
 	TimeoutSeconds int                    `json:"timeout_seconds"`
@@ -209,7 +213,7 @@ func scanModelRoute(row pgx.Row, cipherKey string) (*ModelRoute, error) {
 		&route.APIKeyHeader, &headers, &extra, &runtimeRule, &costRule, &userPriceRule, &route.Priority,
 		&route.Weight, &route.TimeoutSeconds, &route.MaxRetries, &route.IsEnabled,
 		&route.HealthStatus, &route.ConsecutiveFailures, &route.SuccessCount, &route.FailureCount,
-		&route.LastSuccessAt, &route.LastFailureAt, &route.CooldownUntil)
+		&route.LastSuccessAt, &route.LastFailureAt, &route.CooldownUntil, &route.PriceGroup, &route.AccountID)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +235,7 @@ func scanModelRoute(row pgx.Row, cipherKey string) (*ModelRoute, error) {
 const modelRouteColumns = `id, model_id, route_name, provider, protocol, upstream_model, endpoint,
 	base_url, api_key, auth_type, api_key_header, headers, extra_params, runtime_rule, cost_rule, user_price_rule,
 	priority, weight, timeout_seconds, max_retries, is_enabled, health_status,
-	consecutive_failures, success_count, failure_count, last_success_at, last_failure_at, cooldown_until`
+	consecutive_failures, success_count, failure_count, last_success_at, last_failure_at, cooldown_until, COALESCE(price_group,''), account_id`
 
 func (s *ModelService) ListModelRoutes(ctx context.Context, modelID int64, maskSecrets bool) ([]ModelRoute, error) {
 	rows, err := s.db.Query(ctx, `SELECT `+modelRouteColumns+` FROM model_routes WHERE model_id=$1 ORDER BY priority, id`, modelID)
@@ -497,6 +501,21 @@ func (s *ModelService) CreateModelRoute(ctx context.Context, modelID int64, in M
 	if err := normalizeModelRouteInput(&in); err != nil {
 		return nil, err
 	}
+	if in.AccountID != nil && *in.AccountID > 0 {
+		key, group, accountProvider, err := s.resolveRouteAccount(ctx, *in.AccountID)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(in.Provider) != "" && !strings.EqualFold(strings.TrimSpace(in.Provider), accountProvider) {
+			return nil, errors.New("上游账号与线路的渠道标识不一致")
+		}
+		in.APIKey = key
+		if strings.TrimSpace(group) != "" {
+			in.PriceGroup = group
+		}
+	} else {
+		in.AccountID = nil
+	}
 	headers, _ := json.Marshal(in.Headers)
 	extra, _ := json.Marshal(in.ExtraParams)
 	runtimeRule, _ := json.Marshal(in.RuntimeRule)
@@ -507,9 +526,9 @@ func (s *ModelService) CreateModelRoute(ctx context.Context, modelID int64, in M
 		return nil, errors.New("线路密钥加密失败")
 	}
 	row := s.db.QueryRow(ctx, `INSERT INTO model_routes
-		(model_id,route_name,provider,protocol,upstream_model,endpoint,base_url,api_key,auth_type,api_key_header,headers,extra_params,runtime_rule,cost_rule,user_price_rule,priority,weight,timeout_seconds,max_retries,is_enabled)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING `+modelRouteColumns,
-		modelID, in.RouteName, in.Provider, in.Protocol, in.UpstreamModel, in.Endpoint, in.BaseURL, storedAPIKey, in.AuthType, in.APIKeyHeader, headers, extra, runtimeRule, costRule, userPriceRule, in.Priority, in.Weight, in.TimeoutSeconds, in.MaxRetries, in.IsEnabled)
+		(model_id,route_name,provider,protocol,upstream_model,endpoint,base_url,api_key,auth_type,api_key_header,headers,extra_params,runtime_rule,cost_rule,user_price_rule,priority,weight,timeout_seconds,max_retries,is_enabled,price_group,account_id)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING `+modelRouteColumns,
+		modelID, in.RouteName, in.Provider, in.Protocol, in.UpstreamModel, in.Endpoint, in.BaseURL, storedAPIKey, in.AuthType, in.APIKeyHeader, headers, extra, runtimeRule, costRule, userPriceRule, in.Priority, in.Weight, in.TimeoutSeconds, in.MaxRetries, in.IsEnabled, in.PriceGroup, in.AccountID)
 	route, err := scanModelRoute(row, s.routeCipherKey)
 	if err != nil {
 		return nil, err
@@ -638,6 +657,21 @@ func (s *ModelService) UpdateModelRoute(ctx context.Context, modelID, routeID in
 	if err := normalizeModelRouteInput(&in); err != nil {
 		return nil, err
 	}
+	if in.AccountID != nil && *in.AccountID > 0 {
+		key, group, accountProvider, err := s.resolveRouteAccount(ctx, *in.AccountID)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(in.Provider) != "" && !strings.EqualFold(strings.TrimSpace(in.Provider), accountProvider) {
+			return nil, errors.New("上游账号与线路的渠道标识不一致")
+		}
+		in.APIKey = key
+		if strings.TrimSpace(group) != "" {
+			in.PriceGroup = group
+		}
+	} else {
+		in.AccountID = nil
+	}
 	if strings.TrimSpace(in.APIKey) == "" || isMaskedSecret(in.APIKey) {
 		_ = s.db.QueryRow(ctx, `SELECT api_key FROM model_routes WHERE id=$1 AND model_id=$2`, routeID, modelID).Scan(&in.APIKey)
 	}
@@ -650,9 +684,9 @@ func (s *ModelService) UpdateModelRoute(ctx context.Context, modelID, routeID in
 	runtimeRule, _ := json.Marshal(in.RuntimeRule)
 	costRule, _ := json.Marshal(in.CostRule)
 	userPriceRule, _ := json.Marshal(nonNilRouteRule(in.UserPriceRule))
-	row := s.db.QueryRow(ctx, `UPDATE model_routes SET route_name=$1,provider=$2,protocol=$3,upstream_model=$4,endpoint=$5,base_url=$6,api_key=$7,auth_type=$8,api_key_header=$9,headers=$10,extra_params=$11,runtime_rule=$12,cost_rule=$13,user_price_rule=$14,priority=$15,weight=$16,timeout_seconds=$17,max_retries=$18,is_enabled=$19,updated_at=now()
-		WHERE id=$20 AND model_id=$21 RETURNING `+modelRouteColumns,
-		in.RouteName, in.Provider, in.Protocol, in.UpstreamModel, in.Endpoint, in.BaseURL, storedAPIKey, in.AuthType, in.APIKeyHeader, headers, extra, runtimeRule, costRule, userPriceRule, in.Priority, in.Weight, in.TimeoutSeconds, in.MaxRetries, in.IsEnabled, routeID, modelID)
+	row := s.db.QueryRow(ctx, `UPDATE model_routes SET route_name=$1,provider=$2,protocol=$3,upstream_model=$4,endpoint=$5,base_url=$6,api_key=$7,auth_type=$8,api_key_header=$9,headers=$10,extra_params=$11,runtime_rule=$12,cost_rule=$13,user_price_rule=$14,priority=$15,weight=$16,timeout_seconds=$17,max_retries=$18,is_enabled=$19,price_group=$20,account_id=$21,updated_at=now()
+		WHERE id=$22 AND model_id=$23 RETURNING `+modelRouteColumns,
+		in.RouteName, in.Provider, in.Protocol, in.UpstreamModel, in.Endpoint, in.BaseURL, storedAPIKey, in.AuthType, in.APIKeyHeader, headers, extra, runtimeRule, costRule, userPriceRule, in.Priority, in.Weight, in.TimeoutSeconds, in.MaxRetries, in.IsEnabled, in.PriceGroup, in.AccountID, routeID, modelID)
 	route, err := scanModelRoute(row, s.routeCipherKey)
 	if err != nil {
 		return nil, err

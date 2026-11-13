@@ -60,4 +60,7 @@ test("top actions keep stable children and stay above the agent title bar", () =
   for (const file of ["./NotificationBell.tsx", "./UILanguageSelector.tsx", "./workbench/ModelWorkspace.tsx"]) {
     assert.match(read(file), /addEventListener\("pointerdown", \w+, true\)/);
   }
+  // The digital-human header right-aligned “角色设置” button sits under the floating
+  // actions on desktop, so that header must keep a right-side reserve for them.
+  assert.match(read("./workbench/DigitalHumanWorkspace.tsx"), /<header[^>]*lg:pr-48/);
 });

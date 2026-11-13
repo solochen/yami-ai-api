@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, Copy, ExternalLink, Play, RotateCcw, Search, Sparkles, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
+import { isMediaCDNURL, mediaThumbnailURL } from "@/lib/media";
 import { useI18n } from "@/i18n/I18nProvider";
 import {
   filterReferenceCases,
@@ -512,10 +513,13 @@ function GalleryFilterSummary({ chips, label, removeLabel, resetLabel, onReset }
 }
 
 function ReferenceCard({ item, onOpen, onCopy, copied, taxonomyLabel, t }: { item: ReferenceGalleryItem; onOpen: () => void; onCopy: () => void; copied: boolean; taxonomyLabel: (value: string) => string; t: (key: string, vars?: Record<string, string | number>) => string }) {
+  const coverURL = referenceImageURL(item.image);
+  // 参考图在列表里最大占 25vw，按 640 宽取缩略图；详情弹窗仍用原图。
+  const thumbnailURL = mediaThumbnailURL(coverURL, 640);
   return (
     <article className="group overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.045)] transition duration-300 hover:-translate-y-1 hover:border-primary/60 hover:shadow-[0_18px_44px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-gray-900 dark:hover:border-primary/40">
       <button type="button" onClick={onOpen} className="relative block aspect-[4/5] w-full overflow-hidden bg-gray-100 text-left dark:bg-white/5">
-        <Image src={referenceImageURL(item.image)} alt={item.imageAlt || item.title} fill sizes="(min-width: 1536px) 25vw, (min-width: 1280px) 33vw, (min-width: 640px) 50vw, 100vw" className="object-contain transition duration-500 group-hover:scale-[1.025]" />
+        <Image src={thumbnailURL} alt={item.imageAlt || item.title} fill sizes="(min-width: 1536px) 25vw, (min-width: 1280px) 33vw, (min-width: 640px) 50vw, 100vw" unoptimized={isMediaCDNURL(thumbnailURL)} className="object-contain transition duration-500 group-hover:scale-[1.025]" />
         <span className="absolute left-3 top-3 rounded-lg bg-gray-950/80 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur-sm">Case {item.id}</span>
         <span className="absolute inset-x-3 bottom-3 flex translate-y-2 items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-gray-950/70 px-3 py-2 text-xs font-semibold text-white opacity-0 backdrop-blur-md transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100"><Search size={14} />{t("gallery.viewDetails")}</span>
       </button>
@@ -607,13 +611,16 @@ function GalleryPreview({ item, detail = false, videoLabel }: { item: GalleryIte
   const poster = item.thumbnail_url || item.cover_url || "";
   const isVideo = item.type === "video" || /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(mediaURL);
   const previewURL = isVideo && !detail ? withVideoPreviewTime(mediaURL) : mediaURL;
+  // 列表卡片走 CDN 缩略图（配置 NEXT_PUBLIC_MEDIA_CDN_HOSTS 后才生效），详情仍用原图。
+  const thumbnailURL = mediaThumbnailURL(mediaURL, 800);
+  const posterURL = poster !== mediaURL ? mediaThumbnailURL(poster, 800) : "";
   if (!mediaURL) return <div className="aspect-[4/3] bg-gray-100 dark:bg-white/5" />;
   if (isVideo) {
     return detail ? (
-      <video src={mediaURL} poster={poster && poster !== mediaURL ? poster : undefined} controls playsInline className="max-h-[42dvh] w-full bg-gray-950 object-contain md:max-h-none" />
+      <video src={mediaURL} poster={posterURL || undefined} controls playsInline className="max-h-[42dvh] w-full bg-gray-950 object-contain md:max-h-none" />
     ) : (
       <div className="relative aspect-video bg-gray-950">
-        <video src={previewURL} poster={poster && poster !== mediaURL ? poster : undefined} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+        <video src={previewURL} poster={posterURL || undefined} muted playsInline preload="metadata" className="h-full w-full object-cover" />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/25 bg-black/35 text-white backdrop-blur"><Play size={18} fill="currentColor" /></span></div>
         <span className="absolute left-2 top-2 rounded-lg bg-black/60 px-2 py-1 text-[11px] text-white">{videoLabel}</span>
@@ -621,7 +628,7 @@ function GalleryPreview({ item, detail = false, videoLabel }: { item: GalleryIte
     );
   }
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={mediaURL} alt={item.title || ""} loading="lazy" decoding="async" className={`w-full object-cover ${detail ? "max-h-[86dvh]" : "transition duration-500 group-hover:scale-[1.025]"}`} />;
+  return <img src={detail ? mediaURL : thumbnailURL} alt={item.title || ""} loading="lazy" decoding="async" className={`w-full object-cover ${detail ? "max-h-[86dvh]" : "transition duration-500 group-hover:scale-[1.025]"}`} />;
 }
 
 function GallerySkeleton() {

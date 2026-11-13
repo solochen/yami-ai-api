@@ -130,6 +130,42 @@ func TestApplyDigitalHumanAutoCost(t *testing.T) {
 	}
 }
 
+func TestDigitalHumanUpstreamError(t *testing.T) {
+	// 鉴权失败：空响应体也要给出可操作提示，且不能带厂商名。
+	for _, status := range []int{401, 403} {
+		msg := digitalHumanUpstreamError(status, nil)
+		if !strings.Contains(msg, "密钥无效") {
+			t.Fatalf("status %d should mention invalid key, got %q", status, msg)
+		}
+		if strings.Contains(strings.ToLower(msg), "vidu") {
+			t.Fatalf("user facing message must not leak vendor, got %q", msg)
+		}
+	}
+	// 业务错误：透传脱敏后的原因。
+	msg := digitalHumanUpstreamError(400, []byte(`{"message":"vidu 账号余额不足 https://api.vidu.cn/x"}`))
+	if strings.Contains(strings.ToLower(msg), "vidu") || strings.Contains(msg, "api.vidu.cn") {
+		t.Fatalf("upstream detail not sanitized: %q", msg)
+	}
+	if !strings.Contains(msg, "余额不足") {
+		t.Fatalf("reason dropped: %q", msg)
+	}
+	// 空响应体 + 非鉴权状态码：保持原来的兜底文案。
+	if got := digitalHumanUpstreamError(500, nil); got != "数字人服务拒绝了这次通话" {
+		t.Fatalf("fallback = %q", got)
+	}
+}
+
+func TestDigitalHumanLogBody(t *testing.T) {
+	if got := digitalHumanLogBody(nil); got != "<empty>" {
+		t.Fatalf("empty body = %q", got)
+	}
+	long := strings.Repeat("拒", 600)
+	got := digitalHumanLogBody([]byte(long))
+	if !strings.HasSuffix(got, "...") || len([]rune(got)) != 515 {
+		t.Fatalf("unexpected truncation: %d runes", len([]rune(got)))
+	}
+}
+
 func TestRankDigitalHumanKnowledge(t *testing.T) {
 	docs := []knowledgeDoc{{ID: 1, Title: "家庭", Content: "父亲住在杭州，周末一起喝茶。"}, {ID: 2, Title: "工作", Content: "公司在上海做设计。"}}
 	hits := rankDigitalHumanKnowledge(docs, "父亲住在哪里", 5)

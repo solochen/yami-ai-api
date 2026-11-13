@@ -24,6 +24,14 @@ type Config struct {
 	MinioBucket    string
 	MinioUseSSL    bool
 	MinioPublicURL string
+	// MinioRegion 用于 S3 V4 签名；COS 建议显式填写 ap-hongkong 等地域。
+	MinioRegion string
+	// MinioPublicURLStyle 为 object 时公开地址不带 bucket 前缀（COS + 自定义 CDN 域名）。
+	MinioPublicURLStyle string
+	MinioBucketPrivate  bool
+	MinioSkipBucketInit bool
+	// MinioBucketLookup 控制 S3 请求风格：auto（默认）/ path / dns（虚拟主机风格）。
+	MinioBucketLookup string
 
 	NewAPIBaseURL          string
 	NewAPIToken            string
@@ -50,6 +58,11 @@ func Load() *Config {
 		MinioBucket:             getEnv("MINIO_BUCKET", "starai-works"),
 		MinioUseSSL:             getEnv("MINIO_USE_SSL", "false") == "true",
 		MinioPublicURL:          getEnv("MINIO_PUBLIC_URL", "/media"),
+		MinioRegion:             getEnv("MINIO_REGION", ""),
+		MinioPublicURLStyle:     getEnv("MINIO_PUBLIC_URL_STYLE", "bucket"),
+		MinioBucketPrivate:      getEnv("MINIO_BUCKET_PRIVATE", "false") == "true",
+		MinioSkipBucketInit:     getEnv("MINIO_SKIP_BUCKET_INIT", "false") == "true",
+		MinioBucketLookup:       getEnv("MINIO_BUCKET_LOOKUP", "auto"),
 		NewAPIBaseURL:           getEnv("NEW_API_BASE_URL", "http://localhost:3002"),
 		NewAPIToken:             getEnv("NEW_API_TOKEN", "sk-platform-internal-token"),
 		NewAPITimeoutSec:        getEnvInt("NEW_API_TIMEOUT_SECONDS", 300),

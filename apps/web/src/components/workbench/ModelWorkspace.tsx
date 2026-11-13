@@ -2208,7 +2208,7 @@ export function ModelWorkspace({ model, initialPrompt, onOpenModelPicker, onOpen
         </div>
       )}
       {/* Top action bar */}
-      <div className="flex items-center justify-between gap-2 px-3 sm:px-5 py-1.5 sm:py-3 max-lg:border-b max-lg:border-white/60 shrink-0 flex-wrap bg-white/35 backdrop-blur-xl dark:bg-white/[0.02] dark:border-white/10">
+      <div className="relative z-30 flex items-center justify-between gap-2 px-3 sm:px-5 py-1.5 sm:py-3 max-lg:border-b max-lg:border-white/60 shrink-0 flex-wrap bg-white/35 backdrop-blur-xl dark:bg-white/[0.02] dark:border-white/10">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             onClick={() => {

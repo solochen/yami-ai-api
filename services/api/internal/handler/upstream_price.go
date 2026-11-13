@@ -77,6 +77,26 @@ func (h *Handler) AdminGetPriceSyncRun(c *gin.Context) {
 	util.OK(c, item)
 }
 
+func (h *Handler) AdminListUpstreamPriceGroups(c *gin.Context) {
+	provider := strings.TrimSpace(c.Query("provider"))
+	model := strings.TrimSpace(c.Query("model"))
+	if provider != "" && model != "" {
+		options, err := h.admin.ListUpstreamPriceGroupOptions(c.Request.Context(), provider, model)
+		if err != nil {
+			util.InternalError(c, err.Error())
+			return
+		}
+		util.OK(c, options)
+		return
+	}
+	groups, err := h.admin.ListUpstreamPriceGroups(c.Request.Context())
+	if err != nil {
+		util.InternalError(c, err.Error())
+		return
+	}
+	util.OK(c, groups)
+}
+
 func (h *Handler) AdminListUpstreamPrices(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))

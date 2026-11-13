@@ -24,9 +24,9 @@ INSERT INTO model_routes (
 )
 SELECT m.id, 'CodexAuv 国产聚合 · 主线路', 'codexauv', 'openai',
        v.upstream_model, '/v1/chat/completions', 'https://codexauv.com',
-       (SELECT r2.api_key FROM model_routes r2
+       COALESCE((SELECT r2.api_key FROM model_routes r2
         WHERE r2.provider = 'codexauv' AND r2.api_key NOT LIKE 'REPLACE_ME%'
-        ORDER BY r2.id LIMIT 1),
+        ORDER BY r2.id LIMIT 1), ''),
        'bearer', 'Authorization', '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, v.cost_rule::jsonb,
        3, 100, 120, 1, true
 FROM models m

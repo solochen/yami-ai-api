@@ -129,13 +129,18 @@ func main() {
 	defer pool.Close()
 
 	storageCfg := storage.LoadConfig(ctx, pool, storage.Config{
-		Provider:  "minio",
-		Endpoint:  getenv("MINIO_ENDPOINT", "localhost:9000"),
-		AccessKey: getenv("MINIO_ACCESS_KEY", "starai"),
-		SecretKey: getenv("MINIO_SECRET_KEY", "starai123"),
-		Bucket:    getenv("MINIO_BUCKET", "starai-works"),
-		PublicURL: getenv("MINIO_PUBLIC_URL", "/media"),
-		UseSSL:    getenv("MINIO_USE_SSL", "false") == "true",
+		Provider:       "minio",
+		Endpoint:       getenv("MINIO_ENDPOINT", "localhost:9000"),
+		AccessKey:      getenv("MINIO_ACCESS_KEY", "starai"),
+		SecretKey:      getenv("MINIO_SECRET_KEY", "starai123"),
+		Bucket:         getenv("MINIO_BUCKET", "starai-works"),
+		PublicURL:      getenv("MINIO_PUBLIC_URL", "/media"),
+		UseSSL:         getenv("MINIO_USE_SSL", "false") == "true",
+		Region:         getenv("MINIO_REGION", ""),
+		PublicURLStyle: getenv("MINIO_PUBLIC_URL_STYLE", "bucket"),
+		Private:        getenv("MINIO_BUCKET_PRIVATE", "false") == "true",
+		SkipBucketInit: getenv("MINIO_SKIP_BUCKET_INIT", "false") == "true",
+		BucketLookup:   getenv("MINIO_BUCKET_LOOKUP", "auto"),
 	})
 	if storageCfg.Provider == "local" {
 		storeErr := localStoragePublicErr
@@ -149,14 +154,7 @@ func main() {
 			objectStore = store
 		}
 	} else {
-		store, storeErr := storage.New(
-			storageCfg.Endpoint,
-			storageCfg.AccessKey,
-			storageCfg.SecretKey,
-			storageCfg.Bucket,
-			storageCfg.PublicURL,
-			storageCfg.UseSSL,
-		)
+		store, storeErr := storage.New(storageCfg)
 		if storeErr != nil {
 			log.Printf("object storage init warning: %v, falling back to local uploads", storeErr)
 			localErr := localStoragePublicErr
@@ -361,6 +359,9 @@ func processImageTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token st
 			}
 		}
 	}
+	var firstFailedRoute int64
+	var firstFailedStatus int
+	var firstFailedReason string
 	if !selectedOK {
 	routeLoop:
 		for _, route := range routes {
@@ -391,6 +392,10 @@ func processImageTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token st
 					selectedOK = true
 					markWorkerRouteSuccess(ctx, pool, route.ID)
 					logWorkerRouteAttempt(ctx, pool, p.TaskNo, p.ModelID, route.ID, attempt, "success", candidate.StatusCode, latency)
+					if firstFailedRoute > 0 && firstFailedRoute != route.ID {
+						insertWorkerUpstreamEvent(ctx, pool, "route_failover", route.Provider, route.AccountID, p.ModelID, p.ModelCode,
+							firstFailedRoute, route.ID, firstFailedReason, firstFailedStatus, 10)
+					}
 					break
 				}
 				lastRouteErr = callErr
@@ -417,6 +422,15 @@ func processImageTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token st
 					return failTask(ctx, pool, p, "MODEL_PROVIDER_ERROR", upstreamErrorMessage(candidate.ResponseBody))
 				}
 				markWorkerRouteFailure(ctx, pool, route.ID, poolEnabled)
+				if firstFailedRoute == 0 {
+					firstFailedRoute = route.ID
+					firstFailedStatus = candidate.StatusCode
+					firstFailedReason = truncateText(fmt.Sprint(lastRouteErr), 300)
+				}
+				if accountFatalStatus(candidate.StatusCode) || (callErr == nil && classifyUpstreamCapacity(candidate.StatusCode, candidate.ResponseBody) == upstreamCapacityCredits) {
+					insertWorkerUpstreamEvent(ctx, pool, "account_down", route.Provider, route.AccountID, p.ModelID, p.ModelCode,
+						route.ID, 0, firstFailedReason, candidate.StatusCode, 15)
+				}
 				logWorkerRouteAttempt(ctx, pool, p.TaskNo, p.ModelID, route.ID, attempt, "failed", candidate.StatusCode, latency)
 				log.Printf("Task %s route %d failed status=%d: %s", p.TaskNo, route.ID, candidate.StatusCode, truncateText(fmt.Sprint(lastRouteErr), 800))
 				if retry < route.MaxRetries && workerShouldRetrySameRoute(callErr, candidate.StatusCode, poolEnabled) && waitWorkerRouteRetry(ctx, retry) {
@@ -430,6 +444,7 @@ func processImageTask(ctx context.Context, pool *pgxpool.Pool, baseURL, token st
 		}
 	}
 	if !selectedOK {
+		insertWorkerUpstreamEvent(ctx, pool, "all_routes_down", "", nil, p.ModelID, p.ModelCode, firstFailedRoute, 0, firstFailedReason, firstFailedStatus, 10)
 		message := "所有可用线路均调用失败"
 		if lastRouteErr != nil && strings.TrimSpace(lastRouteErr.Error()) != "" {
 			message += "：" + humanizeUpstreamFailure(lastRouteErr.Error())
@@ -821,6 +836,10 @@ type workerModelRoute struct {
 	Weight              int
 	TimeoutSeconds      int
 	MaxRetries          int
+	Provider            string
+	AccountID           *int64
+	AccountHealth       string
+	AccountCooldown     *time.Time
 	HealthStatus        string
 	ConsecutiveFailures int
 	SuccessCount        int64
@@ -882,8 +901,8 @@ func workerRouteRequestTransform(route workerModelRoute) map[string]interface{} 
 var errNoEnabledModelRoutes = errors.New("model has configured routes but none are enabled")
 
 func loadWorkerModelRoutes(ctx context.Context, pool *pgxpool.Pool, modelID int64, fallbackBaseURL, fallbackToken, legacyModel, legacyEndpoint string, legacyExtra, legacyRuntime map[string]interface{}) ([]workerModelRoute, error) {
-	rows, err := pool.Query(ctx, `SELECT id,protocol,upstream_model,endpoint,base_url,api_key,auth_type,api_key_header,headers,extra_params,runtime_rule,cost_rule,user_price_rule,priority,weight,timeout_seconds,max_retries,health_status,consecutive_failures,success_count,failure_count,cooldown_until
-		FROM model_routes WHERE model_id=$1 AND is_enabled=true ORDER BY priority,id`, modelID)
+	rows, err := pool.Query(ctx, `SELECT r.id,r.protocol,r.upstream_model,r.endpoint,r.base_url,r.api_key,r.auth_type,r.api_key_header,r.headers,r.extra_params,r.runtime_rule,r.cost_rule,r.user_price_rule,r.priority,r.weight,r.timeout_seconds,r.max_retries,r.health_status,r.consecutive_failures,r.success_count,r.failure_count,r.cooldown_until,r.provider,r.account_id,COALESCE(a.health_status,''),a.cooldown_until
+		FROM model_routes r LEFT JOIN upstream_accounts a ON a.id=r.account_id WHERE r.model_id=$1 AND r.is_enabled=true ORDER BY r.priority,r.id`, modelID)
 	if err != nil {
 		return nil, err
 	}
@@ -893,7 +912,7 @@ func loadWorkerModelRoutes(ctx context.Context, pool *pgxpool.Pool, modelID int6
 		var route workerModelRoute
 		var baseURL, apiKey, authType, apiKeyHeader string
 		var headersRaw, extraRaw, runtimeRaw, costRaw, userPriceRaw []byte
-		if err := rows.Scan(&route.ID, &route.Protocol, &route.UpstreamModel, &route.Endpoint, &baseURL, &apiKey, &authType, &apiKeyHeader, &headersRaw, &extraRaw, &runtimeRaw, &costRaw, &userPriceRaw, &route.Priority, &route.Weight, &route.TimeoutSeconds, &route.MaxRetries, &route.HealthStatus, &route.ConsecutiveFailures, &route.SuccessCount, &route.FailureCount, &route.CooldownUntil); err != nil {
+		if err := rows.Scan(&route.ID, &route.Protocol, &route.UpstreamModel, &route.Endpoint, &baseURL, &apiKey, &authType, &apiKeyHeader, &headersRaw, &extraRaw, &runtimeRaw, &costRaw, &userPriceRaw, &route.Priority, &route.Weight, &route.TimeoutSeconds, &route.MaxRetries, &route.HealthStatus, &route.ConsecutiveFailures, &route.SuccessCount, &route.FailureCount, &route.CooldownUntil, &route.Provider, &route.AccountID, &route.AccountHealth, &route.AccountCooldown); err != nil {
 			return nil, err
 		}
 		var headers map[string]interface{}
@@ -940,12 +959,26 @@ func loadWorkerModelRoutes(ctx context.Context, pool *pgxpool.Pool, modelID int6
 		now := time.Now()
 		active := make([]workerModelRoute, 0, len(routes))
 		for _, route := range routes {
-			if route.CooldownUntil == nil || !route.CooldownUntil.After(now) {
-				active = append(active, route)
+			// 线路自身冷却中 → 跳过
+			if route.CooldownUntil != nil && route.CooldownUntil.After(now) {
+				continue
 			}
+			// 账号级熔断（额度耗尽 / Key 失效）→ 该账号下所有线路一起跳过
+			if route.AccountCooldown != nil && route.AccountCooldown.After(now) {
+				continue
+			}
+			active = append(active, route)
 		}
 		if len(active) == 0 {
-			return nil, fmt.Errorf("all model routes are cooling down")
+			// 全部线路都在冷却：放宽到「账号未熔断」的线路，避免完全不可用
+			for _, route := range routes {
+				if route.AccountCooldown == nil || !route.AccountCooldown.After(now) {
+					active = append(active, route)
+				}
+			}
+			if len(active) == 0 {
+				active = routes
+			}
 		}
 		routes = active
 	}
@@ -1155,6 +1188,32 @@ func markWorkerRouteFailure(ctx context.Context, pool *pgxpool.Pool, routeID int
 		last_failure_at=now(),health_status=CASE WHEN consecutive_failures+1>=5 THEN 'open' ELSE 'degraded' END,
 		cooldown_until=CASE WHEN consecutive_failures+1>=5 THEN now()+interval '60 seconds' ELSE cooldown_until END,
 		updated_at=now() WHERE id=$1`, routeID, routeHistoryWindow)
+}
+
+// insertWorkerUpstreamEvent 记录线路切换/账号不可用事件（同键 10~15 分钟内去重），供告警通知。
+func insertWorkerUpstreamEvent(ctx context.Context, pool *pgxpool.Pool, eventType, provider string, accountID *int64,
+	modelID int64, modelCode string, fromRoute, toRoute int64, reason string, statusCode int, dedupeMinutes int) {
+	if dedupeMinutes < 1 {
+		dedupeMinutes = 10
+	}
+	_, _ = pool.Exec(ctx, `INSERT INTO upstream_events
+		(event_type, provider, account_id, model_id, model_code, from_route_id, to_route_id, reason, status_code)
+		SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9
+		WHERE NOT EXISTS (
+			SELECT 1 FROM upstream_events e
+			WHERE e.event_type = $1 AND e.created_at > now() - make_interval(mins => $10)
+			  AND (($3 IS NOT NULL AND e.account_id = $3) OR ($3 IS NULL AND e.model_id = $4))
+		)`,
+		eventType, provider, accountID, modelID, modelCode, nullableRouteID(fromRoute), nullableRouteID(toRoute), truncateText(reason, 500), statusCode, dedupeMinutes)
+}
+
+// accountFatalStatus 表示该状态说明「这个 Key/账号本身不可用」，应上报账号级告警。
+func accountFatalStatus(status int) bool {
+	switch status {
+	case 401, 402, 403:
+		return true
+	}
+	return false
 }
 
 // healWorkerSingleRouteState 清除单线路模型残留的熔断/冷却状态，避免无降级可走时自伤。

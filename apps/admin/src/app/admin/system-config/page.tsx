@@ -119,11 +119,11 @@ const DYNAMIC_I18N_ITEMS: ConfigItem[] = [
 ];
 
 const STORAGE_ITEMS: ConfigItem[] = [
-  { key: "storage_endpoint", label: "Endpoint 地址", type: "text", hint: "S3 兼容地址，不要带 http:// 或 https://。如 localhost:9000、account.r2.cloudflarestorage.com、storage.googleapis.com" },
+  { key: "storage_endpoint", label: "Endpoint 地址", type: "text", hint: "S3 兼容地址，不要带 http:// 或 https://。如 localhost:9000、account.r2.cloudflarestorage.com、cos.ap-hongkong.myqcloud.com" },
   { key: "storage_access_key", label: "Access Key", type: "text" },
   { key: "storage_secret_key", label: "Secret Key", type: "password" },
   { key: "storage_bucket", label: "Bucket 名称", type: "text" },
-  { key: "storage_public_url", label: "公开访问域名", type: "text", hint: "如 https://cdn.example.com。留空时按 Endpoint 自动生成。" },
+  { key: "storage_public_url", label: "公开访问域名", type: "text", hint: "如 https://cdn.example.com。腾讯云 COS 自定义 CDN 域名填 https://img.example.com，并在 .env 设置 MINIO_PUBLIC_URL_STYLE=object（地址不带 bucket 前缀）。留空时按 Endpoint 自动生成。" },
   { key: "storage_use_ssl", label: "使用 HTTPS/SSL", type: "checkbox" },
   { key: "work_retention_days", label: "作品自动删除天数", type: "number", hint: "0 表示永久保留。大于 0 时，新作品会写入过期时间，清理任务会删除记录和对象存储文件。" },
 ];

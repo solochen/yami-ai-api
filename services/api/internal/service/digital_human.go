@@ -37,7 +37,7 @@ const (
 	digitalHumanSaleDefault = 2.49
 	// Vidu 实时版每秒消耗的积分（官方价目表：1.5 积分/秒）。
 	digitalHumanRealtimeCreditDefault = 1.5
-	digitalHumanPersonaLimit = 50000
+	digitalHumanPersonaLimit          = 50000
 )
 
 type digitalHumanSettings struct {
@@ -552,7 +552,9 @@ func (s *ChatService) StartDigitalHumanSession(ctx context.Context, userID int64
 		return fail("连接数字人服务超时，请再试一次")
 	}
 	if status >= 300 {
-		return fail(viduErrorMessage(payload))
+		// 上游原文只留在服务端日志里排障，返回给用户的文案必须脱敏。
+		log.Printf("digital human create live rejected: status=%d body=%s", status, digitalHumanLogBody(payload))
+		return fail(digitalHumanUpstreamError(status, payload))
 	}
 	var created struct {
 		Live struct {
@@ -1073,7 +1075,12 @@ func (s *ChatService) viduUsage(ctx context.Context, settings digitalHumanSettin
 	return parsed.Live.BilledSeconds, parsed.Live.CreditsCost
 }
 
-func viduErrorMessage(payload []byte) string {
+// digitalHumanUpstreamError 把上游创建会话失败翻译成用户可读文案。
+// 鉴权类状态码单独给出可操作提示；其余状态码只透传脱敏后的业务原因。
+func digitalHumanUpstreamError(status int, payload []byte) string {
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return "数字人服务的密钥无效或没有数字人权限，请联系客服"
+	}
 	var parsed struct {
 		Message string `json:"message"`
 		Reason  string `json:"reason"`
@@ -1088,6 +1095,18 @@ func viduErrorMessage(payload []byte) string {
 		}
 	}
 	return "数字人服务拒绝了这次通话"
+}
+
+// digitalHumanLogBody 截断上游响应体，避免把超长内容整个写进日志。
+func digitalHumanLogBody(payload []byte) string {
+	text := strings.TrimSpace(string(payload))
+	if text == "" {
+		return "<empty>"
+	}
+	if runes := []rune(text); len(runes) > 512 {
+		text = string(runes[:512]) + "..."
+	}
+	return text
 }
 
 func (s *ChatService) openDigitalHumanLink(settings digitalHumanSettings, liveID, rtcUser string, roleDBID int64) (*liveLink, error) {

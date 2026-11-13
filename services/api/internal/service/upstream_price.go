@@ -291,13 +291,13 @@ func (s *AdminService) StartPriceSync(ctx context.Context, adminID int64, provid
 		if len(want) > 0 && !want[p.Provider] {
 			continue
 		}
-		if p.SourceType != "new_api" && p.SourceType != "openrouter" && p.SourceType != "new_api_hub" && p.SourceType != "codexauv_page" {
+		if p.SourceType != "new_api" && p.SourceType != "openrouter" && p.SourceType != "new_api_hub" && p.SourceType != "codexauv_page" && p.SourceType != "qiniu_market" {
 			continue
 		}
 		targets = append(targets, p.Provider)
 	}
 	if len(targets) == 0 {
-		return 0, errors.New("没有可同步的厂商（仅支持 new_api / openrouter）")
+		return 0, errors.New("没有可同步的厂商（仅支持 new_api / openrouter / codexauv / 七牛云）")
 	}
 	var runID int64
 	if err := s.db.QueryRow(ctx, `INSERT INTO price_sync_runs(trigger,status,provider_total,created_by,started_at)
@@ -396,6 +396,13 @@ func (s *AdminService) syncOneProvider(ctx context.Context, runID int64, p Upstr
 		}
 	}
 	latency := int(time.Since(started).Milliseconds())
+	if err == nil {
+		// 同步成功后刷新该上游账号的分组倍率（用于账号名展示与识别）
+		_, _ = s.db.Exec(ctx, `UPDATE upstream_accounts a SET rate_multiplier = COALESCE((
+			SELECT max(c.billing_multiplier) FROM upstream_price_current c
+			WHERE c.provider = a.provider AND c.group_name = a.group_name AND COALESCE(c.group_name,'') <> ''
+		), a.rate_multiplier), updated_at = now() WHERE a.provider = $1`, p.Provider)
+	}
 	status := "success"
 	if err != nil {
 		status = "failed"
@@ -435,6 +442,8 @@ func (s *AdminService) fetchProviderPrices(ctx context.Context, p UpstreamProvid
 		return s.fetchNewAPIHubPrices(ctx, p, timeout)
 	case "codexauv_page":
 		return s.fetchCodexAuvPrices(ctx, p, timeout)
+	case "qiniu_market":
+		return s.fetchQiniuPrices(ctx, p, timeout)
 	default:
 		return nil, 0, errors.New("不支持的同步来源")
 	}
@@ -445,13 +454,14 @@ func (s *AdminService) fetchNewAPIPrices(ctx context.Context, p UpstreamProvider
 	if base == "" {
 		return nil, 0, errors.New("缺少 price_endpoint")
 	}
+	token := strAny(p.Config["api_key"])
 	var status map[string]interface{}
-	code, err := httpGetJSON(ctx, base+"/api/status", timeout, &status)
+	code, err := httpGetJSONAuth(ctx, base+"/api/status", token, timeout, &status)
 	if err != nil {
 		return nil, code, err
 	}
 	var pricing map[string]interface{}
-	code, err = httpGetJSON(ctx, base+"/api/pricing", timeout, &pricing)
+	code, err = httpGetJSONAuth(ctx, base+"/api/pricing", token, timeout, &pricing)
 	if err != nil {
 		return nil, code, err
 	}
@@ -729,6 +739,13 @@ func (s *AdminService) fetchCodexAuvPrices(ctx context.Context, p UpstreamProvid
 		if rate <= 0 {
 			rate = 1
 		}
+		if groupName != "" {
+			// 记录分组倍率（即使该分组没有可计价的文本模型，例如纯生图分组）
+			_, _ = s.db.Exec(ctx, `INSERT INTO upstream_group_rates (provider, group_name, rate, updated_at)
+				VALUES ($1,$2,$3,now())
+				ON CONFLICT (provider, group_name) DO UPDATE SET rate=EXCLUDED.rate, updated_at=now()`,
+				p.Provider, groupName, rate)
+		}
 		models, _ := g["models"].([]interface{})
 		for _, mit := range models {
 			m, ok := mit.(map[string]interface{})
@@ -856,6 +873,100 @@ func (s *AdminService) fetchOpenRouterPrices(ctx context.Context, p UpstreamProv
 	return out, 200, nil
 }
 
+// fetchQiniuPrices 拉取七牛云官方模型市场（api.qnaigc.com/v1/market/models，公开接口）。
+// 价格口径：token 模型取闲时档（人民币/百万 token）；视频按秒、图像按张取明细单价；
+// 已下架（retirement_at 非空）的模型跳过。
+func (s *AdminService) fetchQiniuPrices(ctx context.Context, p UpstreamProvider, timeout time.Duration) ([]UpstreamPrice, int, error) {
+	base := strings.TrimRight(strings.TrimSpace(p.PriceEndpoint), "/")
+	if base == "" {
+		base = "https://api.qnaigc.com/v1"
+	}
+	var payload map[string]interface{}
+	code, err := httpGetJSON(ctx, base+"/market/models", timeout, &payload)
+	if err != nil {
+		return nil, code, err
+	}
+	data, _ := payload["data"].([]interface{})
+	out := []UpstreamPrice{}
+	for _, item := range data {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		id := strAny(m["id"])
+		if id == "" || strAny(m["retirement_at"]) != "" {
+			continue
+		}
+		rules, _ := m["pricing_rules_v2"].([]interface{})
+		if len(rules) == 0 {
+			continue
+		}
+		rule, _ := rules[0].(map[string]interface{})
+		details, _ := rule["details_v2"].(map[string]interface{})
+		getPerM := func(keys ...string) float64 {
+			for _, k := range keys {
+				if v, ok := details[k].(map[string]interface{}); ok {
+					if up := numAny(v["unit_price"]); up > 0 {
+						return up * 1000
+					}
+				}
+			}
+			return 0
+		}
+		pin := getPerM("ncache_offpeak", "ncache", "input", "nth_input")
+		pout := getPerM("output_offpeak", "output", "nth_output")
+		cacheRead := getPerM("cache_offpeak", "cache")
+		billingType := "per_token"
+		sourceUnit := "per_1m_tokens"
+		unitPrice := 0.0
+		if pin <= 0 && pout <= 0 {
+			bestUnit := 0.0
+			bestKey := ""
+			bestScore := -1
+			bestType := ""
+			for k, v := range details {
+				vm, ok := v.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				un := strAny(vm["unit_name"])
+				up := numAny(vm["unit_price"])
+				if up <= 0 || (un != "second" && un != "image" && un != "pic") {
+					continue
+				}
+				// 优先取「产出」单价（如 i_output_quantity），避免拿到输入价
+				score := 0
+				if strings.Contains(strings.ToLower(k), "output") || strings.Contains(strAny(vm["name"]), "生成") {
+					score = 1
+				}
+				if bestKey == "" || score > bestScore || (score == bestScore && up > bestUnit) {
+					bestUnit, bestKey, bestScore = up, k, score
+					if un == "second" {
+						bestType = "per_second"
+					} else {
+						bestType = "per_image"
+					}
+				}
+			}
+			if bestKey == "" {
+				continue
+			}
+			billingType = bestType
+			sourceUnit = bestType
+			unitPrice = bestUnit
+		}
+		out = append(out, UpstreamPrice{
+			Provider: p.Provider, UpstreamModel: id, GroupName: "offpeak",
+			BillingType: billingType, SourceCurrency: "CNY", SourceUnit: sourceUnit,
+			InputPrice: pin, OutputPrice: pout, CacheReadPrice: cacheRead,
+			UnitPrice: unitPrice, BillingMultiplier: 1, FXRate: 1,
+			CNYInputPerM: pin, CNYOutputPerM: pout, CNYCacheReadPerM: cacheRead, CNYUnitPrice: unitPrice,
+			SourceType: "sync", IsTrusted: true,
+		})
+	}
+	return out, 200, nil
+}
+
 func (s *AdminService) saveUpstreamPrice(ctx context.Context, runID *int64, p UpstreamPrice) error {
 	raw, _ := json.Marshal(p)
 	var snapID int64
@@ -965,6 +1076,57 @@ func (s *AdminService) GetPriceSyncRun(ctx context.Context, id int64) (*PriceSyn
 		r.Providers = append(r.Providers, p)
 	}
 	return &r, rows.Err()
+}
+
+// UpstreamPriceGroupOption 是线路编辑下拉框里的一个价格分组选项（含倍率与该上游模型的实际价格）。
+type UpstreamPriceGroupOption struct {
+	GroupName         string  `json:"group_name"`
+	BillingMultiplier float64 `json:"billing_multiplier"`
+	BillingType       string  `json:"billing_type"`
+	InputPrice        float64 `json:"input_price"`
+	OutputPrice       float64 `json:"output_price"`
+	UnitPrice         float64 `json:"unit_price"`
+}
+
+// ListUpstreamPriceGroupOptions 返回某个上游模型在各分组下的价格，供线路编辑下拉框展示。
+func (s *AdminService) ListUpstreamPriceGroupOptions(ctx context.Context, provider, model string) ([]UpstreamPriceGroupOption, error) {
+	rows, err := s.db.Query(ctx, `SELECT group_name, COALESCE(billing_multiplier,0), COALESCE(billing_type,'per_token'),
+		COALESCE(cny_input_per_m,0), COALESCE(cny_output_per_m,0), COALESCE(cny_unit_price,0)
+		FROM upstream_price_current
+		WHERE provider=$1 AND upstream_model=$2 AND COALESCE(group_name,'') <> ''
+		ORDER BY cny_input_per_m, cny_unit_price, group_name`, provider, model)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []UpstreamPriceGroupOption{}
+	for rows.Next() {
+		var o UpstreamPriceGroupOption
+		if err := rows.Scan(&o.GroupName, &o.BillingMultiplier, &o.BillingType, &o.InputPrice, &o.OutputPrice, &o.UnitPrice); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// ListUpstreamPriceGroups 返回各上游已同步的价格分组名（供线路编辑下拉框使用）。
+func (s *AdminService) ListUpstreamPriceGroups(ctx context.Context) (map[string][]string, error) {
+	rows, err := s.db.Query(ctx, `SELECT DISTINCT provider, group_name FROM upstream_price_current
+		WHERE COALESCE(group_name,'') <> '' ORDER BY provider, group_name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var provider, group string
+		if err := rows.Scan(&provider, &group); err != nil {
+			return nil, err
+		}
+		out[provider] = append(out[provider], group)
+	}
+	return out, rows.Err()
 }
 
 func (s *AdminService) ListUpstreamPrices(ctx context.Context, page, pageSize int, provider, q, group string, trustedOnly bool) ([]UpstreamPrice, int, error) {
@@ -1563,12 +1725,19 @@ func (s *AdminService) configInt(ctx context.Context, key string, def int) int {
 }
 
 func httpGetJSON(ctx context.Context, url string, timeout time.Duration, out interface{}) (int, error) {
+	return httpGetJSONAuth(ctx, url, "", timeout, out)
+}
+
+func httpGetJSONAuth(ctx context.Context, url, token string, timeout time.Duration, out interface{}) (int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return 0, err
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "orbit-e-price-monitor/1.0")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(req)
 	if err != nil {

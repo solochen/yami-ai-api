@@ -16,6 +16,20 @@ type Config struct {
 	Bucket    string
 	PublicURL string
 	UseSSL    bool
+
+	// Region 用于 S3 V4 签名（例如 ap-hongkong）。留空时 minio-go 会调用
+	// GetBucketLocation 自动探测，COS 上该调用需要额外的桶级权限。
+	Region string
+	// PublicURLStyle 决定公开地址是否带 bucket 前缀：
+	// "bucket"（默认）→ <域名>/<bucket>/<key>；"object" → <域名>/<key>。
+	PublicURLStyle string
+	// Private 为 true 时不写入“公有读”桶策略，适配私有读桶（如 COS 私有桶）。
+	Private bool
+	// SkipBucketInit 为 true 时不检查/创建桶，适用于在控制台建桶的对象存储。
+	SkipBucketInit bool
+	// BucketLookup 控制 S3 请求风格："auto"（默认）、"path"、"dns"（虚拟主机风格）。
+	// COS 默认走 path；若返回 SignatureDoesNotMatch 可尝试 "dns"。
+	BucketLookup string
 }
 
 func LoadConfig(ctx context.Context, db *pgxpool.Pool, fallback Config) Config {

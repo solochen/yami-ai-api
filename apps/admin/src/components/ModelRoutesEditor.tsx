@@ -19,6 +19,8 @@ interface ModelRoute {
   runtime_rule: Record<string, unknown>;
   cost_rule: Record<string, unknown>;
   user_price_rule?: Record<string, unknown>;
+  account_id?: number | null;
+  price_group?: string;
   priority: number;
   weight: number;
   timeout_seconds: number;
@@ -29,6 +31,49 @@ interface ModelRoute {
   success_count: number;
   failure_count: number;
   cooldown_until?: string;
+}
+
+interface UpstreamAccountLite {
+  id: number;
+  provider: string;
+  name: string;
+  group_name: string;
+  rate_multiplier?: number;
+  login_account: string;
+  is_enabled: boolean;
+  route_count: number;
+}
+
+interface PriceGroupOption {
+  group_name: string;
+  billing_multiplier: number;
+  billing_type: string;
+  input_price: number;
+  output_price: number;
+  unit_price: number;
+}
+
+// 分组价格文案：按计费方式展示
+function groupPriceLabel(option: PriceGroupOption) {
+  const multiplier = option.billing_multiplier > 0 ? `×${formatNumber(option.billing_multiplier)}` : "";
+  const parts: string[] = [];
+  if (multiplier) parts.push(multiplier);
+  if (option.billing_type === "per_token") {
+    if (option.input_price > 0 || option.output_price > 0) {
+      parts.push(`¥${formatNumber(option.input_price)} / ¥${formatNumber(option.output_price)} 每百万`);
+    }
+  } else if (option.unit_price > 0) {
+    const unit = option.billing_type === "per_request" ? "次" : option.billing_type === "per_image" ? "张" : option.billing_type === "per_second" ? "秒" : "单位";
+    parts.push(`¥${formatNumber(option.unit_price)}/${unit}`);
+  }
+  return parts.join(" · ");
+}
+
+function formatNumber(value: number) {
+  if (!Number.isFinite(value)) return "-";
+  if (value === 0) return "0";
+  if (Math.abs(value) >= 1) return String(Number(value.toFixed(2)));
+  return String(Number(value.toPrecision(3)));
 }
 
 interface ModelRouteAttempt {
@@ -77,6 +122,8 @@ const emptyRoute = (defaults: { upstreamModel: string; endpoint: string; billing
   cost_rule: defaults.billingType === "per_token"
     ? { billing_type: "per_token", input_cost_per_m: 0, output_cost_per_m: 0 }
     : { billing_type: defaults.billingType, unit_cost: 0 },
+  price_group: "",
+  account_id: null,
   priority: 100,
   weight: 100,
   timeout_seconds: defaults.requestMode === "images" ? 600 : (["chat_completions", "responses"].includes(defaults.requestMode) ? 90 : 120),
@@ -133,6 +180,11 @@ export function ModelRoutesEditor({ modelId, upstreamModel, endpoint, requestMod
   const [advanced, setAdvanced] = useState({ headers: "{}", extra: "{}", runtime: "{}", userPrice: "{}" });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  // 各上游已同步的价格分组（线路编辑时下拉选择，避免手输）
+  const [priceGroups, setPriceGroups] = useState<Record<string, string[]>>({});
+  const [groupOptions, setGroupOptions] = useState<PriceGroupOption[]>([]);
+  const [groupOptionsKey, setGroupOptionsKey] = useState("");
+  const [accounts, setAccounts] = useState<UpstreamAccountLite[]>([]);
 
   const load = useCallback(async () => {
     const [routeItems, attemptItems, profitItems] = await Promise.all([
@@ -146,6 +198,30 @@ export function ModelRoutesEditor({ modelId, upstreamModel, endpoint, requestMod
     return routeItems;
   }, [modelId]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    adminApi<Record<string, string[]>>("/upstream-prices/groups").then(setPriceGroups).catch(() => setPriceGroups({}));
+    adminApi<UpstreamAccountLite[]>("/upstream-accounts").then((items) => setAccounts(Array.isArray(items) ? items : [])).catch(() => setAccounts([]));
+  }, []);
+
+  const groupProvider = form.provider;
+  const groupModel = form.upstream_model;
+  useEffect(() => {
+    if (!groupProvider || !groupModel) {
+      setGroupOptions([]);
+      setGroupOptionsKey("");
+      return;
+    }
+    const key = `${groupProvider}\u0000${groupModel}`;
+    adminApi<PriceGroupOption[]>(`/upstream-prices/groups?provider=${encodeURIComponent(groupProvider)}&model=${encodeURIComponent(groupModel)}`)
+      .then((options) => {
+        setGroupOptions(Array.isArray(options) ? options : []);
+        setGroupOptionsKey(key);
+      })
+      .catch(() => {
+        setGroupOptions([]);
+        setGroupOptionsKey(key);
+      });
+  }, [groupProvider, groupModel]);
 
   const beginCreate = () => {
     const next = emptyRoute({ upstreamModel, endpoint, billingType: defaultBillingType, requestMode });
@@ -176,6 +252,8 @@ export function ModelRoutesEditor({ modelId, upstreamModel, endpoint, requestMod
       api_key: route.api_key || "", auth_type: route.auth_type, api_key_header: route.api_key_header,
       headers: route.headers || {}, extra_params: route.extra_params || {}, runtime_rule: route.runtime_rule || {}, cost_rule: normalizedCostRule(route.cost_rule, defaultBillingType),
       user_price_rule: route.user_price_rule || {},
+      price_group: route.price_group || "",
+      account_id: route.account_id ?? null,
       priority: route.priority, weight: route.weight, timeout_seconds: requestMode === "images" ? Math.max(600, route.timeout_seconds) : route.timeout_seconds,
       max_retries: route.max_retries, is_enabled: route.is_enabled,
     });
@@ -320,7 +398,7 @@ export function ModelRoutesEditor({ modelId, upstreamModel, endpoint, requestMod
             {routes.map((route) => (
               <tr key={route.id}>
                 <td className="p-3"><div className="flex items-center gap-2"><div className="font-medium text-gray-900">{route.route_name}</div>{routes[0]?.id === route.id && <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700">主线路</span>}<span className={`rounded-full px-1.5 py-0.5 text-[10px] ${route.is_enabled ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>{route.is_enabled ? "已启用" : "已禁用"}</span></div><div className="mt-1 text-gray-400">{route.provider || "未标注渠道"} · {route.protocol}</div></td>
-                <td className="p-3"><div className="font-mono text-gray-700">{route.upstream_model}</div><div className="mt-1 max-w-[300px] truncate text-gray-400" title={route.base_url}>{route.base_url}</div></td>
+                <td className="p-3"><div className="font-mono text-gray-700">{route.upstream_model}</div>{route.price_group && <div className="mt-0.5 text-[11px] text-blue-600">分组：{route.price_group}</div>}<div className="mt-1 max-w-[300px] truncate text-gray-400" title={route.base_url}>{route.base_url}</div></td>
                 <td className="p-3 text-gray-700">{route.priority} / {route.weight}</td>
                 <td className="p-3"><span className={`inline-flex rounded-full border px-2 py-1 ${healthStyle(route.health_status)}`}>{healthLabel(route.health_status)}</span>{route.consecutive_failures > 0 && <div className="mt-1 text-gray-400">连续失败 {route.consecutive_failures}</div>}</td>
                 <td className="p-3 text-gray-600">{route.success_count} / {route.failure_count}</td>
@@ -359,6 +437,66 @@ export function ModelRoutesEditor({ modelId, upstreamModel, endpoint, requestMod
           <label className="text-xs text-gray-600">Endpoint<input value={form.endpoint} onChange={(e) => setForm({ ...form, endpoint: e.target.value })} className="mt-1 w-full rounded-lg border p-2 font-mono text-sm" /></label>
           <label className="text-xs text-gray-600">API Key<input type="password" value={form.api_key || ""} onChange={(e) => setForm({ ...form, api_key: e.target.value })} className="mt-1 w-full rounded-lg border p-2 font-mono text-sm" placeholder="留空或保留掩码表示不修改" /></label>
           <label className="text-xs text-gray-600">优先级<input type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} className="mt-1 w-full rounded-lg border p-2 text-sm" /></label>
+          <label className="col-span-2 text-xs text-gray-600">上游账号<span className="ml-1 text-gray-400">（绑定后保存会自动使用该账号的 Key 与分组）</span>
+            <select
+              value={form.account_id ?? ""}
+              onChange={(e) => {
+                const id = Number(e.target.value) || 0;
+                const account = accounts.find((a) => a.id === id);
+                setForm({
+                  ...form,
+                  account_id: id > 0 ? id : null,
+                  price_group: account ? account.group_name : form.price_group,
+                });
+              }}
+              className="mt-1 w-full rounded-lg border bg-white p-2 text-sm"
+            >
+              <option value="">不绑定账号（手动配置 Key）</option>
+              {accounts
+                .filter((a) => !form.provider || a.provider === form.provider)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {(() => {
+                      let label = a.name || "";
+                      if (a.group_name && !label.includes(a.group_name)) label += ` · ${a.group_name}`;
+                      if (a.login_account && !label.includes(a.login_account)) label += ` · ${a.login_account}`;
+                      if (a.rate_multiplier && a.rate_multiplier > 0 && !label.includes(`${a.rate_multiplier}x`)) label += ` · ${a.rate_multiplier}x`;
+                      return label;
+                    })()}{a.is_enabled ? "" : "（已禁用）"}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="text-xs text-gray-600">价格分组<span className="ml-1 text-gray-400">（可选，按上游分组取成本）</span>
+            <select
+              value={form.price_group || ""}
+              onChange={(e) => setForm({ ...form, price_group: e.target.value })}
+              className="mt-1 w-full rounded-lg border bg-white p-2 text-sm"
+            >
+              <option value="">不绑定（按线路 cost_rule 成本）</option>
+              {groupOptions.length > 0
+                ? groupOptions.map((option) => {
+                    const price = groupPriceLabel(option);
+                    return (
+                      <option key={option.group_name} value={option.group_name}>
+                        {option.group_name}{price ? `　${price}` : ""}
+                      </option>
+                    );
+                  })
+                : (priceGroups[form.provider] || []).map((group) => (
+                    <option key={group} value={group}>{group}</option>
+                  ))}
+              {form.price_group && !(priceGroups[form.provider] || []).includes(form.price_group) && (
+                <option value={form.price_group}>{form.price_group}（同步目录中未找到）</option>
+              )}
+            </select>
+            {form.provider && groupOptions.length === 0 && (priceGroups[form.provider] || []).length === 0 && (
+              <span className="mt-1 block text-[10px] text-gray-400">该上游暂无分组数据，请先到「上游价格监控」点一次同步</span>
+            )}
+            {form.provider && groupOptions.length === 0 && (priceGroups[form.provider] || []).length > 0 && groupOptionsKey !== "" && (
+              <span className="mt-1 block text-[10px] text-gray-400">该上游模型暂无分组价格（可先同步，或改用不绑定）</span>
+            )}
+          </label>
           <label className="text-xs text-gray-600">同优先级权重<input type="number" min={1} value={form.weight} onChange={(e) => setForm({ ...form, weight: Number(e.target.value) })} className="mt-1 w-full rounded-lg border p-2 text-sm" /></label>
           <label className="text-xs text-gray-600">超时秒数{requestMode === "images" ? <span className="ml-1 text-gray-400">（图片建议至少 600）</span> : ["chat_completions", "responses"].includes(requestMode) && <span className="ml-1 text-gray-400">（建议不超过 90）</span>}<input type="number" min={1} value={form.timeout_seconds} onChange={(e) => setForm({ ...form, timeout_seconds: Number(e.target.value) })} className="mt-1 w-full rounded-lg border p-2 text-sm" /></label>
           <label className="text-xs text-gray-600">单线路重试次数{["chat_completions", "responses"].includes(requestMode) && <span className="ml-1 text-gray-400">（瞬时网关错误建议 1）</span>}<input type="number" min={0} max={3} value={form.max_retries} onChange={(e) => setForm({ ...form, max_retries: Number(e.target.value) })} className="mt-1 w-full rounded-lg border p-2 text-sm" /></label>

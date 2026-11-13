@@ -197,6 +197,14 @@ func (s *ModelService) RouteProviderCharge(
 		providerCost = 0
 	}
 	providerCost *= routeImageTokenItemCount(model, route.CostRule, params)
+	// 倍率定价：售价 = 官方价 × price_multiplier；成本仍按线路真实上游成本记账。
+	if chargeAmount, ok := modelOfficialUserCharge(model, cfg, promptTokens, outputTokens, cacheReadTokens, cacheWriteTokens); ok {
+		return billing.ChargeBreakdown{
+			ProviderCost: providerCost,
+			UserCharge:   chargeAmount,
+			Commission:   chargeAmount - providerCost,
+		}, true, cfg, nil
+	}
 	// 收费依据与成本依据可分离：user_price_rule 存在时用它算用户应付，
 	// provider_cost 仍按上游真实成本记账，毛利报表因此保持准确。
 	chargeCost := providerCost
