@@ -627,6 +627,44 @@ export function DigitalHumanWorkspace() {
     }
   };
 
+  const editDefaultRole = async (preset: DigitalHumanDefaultRole) => {
+    if (defaultRoleBusy || busy) return;
+    setDefaultRoleError("");
+    const existing = roles.find((role) => role.name === preset.name || role.avatar_url === preset.avatarUrl);
+    if (!existing) {
+      setEditorMode("create");
+      setEditorDraft({
+        name: preset.name,
+        relation: preset.relation,
+        user_title: preset.userTitle,
+        memory: preset.memory,
+        style: preset.style,
+        persona: preset.persona,
+        voice: preset.voice,
+        avatar_url: preset.avatarUrl,
+        knowledge_title: "",
+      });
+      setEditorError("");
+      setRoleTab("mine");
+      setEditorOpen(true);
+      return;
+    }
+    setDefaultRoleBusy(preset.key);
+    try {
+      const detail = await api<RoleDetail>(`/api/digital-human/roles/${existing.public_id}`);
+      setRoleId(existing.public_id);
+      setRoleTab("mine");
+      setEditorMode("edit");
+      setEditorDraft(draftFromRole(detail));
+      setEditorError("");
+      setEditorOpen(true);
+    } catch (err) {
+      setDefaultRoleError(err instanceof Error ? ts(err.message) : ts("打开默认角色编辑失败"));
+    } finally {
+      setDefaultRoleBusy("");
+    }
+  };
+
   const saveEditor = async () => {
     if (!editorDraft.name.trim()) {
       setEditorError(ts("请填写角色名字"));
@@ -960,24 +998,37 @@ export function DigitalHumanWorkspace() {
                     const added = roles.some((role) => role.name === preset.name || role.avatar_url === preset.avatarUrl);
                     const loading = defaultRoleBusy === preset.key;
                     return (
-                      <button
+                      <div
                         key={preset.key}
-                        type="button"
-                        disabled={!!defaultRoleBusy || !!busy}
-                        onClick={() => void applyDefaultRole(preset)}
-                        className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white text-left transition hover:border-primary/60 hover:shadow-sm disabled:opacity-60 dark:border-white/10 dark:bg-gray-950"
+                        className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white transition hover:border-primary/60 hover:shadow-sm dark:border-white/10 dark:bg-gray-950"
                       >
-                        <span className="relative block aspect-[3/4] w-full overflow-hidden bg-gray-100 dark:bg-white/5">
-                          <img src={preset.avatarUrl} alt={preset.name} loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
-                          {added && <span className="absolute left-1.5 top-1.5 rounded-full bg-black/65 px-1.5 py-0.5 text-[9px] font-medium text-white">{ts("已添加")}</span>}
-                          {loading && <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-[10px] font-medium text-white">{ts("添加中")}</span>}
-                        </span>
-                        <span className="block px-2 py-1.5">
-                          <span className="block truncate text-xs font-semibold">{preset.name}</span>
-                          <span className="mt-0.5 block truncate text-[10px] text-gray-400">{ts(preset.type)}</span>
-                          <span className="mt-0.5 block truncate text-[9px] text-gray-400">{preset.voice}</span>
-                        </span>
-                      </button>
+                        <button
+                          type="button"
+                          disabled={!!defaultRoleBusy || !!busy}
+                          onClick={() => void applyDefaultRole(preset)}
+                          className="block w-full text-left disabled:opacity-60"
+                        >
+                          <span className="relative block aspect-[3/4] w-full overflow-hidden bg-gray-100 dark:bg-white/5">
+                            <img src={preset.avatarUrl} alt={preset.name} loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+                            {added && <span className="absolute left-1.5 top-1.5 rounded-full bg-black/65 px-1.5 py-0.5 text-[9px] font-medium text-white">{ts("已添加")}</span>}
+                            {loading && <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-[10px] font-medium text-white">{ts("打开中")}</span>}
+                          </span>
+                          <span className="block px-2 py-1.5">
+                            <span className="block truncate text-xs font-semibold">{preset.name}</span>
+                            <span className="mt-0.5 block truncate text-[10px] text-gray-400">{ts(preset.type)}</span>
+                            <span className="mt-0.5 block truncate text-[9px] text-gray-400">{preset.voice}</span>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!!defaultRoleBusy || !!busy}
+                          onClick={() => void editDefaultRole(preset)}
+                          title={ts("编辑默认角色")}
+                          className="absolute right-1.5 top-1.5 rounded-full bg-white/90 px-1.5 py-0.5 text-[9px] font-medium text-gray-700 shadow-sm backdrop-blur transition hover:bg-white disabled:opacity-50"
+                        >
+                          {ts("编辑")}
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
