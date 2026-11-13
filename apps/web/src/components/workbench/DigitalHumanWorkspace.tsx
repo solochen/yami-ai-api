@@ -4,6 +4,7 @@ import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/i18n/I18nProvider";
 import { api, uploadFile } from "@/lib/api";
+import { DIGITAL_HUMAN_DEFAULT_ROLES, type DigitalHumanDefaultRole } from "@/lib/digitalHumanDefaults";
 
 const RELATIONS = ["父亲", "母亲", "伴侣", "朋友", "兄弟", "姐妹", "祖父", "祖母", "助理", "其他"];
 const RTC_SDK = "https://g.alicdn.com/apsara-media-box/imp-web-rtc/7.1.9/aliyun-rtc-sdk.js";
@@ -407,6 +408,9 @@ export function DigitalHumanWorkspace() {
   const [knowledge, setKnowledge] = useState<KnowledgeDoc[]>([]);
   const [session, setSession] = useState<LiveSession | null>(null);
   const [query, setQuery] = useState("");
+  const [roleTab, setRoleTab] = useState<"default" | "mine">("default");
+  const [defaultRoleBusy, setDefaultRoleBusy] = useState("");
+  const [defaultRoleError, setDefaultRoleError] = useState("");
   const [text, setText] = useState("");
   const [docTitle, setDocTitle] = useState("");
   const [notice, setNotice] = useState("");
@@ -536,9 +540,15 @@ export function DigitalHumanWorkspace() {
     return !q || role.name.includes(q) || role.relation.includes(q);
   });
 
+  const visibleDefaults = DIGITAL_HUMAN_DEFAULT_ROLES.filter((preset) => {
+    const q = query.trim();
+    return !q || preset.name.includes(q) || preset.type.includes(q) || preset.relation.includes(q);
+  });
+
   const patchEditor = (key: keyof Draft, value: string) => setEditorDraft((prev) => ({ ...prev, [key]: value }));
 
   const openCreate = () => {
+    setRoleTab("mine");
     setEditorMode("create");
     setEditorDraft(emptyDraft());
     setEditorError("");
@@ -574,6 +584,49 @@ export function DigitalHumanWorkspace() {
     setRoles(await api<RoleSummary[]>("/api/digital-human/roles"));
   };
 
+  const applyDefaultRole = async (preset: DigitalHumanDefaultRole) => {
+    if (defaultRoleBusy || busy) return;
+    setDefaultRoleError("");
+    const existing = roles.find((role) => role.name === preset.name || role.avatar_url === preset.avatarUrl);
+    if (existing) {
+      setRoleTab("mine");
+      setRoleId(existing.public_id);
+      return;
+    }
+    setDefaultRoleBusy(preset.key);
+    try {
+      const created = await api<RoleDetail>("/api/digital-human/roles", {
+        method: "POST",
+        body: JSON.stringify({
+          name: preset.name,
+          relation: preset.relation,
+          user_title: preset.userTitle,
+          memory: preset.memory,
+          style: preset.style,
+          persona: preset.persona,
+          voice: preset.voice,
+          avatar_url: preset.avatarUrl,
+          knowledge_title: "",
+        }),
+      });
+      setRoles((prev) => [{
+        public_id: created.public_id,
+        name: created.name,
+        relation: created.relation,
+        user_title: created.user_title,
+        avatar_url: created.avatar_url,
+        knowledge_title: created.knowledge_title,
+      }, ...prev]);
+      setRoleTab("mine");
+      setRoleId(created.public_id);
+      setNotice(ts("已加入「我的角色」并选中"));
+    } catch (err) {
+      setDefaultRoleError(err instanceof Error ? ts(err.message) : ts("使用默认角色失败"));
+    } finally {
+      setDefaultRoleBusy("");
+    }
+  };
+
   const saveEditor = async () => {
     if (!editorDraft.name.trim()) {
       setEditorError(ts("请填写角色名字"));
@@ -589,6 +642,7 @@ export function DigitalHumanWorkspace() {
       });
       await refreshRoles();
       setEditorOpen(false);
+      setRoleTab("mine");
       if (creating) setRoleId(saved.public_id);
       else setDraft(draftFromRole(saved));
       setNotice(ts("角色已保存"));
@@ -881,37 +935,88 @@ export function DigitalHumanWorkspace() {
               {ts("新建角色")}
             </button>
           </div>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={ts("搜索角色")} className="mx-3 mb-2 rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-gray-950" />
+          <div className="mx-3 mb-2 grid grid-cols-2 rounded-lg bg-gray-100 p-0.5 text-xs dark:bg-white/5">
+            <button
+              type="button"
+              onClick={() => setRoleTab("default")}
+              className={`rounded-md px-2 py-1.5 font-medium transition ${roleTab === "default" ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white" : "text-gray-500"}`}
+            >
+              {ts("默认角色")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setRoleTab("mine")}
+              className={`rounded-md px-2 py-1.5 font-medium transition ${roleTab === "mine" ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white" : "text-gray-500"}`}
+            >
+              {ts("我的角色")}{roles.length ? ` ${roles.length}` : ""}
+            </button>
+          </div>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={roleTab === "default" ? ts("搜索默认角色") : ts("搜索角色")} className="mx-3 mb-2 rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-white/10 dark:bg-gray-950" />
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-            {visibleRoles.map((role) => (
-              <button
-                key={role.public_id}
-                type="button"
-                onClick={() => {
-                  if (sessionRef.current?.public_id) {
-                    void engineRef.current?.leaveChannel?.();
-                    void api(`/api/digital-human/sessions/${sessionRef.current.public_id}/end`, { method: "POST" }).catch(() => undefined);
-                    engineRef.current = null;
-                    sessionRef.current = null;
-                    setSession(null);
-                    setVideoStage("idle");
-                    videoJoinRef.current = null;
-                    joinedVideoRef.current = "";
-                  }
-                  setRoleId(role.public_id);
-                }}
-                className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${role.public_id === roleId ? "bg-primary/10 text-primary dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-white/5"}`}
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-xs dark:bg-white/10">
-                  {role.avatar_url ? <img src={role.avatar_url} alt="" className="h-full w-full object-cover" /> : role.name.slice(0, 1) || ts("人")}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate font-medium">{role.name || ts("未命名")}</span>
-                  <span className="block truncate text-[11px] text-gray-400">{role.relation ? ts(role.relation) : ts("未设置关系")}</span>
-                </span>
-              </button>
-            ))}
-            {visibleRoles.length === 0 && <div className="px-2 py-6 text-center text-xs text-gray-400">{ts("还没有角色")}</div>}
+            {roleTab === "default" ? (
+              <>
+                <div className="grid grid-cols-2 gap-2 px-1">
+                  {visibleDefaults.map((preset) => {
+                    const added = roles.some((role) => role.name === preset.name || role.avatar_url === preset.avatarUrl);
+                    const loading = defaultRoleBusy === preset.key;
+                    return (
+                      <button
+                        key={preset.key}
+                        type="button"
+                        disabled={!!defaultRoleBusy || !!busy}
+                        onClick={() => void applyDefaultRole(preset)}
+                        className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white text-left transition hover:border-primary/60 hover:shadow-sm disabled:opacity-60 dark:border-white/10 dark:bg-gray-950"
+                      >
+                        <span className="relative block aspect-[3/4] w-full overflow-hidden bg-gray-100 dark:bg-white/5">
+                          <img src={preset.avatarUrl} alt={preset.name} loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+                          {added && <span className="absolute left-1.5 top-1.5 rounded-full bg-black/65 px-1.5 py-0.5 text-[9px] font-medium text-white">{ts("已添加")}</span>}
+                          {loading && <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-[10px] font-medium text-white">{ts("添加中")}</span>}
+                        </span>
+                        <span className="block px-2 py-1.5">
+                          <span className="block truncate text-xs font-semibold">{preset.name}</span>
+                          <span className="mt-0.5 block truncate text-[10px] text-gray-400">{ts(preset.type)}</span>
+                          <span className="mt-0.5 block truncate text-[9px] text-gray-400">{preset.voice}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {visibleDefaults.length === 0 && <div className="px-2 py-6 text-center text-xs text-gray-400">{ts("没有匹配的默认角色")}</div>}
+                {defaultRoleError && <div className="mx-2 mt-2 text-[11px] leading-4 text-red-500">{defaultRoleError}</div>}
+              </>
+            ) : (
+              <>
+                {visibleRoles.map((role) => (
+                  <button
+                    key={role.public_id}
+                    type="button"
+                    onClick={() => {
+                      if (sessionRef.current?.public_id) {
+                        void engineRef.current?.leaveChannel?.();
+                        void api(`/api/digital-human/sessions/${sessionRef.current.public_id}/end`, { method: "POST" }).catch(() => undefined);
+                        engineRef.current = null;
+                        sessionRef.current = null;
+                        setSession(null);
+                        setVideoStage("idle");
+                        videoJoinRef.current = null;
+                        joinedVideoRef.current = "";
+                      }
+                      setRoleId(role.public_id);
+                    }}
+                    className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${role.public_id === roleId ? "bg-primary/10 text-primary dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-white/5"}`}
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-xs dark:bg-white/10">
+                      {role.avatar_url ? <img src={role.avatar_url} alt="" className="h-full w-full object-cover" /> : role.name.slice(0, 1) || ts("人")}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{role.name || ts("未命名")}</span>
+                      <span className="block truncate text-[11px] text-gray-400">{role.relation ? ts(role.relation) : ts("未设置关系")}</span>
+                    </span>
+                  </button>
+                ))}
+                {visibleRoles.length === 0 && <div className="px-2 py-6 text-center text-xs text-gray-400">{ts("还没有角色")}</div>}
+              </>
+            )}
           </div>
         </aside>
 
